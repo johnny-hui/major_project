@@ -6,8 +6,9 @@ and managing EC (elliptic curve) keys.
 """
 import hashlib
 import secrets
+
 from tinyec import registry
-from utility.constants import BLOCK_SIZE, MODE_PLAYGROUND, MODE_SERVER, MODE_CLIENT
+from utility.constants import BLOCK_SIZE
 
 
 def compress(key):

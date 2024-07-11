@@ -1,11 +1,12 @@
 import hashlib
 import secrets
+
 from utility.cipher_utils import (pad_block, encrypt_block, decrypt_block,
                                   unpad_block, get_subkeys_from_user, get_default_subkeys,
                                   is_sub_keys_generated)
 from utility.constants import (CIPHER_INIT_MSG, ROUNDS, BLOCK_SIZE, DEFAULT_ROUND_KEYS,
-                               OP_ENCRYPT, OP_DECRYPT, INIT_SUCCESS_MSG, FORMAT_FILE,
-                               FORMAT_PICTURE, FORMAT_AVALANCHE, ECB, CBC, S_BOX)
+                               OP_ENCRYPT, OP_DECRYPT, FORMAT_FILE,
+                               FORMAT_PICTURE, FORMAT_AVALANCHE, ECB, CBC, S_BOX, CIPHER_INIT_SUCCESS_MSG)
 
 
 class CustomCipher:
@@ -33,7 +34,7 @@ class CustomCipher:
         self.iv = iv
         self.sub_keys = []
         self.__generate_subkeys()
-        print(INIT_SUCCESS_MSG)
+        print(CIPHER_INIT_SUCCESS_MSG)
         print('=' * 160)
 
     def round_function(self, right_block: bytes, key: bytes, round_num: int):

@@ -64,73 +64,34 @@ NODE_INIT_MSG = "[+] Now initializing your node..."
 NODE_INIT_SUCCESS_MSG = "[+] Initialization Successful!"
 
 
-# MODE CONSTANTS
-MODE_SERVER = "SERVER"
-MODE_CLIENT = "CLIENT"
-MODE_PLAYGROUND = "PLAYGROUND"
+# ROLE CONSTANTS
+ROLE_PEER = "PEER"
+ROLE_DELEGATE = "DELEGATE"
+ROLE_ADMIN = "ADMIN"
 
 
-# CIPHER PLAYGROUND CONSTANTS
-PLAYGROUND_MIN_MENU_ITEM_VALUE = 1
-PLAYGROUND_MAX_MENU_ITEM_VALUE = 9
-USER_MENU_TITLE = "CIPHER PLAYGROUND MENU"
-USER_MENU_COLUMNS = ["Option", "Command"]
-USER_MENU_OPTIONS_LIST = [
-    ["1", "Perform Encryption"],
-    ["2", "Perform Decryption"],
-    ["3", "Perform Avalanche Analysis"],
-    ["4", "Change Mode"],
-    ["5", "Change Main Key"],
-    ["6", "Regenerate Sub-keys"],
-    ["7", "View Cipher Settings"],
-    ["8", "View Pending Operations"],
-    ["9", "Return to Main Menu"],
-]
-USER_INPUT_PROMPT = "[+] Select a menu option: "
-INVALID_MENU_SELECTION = "[+] MENU SELECTION: Please enter a valid menu option ({} to {}): "
-MENU_ACTION_START_MSG = "\n[+] ACTION SELECTED: Now performing menu item {}..."
-INVALID_INPUT_MENU_ERROR = "[+] ERROR: Invalid input was provided to menu: {}"
-PENDING_OP_TITLE = "Pending Operations (Decryption)"
-PENDING_OP_COLUMNS = ["Format", "Mode", "Encrypted Payload", "Initialization Vector (IV)"]
-FORMAT_USER_INPUT = "USER_INPUT"
-FORMAT_FILE = "FILE"  # => Path to file
-FORMAT_TEXT = "TEXT"
-FORMAT_PICTURE = "PICTURE"  # => Path to file
-FORMAT_AVALANCHE = "AVALANCHE"
-FORMAT_STRING = "STRING"
-FORMAT_BYTES = "BYTES"
-
-
-# CLIENT/SERVER MENU CONSTANTS
-CLIENT_MIN_MENU_ITEM_VALUE = 1
-CLIENT_MAX_MENU_ITEM_VALUE = 6
-SERVER_MIN_MENU_ITEM_VALUE = 1
-SERVER_MAX_MENU_ITEM_VALUE = 5
+# MENU CONSTANTS
+MIN_MENU_ITEM_VALUE = 1
+MAX_MENU_ITEM_VALUE = 6
 MENU_TITLE = "Menu Options"
 MENU_FIELD_OPTION = "Option"
 MENU_FIELD_DESC = "Command"
 INPUT_PROMPT = "[+] Select a menu option: "
-CLIENT_MENU_OPTIONS_LIST = [
-    ["1", "Connect to a Server"],
-    ["2", "View Current Connection"],
-    ["3", "Select Cipher Mode"],
-    ["4", "Cipher Playground"],
-    ["5", "Disconnect (Close Application)"]
-]
-CLIENT_MENU_CONNECTED_OPTIONS_LIST = [
-    ["1", "Send Message to Server"],
-    ["2", "Send a File to Server"],
-    ["3", "View Current Connection"],
-    ["4", "Select Cipher Mode"],
-    ["5", "Cipher Playground"],
+MENU_OPTIONS = [
+    ["1", "Connect to the P2P Network"],
+    ["2", "Approve a Connection Request (Consensus)"],
+    ["3", "View Blockchain (Network Connection History)"],
+    ["4", "View Pending Connection Requests"],
+    ["5", "View Current Peers"],
     ["6", "Disconnect (Close Application)"]
 ]
-SERVER_MENU_OPTIONS_LIST = [
-    ["1", "Send Message to a Client"],
-    ["2", "Send a File to a Client"],
-    ["3", "View Current Connections"],
-    ["4", "Cipher Playground"],
-    ["5", "Disconnect (Close Application)"]
+MENU_OPTIONS_CONNECTED = [
+    ["1", "Send Message to a Peer"],
+    ["2", "Send a Connection Request for Approval"],
+    ["3", "View Blockchain (Network Connection History)"],
+    ["4", "View Pending Connection Requests"],
+    ["5", "View Current Peers"],
+    ["6", "Disconnect (Close Application)"]
 ]
 USER_INPUT_START_MSG = "[+] User input (menu) thread has started!"
 USER_INPUT_THREAD_NAME = "user_input_menu_thread"
@@ -138,6 +99,33 @@ USER_MENU_THREAD_TERMINATE = "[+] THREAD TERMINATION: User menu thread has been 
 SELECT_ONE_SECOND_TIMEOUT = 1
 CIPHER_MODE_PROMPT = "[+] CHANGE CIPHER MODE: Enter 1 - CBC; Enter 2 - ECB; (or Enter 0 to quit) "
 ACK = "ACK"
+
+
+# ADMIN/DELEGATE MENU CONSTANTS (WHEN CONNECTED)
+ADMIN_MIN_MENU_ITEM_VALUE = 1
+ADMIN_MAX_MENU_ITEM_VALUE = 9
+ADMIN_MENU_OPTIONS = [
+    ["1", "Send Message to a Peer"],
+    ["2", "Broadcast a Message"],
+    ["3", "Approve a Connection Request (Consensus)"],
+    ["4", "View Blockchain (Network Connection History)"],
+    ["5", "View Pending Connection Requests"],
+    ["6", "View Current Peers"],
+    ["7", "Promote a Peer (as Delegate)"],
+    ["8", "Kick a Peer"],
+    ["9", "Disconnect (Close Application)"]
+]
+DELEGATE_MIN_MENU_ITEM_VALUE = 1
+DELEGATE_MAX_MENU_ITEM_VALUE = 7
+DELEGATE_MENU_OPTIONS = [
+    ["1", "Send Message to a Peer"],
+    ["2", "Broadcast a Message"],
+    ["3", "Approve a Connection Request (Consensus)"],
+    ["4", "View Blockchain (Network Connection History)"],
+    ["5", "View Pending Connection Requests"],
+    ["6", "View Current Peers"],
+    ["7", "Disconnect (Close Application)"]
+]
 
 
 # USER MENU - REGENERATE SUBKEYS CONSTANTS
