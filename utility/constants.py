@@ -57,6 +57,13 @@ CIPHER_INIT_CONFIG_ATTRIBUTES = [
     "Main Key", "Initialization Vector(IV)", "Sub-keys"
 ]
 GET_SUBKEY_USER_PROMPT = "[+] Enter 1 (to provide own sub-keys); Enter 2 (to use default sub-keys)"
+FORMAT_USER_INPUT = "USER_INPUT"
+FORMAT_FILE = "FILE"  # => Path to file
+FORMAT_TEXT = "TEXT"
+FORMAT_PICTURE = "PICTURE"  # => Path to file
+FORMAT_AVALANCHE = "AVALANCHE"
+FORMAT_STRING = "STRING"
+FORMAT_BYTES = "BYTES"
 
 
 # NODE INIT CONSTANTS
@@ -72,7 +79,7 @@ ROLE_ADMIN = "ADMIN"
 
 # MENU CONSTANTS
 MIN_MENU_ITEM_VALUE = 1
-MAX_MENU_ITEM_VALUE = 6
+MAX_MENU_ITEM_VALUE = 7
 MENU_TITLE = "Menu Options"
 MENU_FIELD_OPTION = "Option"
 MENU_FIELD_DESC = "Command"
@@ -80,18 +87,20 @@ INPUT_PROMPT = "[+] Select a menu option: "
 MENU_OPTIONS = [
     ["1", "Connect to the P2P Network"],
     ["2", "Approve a Connection Request (Consensus)"],
-    ["3", "View Blockchain (Network Connection History)"],
-    ["4", "View Pending Connection Requests"],
-    ["5", "View Current Peers"],
-    ["6", "Disconnect (Close Application)"]
+    ["3", "Revoke Connection Request"],
+    ["4", "View Blockchain (Network Connection History)"],
+    ["5", "View Pending Connection Requests"],
+    ["6", "View Current Peers"],
+    ["7", "Disconnect (Close Application)"]
 ]
 MENU_OPTIONS_CONNECTED = [
     ["1", "Send Message to a Peer"],
     ["2", "Send a Connection Request for Approval"],
-    ["3", "View Blockchain (Network Connection History)"],
-    ["4", "View Pending Connection Requests"],
-    ["5", "View Current Peers"],
-    ["6", "Disconnect (Close Application)"]
+    ["3", "Revoke a Connection Request"],
+    ["4", "View Blockchain (Network Connection History)"],
+    ["5", "View Pending Connection Requests"],
+    ["6", "View Current Peers"],
+    ["7", "Disconnect (Close Application)"]
 ]
 USER_INPUT_START_MSG = "[+] User input (menu) thread has started!"
 USER_INPUT_THREAD_NAME = "user_input_menu_thread"
@@ -103,28 +112,30 @@ ACK = "ACK"
 
 # ADMIN/DELEGATE MENU CONSTANTS (WHEN CONNECTED)
 ADMIN_MIN_MENU_ITEM_VALUE = 1
-ADMIN_MAX_MENU_ITEM_VALUE = 9
+ADMIN_MAX_MENU_ITEM_VALUE = 10
 ADMIN_MENU_OPTIONS = [
     ["1", "Send Message to a Peer"],
     ["2", "Broadcast a Message"],
     ["3", "Approve a Connection Request (Consensus)"],
-    ["4", "View Blockchain (Network Connection History)"],
-    ["5", "View Pending Connection Requests"],
-    ["6", "View Current Peers"],
-    ["7", "Promote a Peer (as Delegate)"],
-    ["8", "Kick a Peer"],
-    ["9", "Disconnect (Close Application)"]
+    ["4", "Revoke a Connection Request"],
+    ["5", "View Blockchain (Network Connection History)"],
+    ["6", "View Pending Connection Requests"],
+    ["7", "View Current Peers"],
+    ["8", "Promote a Peer (as Delegate)"],
+    ["9", "Kick a Peer"],
+    ["10", "Disconnect (Close Application)"]
 ]
 DELEGATE_MIN_MENU_ITEM_VALUE = 1
-DELEGATE_MAX_MENU_ITEM_VALUE = 7
+DELEGATE_MAX_MENU_ITEM_VALUE = 8
 DELEGATE_MENU_OPTIONS = [
     ["1", "Send Message to a Peer"],
     ["2", "Broadcast a Message"],
     ["3", "Approve a Connection Request (Consensus)"],
-    ["4", "View Blockchain (Network Connection History)"],
-    ["5", "View Pending Connection Requests"],
-    ["6", "View Current Peers"],
-    ["7", "Disconnect (Close Application)"]
+    ["4", "Revoke a Connection Request"],
+    ["5", "View Blockchain (Network Connection History)"],
+    ["6", "View Pending Connection Requests"],
+    ["7", "View Current Peers"],
+    ["8", "Disconnect (Close Application)"]
 ]
 
 
@@ -211,7 +222,14 @@ FILE_TRANSFER_BULK_SIGNAL = "FILE TRANSFER BULK"
 END_OF_FILE = "EOF"
 
 
+# TRANSACTION CONSTANTS
+TRANSACTION_TO_STR = ("Transaction <Object>: ip_addr={}, port={}, role={}, pub_key={}, "
+                      "first_name={}, last_name={}, timestamp={}, signature={}, received_by={}")
+
+
 # OTHER CONSTANTS
 OP_ENCRYPT = "ENCRYPTION"
 OP_DECRYPT = "DECRYPTION"
 SAVE_FILE_DIR = "data/received/{}"
+THREE_MINUTES = 180
+

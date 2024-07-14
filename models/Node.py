@@ -6,9 +6,9 @@ from utility.constants import NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_T
     INPUT_PROMPT, MIN_MENU_ITEM_VALUE, MAX_MENU_ITEM_VALUE, SELECT_CLIENT_SEND_MSG_PROMPT, \
     USER_MENU_THREAD_TERMINATE, ROLE_PEER
 from utility.ec_keys_utils import generate_keys
-from utility.node_init import parse_arguments, initialize_socket
+from utility.node_init import parse_arguments, initialize_socket, get_application_timestamp
 from utility.node_utils import display_menu, view_current_connections, close_application, send_message, \
-    get_specific_client
+    get_specific_peer
 
 
 class Node:
@@ -36,6 +36,7 @@ class Node:
         self.pvt_key, self.pub_key = generate_keys()
         self.fd_list = [self.own_socket]  # => Monitored by select()
         self.peer_dict = {}  # Format {IP: [name, shared_secret, IV, cipher mode]}
+        self.app_timestamp = get_application_timestamp()
         self.is_connected = False
         self.terminate = False
         print(NODE_INIT_SUCCESS_MSG)
@@ -86,8 +87,8 @@ class Node:
 
         @return: None
         """
-        def send_message_to_specific_client():
-            client_sock, cipher, _, _ = get_specific_client(self, prompt=SELECT_CLIENT_SEND_MSG_PROMPT)
+        def send_message_to_specific_peer():
+            client_sock, cipher, _, _ = get_specific_peer(self, prompt=SELECT_CLIENT_SEND_MSG_PROMPT)
             send_message(client_sock, cipher)
 
         def terminate_application():
@@ -110,7 +111,7 @@ class Node:
             6: lambda: terminate_application()
         }
         actions_when_connected = {
-            1: lambda: send_message_to_specific_client(),
+            1: lambda: send_message_to_specific_peer(),
             2: lambda: None,
             3: lambda: None,
             4: lambda: None,

@@ -4,11 +4,15 @@ This Python file contains functions that assist in creating
 and managing EC (elliptic curve) keys.
 
 """
-import hashlib
 import secrets
-
+from base64 import b64encode
+from hashlib import sha3_256
 from tinyec import registry
+from tinyec.ec import Point
 from utility.constants import BLOCK_SIZE
+
+# CONSTANTS
+BRAINPOOLP256r1 = "brainpoolP256r1"
 
 
 def compress(key):
@@ -24,6 +28,21 @@ def compress(key):
         A compressed key represented as a hex string
     """
     return hex(key.x) + hex(key.y % 2)[2:]
+
+
+def compress_signature(signature: tuple):
+    """
+    Compresses the signature tuple (r, s) into a
+    printable format.
+
+    @param signature:
+        A tuple containing a pair of integers (r,s)
+
+    @return: signature_hash
+        A string containing the hash of the signature
+    """
+    r, s = signature
+    return hex(r), hex(s)
 
 
 def derive_shared_secret(pvt_key: int, pub_key):
@@ -49,7 +68,7 @@ def derive_shared_secret(pvt_key: int, pub_key):
     shared_key_bytes = shared_key.x.to_bytes((shared_key.x.bit_length() + 7) // 8, 'big')
 
     # Compress the key by taking only the first 16-bytes of the SHA256 hash
-    shared_key_hash = hashlib.sha3_256(shared_key_bytes).digest()
+    shared_key_hash = sha3_256(shared_key_bytes).digest()
     return shared_key_hash[:BLOCK_SIZE]
 
 
@@ -74,6 +93,89 @@ def generate_keys():
     print(f"[+] Your public key: {compress(public_key)}")
 
     return private_key, public_key
+
+
+def create_signature(pvt_key: int, data: bytes):
+    """
+    Creates a signature using a simplified version of ECDSA
+    (Elliptic Curve Digital Signature Algorithm) based on
+    ElGamal's signature scheme.
+
+    @note Information Source:
+        https://cryptobook.nakov.com/digital-signatures/ecdsa-sign-verify-messages
+
+    @param pvt_key:
+        A random integer selected within 'brainpoolP256r1'
+        elliptic curve's field
+
+    @param data:
+        The data to be signed (in bytes)
+
+    @return: signature (r,s)
+        A tuple containing a pair of integers (r,s)
+    """
+    # Define BrainPool 256-bit Elliptic Curve
+    curve = registry.get_curve(BRAINPOOLP256r1)
+
+    # Hash the data and convert it to integer
+    data_hash = sha3_256(data).digest()
+    e = int.from_bytes(data_hash, byteorder='big')
+
+    # Generate a random integer k
+    k = secrets.randbelow(curve.field.n)
+
+    # Calculate the random curve point (R) and its x-coordinate (r)
+    R = k * curve.g
+    r = R.x % curve.field.n
+
+    # Calculate the signature proof s
+    s = ((e + r * pvt_key) * pow(k, -1, curve.field.n)) % curve.field.n
+
+    # Return the signature (pair of integers r, s)
+    return (r, s)
+
+
+def verify_signature(signature: tuple, data: bytes, pub_key: Point):
+    """
+    Verifies a signature created by the ECDSA algorithm.
+
+    @note Information Source:
+        https://cryptobook.nakov.com/digital-signatures/ecdsa-sign-verify-messages
+
+    @param signature:
+        A tuple containing a pair of integers (r,s)
+
+    @param data:
+        The data to be verified (in bytes)
+
+    @param pub_key:
+        A point (x, y) on the elliptic curve
+
+    @return: Boolean (T/F)
+        True if the signature is valid, False otherwise
+    """
+    # Define BrainPool 256-bit Elliptic Curve
+    curve = registry.get_curve(BRAINPOOLP256r1)
+
+    # Unpack the r, s values of signature
+    r, s = signature
+
+    # Check if r and s are within galois field of the elliptic curve
+    if not (1 <= r <= curve.field.n - 1) or not (1 <= s <= curve.field.n - 1):
+        return False
+
+    # Hash the data and convert it to integer
+    data_hash = sha3_256(data).digest()
+    e = int.from_bytes(data_hash, byteorder='big')
+
+    # Calculate the modular inverse w, and intermediate values u1, u2
+    w = pow(s, -1, curve.field.n)
+    u1 = (e * w) % curve.field.n
+    u2 = (r * w) % curve.field.n
+
+    # Determine the curve point (R) and validate with signature point r
+    R = u1 * curve.g + u2 * pub_key
+    return R.x % curve.field.n == r
 
 
 def generate_shared_secret():

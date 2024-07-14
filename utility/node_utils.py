@@ -3,9 +3,7 @@ Description:
 This Python file contains utility functions for the Node class
 """
 import socket
-
 from prettytable import PrettyTable
-
 from models.CustomCipher import CustomCipher
 from utility.constants import MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, MENU_OPTIONS_CONNECTED, \
     MENU_OPTIONS, CONNECTION_INFO_TITLE, CONNECTION_INFO_FIELD_NAME, \
@@ -109,9 +107,9 @@ def send_message(sock: socket.socket, cipher: CustomCipher):
         print("[+] Your message has been successfully sent!")
 
 
-def get_specific_client(self: object, prompt: str):
+def get_specific_peer(self: object, prompt: str):
     """
-    Prompts user to choose a specific client to
+    Prompts user to choose a specific peer to
     send a message to.
 
     @param self:
@@ -125,7 +123,7 @@ def get_specific_client(self: object, prompt: str):
         the initialization vector
     """
     if len(self.fd_list) > 1:
-        view_current_connections(self, is_server=True)
+        view_current_connections(self)
 
         while True:
             try:
@@ -148,5 +146,5 @@ def get_specific_client(self: object, prompt: str):
             except (ValueError, TypeError) as e:
                 print(f"[+] ERROR: An invalid selection provided ({e}); please enter again.")
     else:
-        print("[+] ERROR: There are currently no connected clients to perform the selected option!")
+        print("[+] ERROR: There are currently no connected peers to perform the selected option!")
         return None, None, None, None

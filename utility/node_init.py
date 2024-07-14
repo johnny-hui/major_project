@@ -9,7 +9,10 @@ import ipaddress
 import socket
 import sys
 from _socket import SO_REUSEADDR
+from datetime import datetime
 from ssl import SOL_SOCKET
+from time import ctime
+import ntplib
 from utility.constants import (INVALID_SRC_IP_ARG_ERROR, MIN_PORT_VALUE,
                                MAX_PORT_VALUE, INVALID_SRC_PORT_RANGE, INVALID_FORMAT_SRC_PORT_ARG_ERROR)
 
@@ -80,3 +83,37 @@ def initialize_socket(ip: str, port: int):
         return sock
     except socket.error as e:
         sys.exit("[+] INIT ERROR: An error has occurred while creating socket object ({})".format(e))
+
+
+def get_application_timestamp():
+    """
+    Gets the current timestamp of when P2P Node application
+    was started (from validated NTP server); if no internet
+    connection, then system time.
+
+    @attention Use Case
+        This is used to determine which Node is designated as
+        "delegate" if two Nodes whom have not yet established
+        a connection to a P2P server and want to connect to one
+        another.
+
+    @return: timestamp
+        A string containing the current timestamp of the time
+        when the application was started
+    """
+    try:
+        response = ntplib.NTPClient().request('pool.ntp.org', timeout=5)
+        ntp_time = ctime(response.tx_time)  # Convert response into ctime
+        ntp_datetime = datetime.strptime(ntp_time, '%a %b %d %H:%M:%S %Y')  # Convert ctime to DateTime
+        timestamp = ntp_datetime.strftime('%Y-%m-%d %I:%M:%S %p')  # Format the timestamp
+
+    except (ntplib.NTPException, socket.timeout, socket.gaierror):
+        print("[+] ERROR: Failed to receive response from NTP server; using system time instead.")
+        system_time = datetime.now()
+        timestamp = system_time.strftime('%Y-%m-%d %I:%M:%S %p')
+
+    except Exception as e:
+        print(f"[+] ERROR: An error occurred while receiving an official timestamp from NTP server: {e}")
+        return None
+
+    return timestamp

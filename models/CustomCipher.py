@@ -1,12 +1,11 @@
 import hashlib
 import secrets
-
 from utility.cipher_utils import (pad_block, encrypt_block, decrypt_block,
                                   unpad_block, get_subkeys_from_user, get_default_subkeys,
                                   is_sub_keys_generated)
 from utility.constants import (CIPHER_INIT_MSG, ROUNDS, BLOCK_SIZE, DEFAULT_ROUND_KEYS,
-                               OP_ENCRYPT, OP_DECRYPT, FORMAT_FILE,
-                               FORMAT_PICTURE, FORMAT_AVALANCHE, ECB, CBC, S_BOX, CIPHER_INIT_SUCCESS_MSG)
+                               OP_ENCRYPT, OP_DECRYPT, ECB, CBC, S_BOX, CIPHER_INIT_SUCCESS_MSG, FORMAT_FILE,
+                               FORMAT_PICTURE, FORMAT_AVALANCHE)
 
 
 class CustomCipher:
