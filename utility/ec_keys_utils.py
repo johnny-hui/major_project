@@ -5,7 +5,6 @@ and managing EC (elliptic curve) keys.
 
 """
 import secrets
-from base64 import b64encode
 from hashlib import sha3_256
 from tinyec import registry
 from tinyec.ec import Point

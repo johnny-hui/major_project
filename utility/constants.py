@@ -6,6 +6,8 @@ INVALID_SRC_IP_ARG_ERROR = ("[+] INIT ERROR: Invalid format for the source IP ad
 INVALID_SRC_PORT_RANGE = ("[+] INIT ERROR: The value provided for source port (-p option) is not "
                           "valid: (not between 1 and 65535)")
 INVALID_FORMAT_SRC_PORT_ARG_ERROR = "[+] INIT ERROR: Invalid format provided for the source port (-p option): {}"
+INVALID_FIRST_NAME_ERROR = "[+] INIT ERROR: First name must not contain any numbers or special characters (-f option)!"
+INVALID_LAST_NAME_ERROR = "[+] INIT ERROR Last name must not contain any numbers or special characters (-l option)!"
 
 
 # CIPHER CONFIG CONSTANTS
@@ -222,14 +224,17 @@ FILE_TRANSFER_BULK_SIGNAL = "FILE TRANSFER BULK"
 END_OF_FILE = "EOF"
 
 
-# TRANSACTION CONSTANTS
-TRANSACTION_TO_STR = ("Transaction <Object>: ip_addr={}, port={}, role={}, pub_key={}, "
-                      "first_name={}, last_name={}, timestamp={}, signature={}, received_by={}")
+# TRANSACTION (CONNECTION REQUESTS) CONSTANTS
+TRANSACTION_TO_STRING = ("Transaction <Object>: ip_addr={}, port={}, role={}, pub_key={}, "
+                         "first_name={}, last_name={}, timestamp={}, signature(r,s)={}, received_by={}")
+TRANSACTION_EXPIRY_TIME = 180
+SAVE_TRANSACTIONS_DIR = "data/transactions/"
+SAVE_TRANSACTION_SUCCESS = ("[+] REQUEST SAVED: The connection request has been successfully created and saved to the "
+                            "following JSON file: {}")
 
 
 # OTHER CONSTANTS
 OP_ENCRYPT = "ENCRYPTION"
 OP_DECRYPT = "DECRYPTION"
 SAVE_FILE_DIR = "data/received/{}"
-THREE_MINUTES = 180
 

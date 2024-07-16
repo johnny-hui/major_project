@@ -6,6 +6,7 @@ the Node class.
 """
 import getopt
 import ipaddress
+import re
 import socket
 import sys
 from _socket import SO_REUSEADDR
@@ -14,7 +15,8 @@ from ssl import SOL_SOCKET
 from time import ctime
 import ntplib
 from utility.constants import (INVALID_SRC_IP_ARG_ERROR, MIN_PORT_VALUE,
-                               MAX_PORT_VALUE, INVALID_SRC_PORT_RANGE, INVALID_FORMAT_SRC_PORT_ARG_ERROR)
+                               MAX_PORT_VALUE, INVALID_SRC_PORT_RANGE, INVALID_FORMAT_SRC_PORT_ARG_ERROR,
+                               INVALID_FIRST_NAME_ERROR, INVALID_LAST_NAME_ERROR)
 
 
 def parse_arguments():
@@ -25,16 +27,26 @@ def parse_arguments():
         Strings containing name, source IP address and source port
     """
     # Initialize variables
-    name, is_client, src_ip, src_port = "", "", "", ""
+    first_name, last_name, src_ip, src_port = "", "", "", ""
     arguments = sys.argv[1:]
-    opts, user_list_args = getopt.getopt(arguments, 'n:s:p:')
+    opts, user_list_args = getopt.getopt(arguments, 'f:l:s:p:')
+    pattern = re.compile("^[a-zA-Z]+$")  # For string validation
 
     if len(opts) == 0:
         sys.exit("[+] INIT ERROR: No arguments were provided!")
 
     for opt, argument in opts:
-        if opt == '-n':  # For name
-            name = argument
+        if opt == '-f':  # For first name
+            if bool(pattern.match(argument)):
+                first_name = argument
+            else:
+                sys.exit(INVALID_FIRST_NAME_ERROR)
+
+        if opt == '-l':  # For last name
+            if bool(pattern.match(argument)):
+                last_name = argument
+            else:
+                sys.exit(INVALID_LAST_NAME_ERROR)
 
         if opt == '-s':  # For source IP
             try:
@@ -51,14 +63,16 @@ def parse_arguments():
                 sys.exit(INVALID_FORMAT_SRC_PORT_ARG_ERROR.format(e))
 
     # Check if parameters are provided
-    if len(name) == 0:
-        sys.exit("[+] INIT ERROR: A name was not provided! (-n option)")
+    if len(first_name) == 0:
+        sys.exit("[+] INIT ERROR: A first name was not provided! (-f option)")
+    if len(last_name) == 0:
+        sys.exit("[+] INIT ERROR: A last name was not provided! (-l option)")
     if len(src_ip) == 0:
         sys.exit("[+] INIT ERROR: A source IP was not provided! (-s option)")
     if len(str(src_port)) == 0:
         sys.exit("[+] INIT ERROR: A source port was not provided! (-p option)")
 
-    return name, src_ip, src_port
+    return first_name, last_name, src_ip, src_port
 
 
 def initialize_socket(ip: str, port: int):

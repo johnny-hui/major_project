@@ -1,10 +1,10 @@
 import io
-import json
+import pickle
 from base64 import b64encode
 from datetime import datetime
 from PIL import Image
 from tinyec.ec import Point
-from utility.constants import TRANSACTION_TO_STR, THREE_MINUTES
+from utility.constants import TRANSACTION_TO_STRING, TRANSACTION_EXPIRY_TIME
 from utility.ec_keys_utils import create_signature, verify_signature, compress, compress_signature
 
 
@@ -12,10 +12,8 @@ class Transaction:
     """A class representing a Block Transaction
     (i.e., Network Connection Request)
     """
-
     def __init__(self, ip: str, port: int,
-                 first_name: str, last_name: str,
-                 public_key: Point):
+                 first_name: str, last_name: str, public_key: Point):
         """
         A constructor for a Transaction object.
 
@@ -66,7 +64,7 @@ class Transaction:
         }
 
         # Preprocess the data by serialization
-        serialized_data = json.dumps(data, sort_keys=True).encode()
+        serialized_data = pickle.dumps(data)
 
         # Sign the data
         self.signature = create_signature(pvt_key, data=serialized_data)
@@ -90,7 +88,7 @@ class Transaction:
         }
 
         # Preprocess the data by serialization
-        serialized_data = json.dumps(data, sort_keys=True).encode()
+        serialized_data = pickle.dumps(data)
 
         # Verify the signature
         if verify_signature(pub_key=self.pub_key, signature=self.signature, data=serialized_data):
@@ -111,9 +109,9 @@ class Transaction:
 
         time_difference = current_time - timestamp
 
-        if time_difference.total_seconds() > THREE_MINUTES:
+        if time_difference.total_seconds() > TRANSACTION_EXPIRY_TIME:
             print(f"[+] CONNECTION REQUEST EXPIRED: A transaction from (IP: {self.ip_addr}) has exceeded max "
-                  f"{THREE_MINUTES} seconds.")
+                  f"{TRANSACTION_EXPIRY_TIME} seconds.")
             return True
         else:
             return False
@@ -165,7 +163,5 @@ class Transaction:
         """
         hashed_pub_key = compress(self.pub_key)
         hashed_signature = compress_signature(self.signature)
-        return (TRANSACTION_TO_STR.format(self.ip_addr, self.port, self.role, hashed_pub_key, self.first_name,
-                                          self.last_name, self.timestamp, hashed_signature, self.received_by))
-
-# TODO: Test transaction object
+        return (TRANSACTION_TO_STRING.format(self.ip_addr, self.port, self.role, hashed_pub_key, self.first_name,
+                                             self.last_name, self.timestamp, hashed_signature, self.received_by))
