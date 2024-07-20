@@ -4,7 +4,7 @@ from base64 import b64encode
 from datetime import datetime
 from PIL import Image
 from tinyec.ec import Point
-from utility.constants import TRANSACTION_TO_STRING, TRANSACTION_EXPIRY_TIME
+from utility.constants import TRANSACTION_TO_STRING, TRANSACTION_EXPIRY_TIME, TRANSACTION_MAX_IMG_SIZE, TIMESTAMP_FORMAT
 from utility.ec_keys_utils import create_signature, verify_signature, compress, compress_signature
 
 
@@ -105,7 +105,7 @@ class Transaction:
             True if expired; False otherwise
         """
         current_time = datetime.now()
-        timestamp = datetime.strptime(self.timestamp, "%Y-%m-%d %I:%M:%S %p")
+        timestamp = datetime.strptime(self.timestamp, TIMESTAMP_FORMAT)
 
         time_difference = current_time - timestamp
 
@@ -123,9 +123,17 @@ class Transaction:
     def set_image(self, image_bytes: bytes):
         """
         Set the image attribute
+
+        @raise ValueError:
+            The required image must be larger than 1 MB in size
+
         @return: None
         """
-        self.image = image_bytes
+        if len(image_bytes) < TRANSACTION_MAX_IMG_SIZE:
+            raise ValueError(f"[+] ERROR: The provided image is less than 1 MB ({len(image_bytes)}); "
+                             f"please provide a larger image!")
+        else:
+            self.image = image_bytes
 
     def set_timestamp(self, timestamp: str):
         """

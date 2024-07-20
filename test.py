@@ -5,38 +5,39 @@ This Python file is used to test functions.
 """
 import pickle
 import secrets
-
-from models.CustomCipher import CustomCipher
+import sys
+from datetime import datetime
 from models.Transaction import Transaction
-from utility.constants import BLOCK_SIZE, CBC, FORMAT_FILE
+from utility.aes_utils import AES_encrypt
+from utility.constants import BLOCK_SIZE, TIMESTAMP_FORMAT, ECB
 from utility.ec_keys_utils import generate_keys, generate_shared_secret
-from utility.utils import load_image, save_transaction
+from utility.node_utils import save_transaction, load_transactions
+from utility.utils import load_image
 
 if __name__ == '__main__':
-    ip, port, first_name, last_name = "10.0.0.74", 69, "Bob", "Ross"
+    ip, port, first_name, last_name = "10.0.0.16", 126, "Thompson", "Tristan"
     pvt_key, pub_key = generate_keys()
 
     obj = Transaction(ip=ip, port=port, first_name=first_name, last_name=last_name, public_key=pub_key)
-    img = load_image(path="data/photos/received_image.png")
-    obj.set_role("ADMIN")
-    obj.set_image(img)
-    obj.sign_transaction(pvt_key=pvt_key)
-    print(obj)
+    try:
+        img = load_image(path="data/photos/received_image.png")
+        obj.set_role("ADMIN")
+        obj.set_image(img)
+        obj.sign_transaction(pvt_key=pvt_key)
+        obj.set_timestamp(datetime.now().strftime(TIMESTAMP_FORMAT))
+    except ValueError as e:
+        sys.exit(str(e))
 
+    # Connect to Client: Key Exchange Simulation and Generation of Secret
     shared_key = generate_shared_secret()
     iv = secrets.token_bytes(BLOCK_SIZE)
-    cipher = CustomCipher(key=shared_key, mode=CBC, iv=iv)
 
-    # Encrypt and send to peer
+    # Encrypt using AES and send to peer
     data = pickle.dumps(obj)
-    encrypted_object = cipher.encrypt(data, format=FORMAT_FILE)
+    encrypted_object = AES_encrypt(data=data, key=shared_key, mode=ECB, iv=iv)
 
-    # Other peer receives it and saves it to a file (encrypted only!)
-    save_transaction(data=encrypted_object)
-    decrypted_object = cipher.decrypt(encrypted_object, format=FORMAT_FILE)
-    decrypted_data = pickle.loads(decrypted_object)
-    if decrypted_data.is_verified():
-        print("[+] VERIFIED!")
-    else:
-        print("[!] NOT VERIFIED!")
+    # The other peer receives it and saves it to a file (encrypted only!)
+    save_transaction(data=encrypted_object, shared_secret=shared_key, iv=iv, mode=ECB)
 
+    # Load Transactions
+    load_transactions()

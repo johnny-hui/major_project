@@ -36,6 +36,7 @@ class Node:
         self.pvt_key, self.pub_key = generate_keys()
         self.fd_list = [self.own_socket]  # => Monitored by select()
         self.peer_dict = {}  # Format {IP: [name, shared_secret, IV, cipher mode]}
+        self.pendingTransactions = []
         self.app_timestamp = get_application_timestamp()
         self.is_connected = False
         self.terminate = False

@@ -85,6 +85,9 @@ MAX_MENU_ITEM_VALUE = 7
 MENU_TITLE = "Menu Options"
 MENU_FIELD_OPTION = "Option"
 MENU_FIELD_DESC = "Command"
+INVALID_MENU_SELECTION = "[+] MENU SELECTION: Please enter a valid menu option ({} to {}): "
+MENU_ACTION_START_MSG = "\n[+] ACTION SELECTED: Now performing menu item {}..."
+INVALID_INPUT_MENU_ERROR = "[+] ERROR: Invalid input was provided to menu: {}"
 INPUT_PROMPT = "[+] Select a menu option: "
 MENU_OPTIONS = [
     ["1", "Connect to the P2P Network"],
@@ -231,6 +234,27 @@ TRANSACTION_EXPIRY_TIME = 180
 SAVE_TRANSACTIONS_DIR = "data/transactions/"
 SAVE_TRANSACTION_SUCCESS = ("[+] REQUEST SAVED: The connection request has been successfully created and saved to the "
                             "following JSON file: {}")
+TRANSACTION_INVALID_SIG_MSG = ("[+] A transaction (connection request) from {} has an invalid signature "
+                               "and has been deleted!")
+TRANSACTION_EXPIRED_MSG = "[+] A transaction (connection request) from {} has expired!"
+TRANSACTION_MAX_IMG_SIZE = 1048576
+TIMESTAMP_FORMAT = "%Y-%m-%d %I:%M:%S %p"
+SHARED_KEY_BYTE_MAPPING = {
+    29267: None, 10123: None, 761: None, 6305: None,
+    1021: None, 39727: None, 4812: None, 82123: None,
+    20102: None, 3215: None, 92193: None, 21: None,
+    8194: None, 44133: None, 9393: None, 569: None
+}
+INIT_FACTOR_BYTE_MAPPING = {
+    73743: None, 29873: None, 65721: None, 17654: None,
+    76523: None, 32457: None, 49128: None, 12058: None,
+    57392: None, 60543: None, 781: None, 45932: None,
+    10293: None, 62739: None, 50421: None, 94012: None
+}
+ECB_FLAG = 0x3A
+CBC_FLAG = 0x7F
+MODE_ECB_BYTE_MAPPING = (53, 0x3A)
+MODE_CBC_BYTE_MAPPING = (53, 0x7F)
 
 
 # OTHER CONSTANTS

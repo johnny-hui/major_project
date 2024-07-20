@@ -4,10 +4,10 @@ This Python file contains utility functions used by CustomCipher and
 CipherPlayground classes.
 
 """
+from typing import TextIO
 from prettytable import PrettyTable
-
 from utility.constants import OP_DECRYPT, OP_ENCRYPT, NO_SUBKEYS_ENCRYPT_MSG, \
-    NO_SUBKEYS_DECRYPT_MSG
+    NO_SUBKEYS_DECRYPT_MSG, INVALID_MENU_SELECTION, MENU_ACTION_START_MSG, INVALID_INPUT_MENU_ERROR
 
 
 def is_valid_key(key: str, block_size: int):
@@ -245,6 +245,35 @@ def get_default_subkeys(default_keys: list[int]):
     return sub_keys
 
 
+def get_user_menu_option(fd: TextIO, min_num_options: int, max_num_options: int):
+    """
+    Gets the user selection for the menu.
+
+    @param fd:
+        The file descriptor for stdin
+
+    @param min_num_options:
+        The minimum number of options possible
+
+    @param max_num_options:
+        The maximum number of options possible
+
+    @return: command
+        An integer representing the selection
+    """
+    while True:
+        try:
+            command = int(fd.readline().strip())
+            while not (min_num_options <= command <= max_num_options):
+                print(INVALID_MENU_SELECTION.format(min_num_options, max_num_options))
+                command = int(fd.readline().strip())
+            print(MENU_ACTION_START_MSG.format(command))
+            return command
+        except (ValueError, TypeError) as e:
+            print(INVALID_INPUT_MENU_ERROR.format(e))
+            print(INVALID_MENU_SELECTION.format(min_num_options, max_num_options))
+
+
 def make_table(title: str, columns: list[str], content: list):
     """
     Constructs a PrettyTable.
@@ -270,33 +299,6 @@ def make_table(title: str, columns: list[str], content: list):
 
 
 # ============================== // CIPHER PLAYGROUND FUNCTIONS // ==============================
-# def get_user_menu_option(fd: TextIO, min_num_options: int, max_num_options: int):
-#     """
-#     Gets the user selection for the menu.
-#
-#     @param fd:
-#         The file descriptor for stdin
-#
-#     @param min_num_options:
-#         The minimum number of options possible
-#
-#     @param max_num_options:
-#         The maximum number of options possible
-#
-#     @return: command
-#         An integer representing the selection
-#     """
-#     while True:
-#         try:
-#             command = int(fd.readline().strip())
-#             while not (min_num_options <= command <= max_num_options):
-#                 print(INVALID_MENU_SELECTION.format(min_num_options, max_num_options))
-#                 command = int(fd.readline().strip())
-#             print(MENU_ACTION_START_MSG.format(command))
-#             return command
-#         except (ValueError, TypeError) as e:
-#             print(INVALID_INPUT_MENU_ERROR.format(e))
-#             print(INVALID_MENU_SELECTION.format(min_num_options, max_num_options))
 #
 #
 # def change_mode(cipher: object):
