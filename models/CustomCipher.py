@@ -1,11 +1,11 @@
 import hashlib
 import secrets
-from utility.cipher_utils import (pad_block, encrypt_block, decrypt_block,
-                                  unpad_block, get_subkeys_from_user, get_default_subkeys,
-                                  is_sub_keys_generated)
-from utility.constants import (CIPHER_INIT_MSG, ROUNDS, BLOCK_SIZE, DEFAULT_ROUND_KEYS,
-                               OP_ENCRYPT, OP_DECRYPT, ECB, CBC, S_BOX, CIPHER_INIT_SUCCESS_MSG, FORMAT_FILE,
+from utility.constants import (ROUNDS, BLOCK_SIZE, DEFAULT_ROUND_KEYS,
+                               OP_ENCRYPT, OP_DECRYPT, ECB, CBC, S_BOX, FORMAT_FILE,
                                FORMAT_PICTURE, FORMAT_AVALANCHE)
+from utility.crypto.cipher_utils import (pad_block, encrypt_block, decrypt_block,
+                                         unpad_block, get_subkeys_from_user, get_default_subkeys,
+                                         is_sub_keys_generated)
 
 
 class CustomCipher:
@@ -24,8 +24,6 @@ class CustomCipher:
         """
         A constructor for a CustomCipher class object.
         """
-        print('=' * 160)
-        print(CIPHER_INIT_MSG)
         self.mode = mode
         self.rounds = ROUNDS
         self.block_size = BLOCK_SIZE
@@ -33,8 +31,6 @@ class CustomCipher:
         self.iv = iv
         self.sub_keys = []
         self.__generate_subkeys()
-        print(CIPHER_INIT_SUCCESS_MSG)
-        print('=' * 160)
 
     def round_function(self, right_block: bytes, key: bytes, round_num: int):
         """
@@ -116,7 +112,7 @@ class CustomCipher:
         return hashed_result[23:31]
 
     def encrypt(self, plaintext: str | bytes, format=None,
-                playground=False, avalanche=False, verbose=True):
+                playground=False, avalanche=False, verbose=False):
         """
         Encrypts plaintext to ciphertext using a 16-round
         Feistel architecture.
@@ -200,7 +196,7 @@ class CustomCipher:
 
         return ciphertext
 
-    def decrypt(self, ciphertext: bytes, playground=False, format=None, verbose=True):
+    def decrypt(self, ciphertext: bytes, playground=False, format=None, verbose=False):
         """
         Decrypts ciphertext back into plaintext (or bytes)
         using a 16-round Feistel architecture.
@@ -261,7 +257,7 @@ class CustomCipher:
             else:
                 return unpad_block(plaintext_bytes).decode()  # => Return string
 
-    def __generate_subkeys(self):
+    def __generate_subkeys(self, verbose=False):
         """
         Generates a set of sub-keys from the main key on a
         per-round basis based on a permutation scheme.
@@ -275,8 +271,9 @@ class CustomCipher:
 
         @return: None
         """
-        print("[+] SUBKEY GENERATION: Now processing sub-keys...")
-        print(f"[+] Generating sub-keys from the following main key: {self.key.hex()}")
+        if verbose:
+            print("[+] SUBKEY GENERATION: Now processing sub-keys...")
+            print(f"[+] Generating sub-keys from the following main key: {self.key.hex()}")
 
         def expansion(key: bytes):
             EP_BOX = [
@@ -317,7 +314,8 @@ class CustomCipher:
             permuted_key = permutate_key(initial_key, round_number=i+1)
             initial_key = hashlib.sha3_256(permuted_key).digest()
             self.sub_keys.append(initial_key[23:31])
-            print(f"[+] Round {i + 1}: {initial_key[23:31].hex()}")
+            if verbose:
+                print(f"[+] Round {i + 1}: {initial_key[23:31].hex()}")
 
     def process_subkey_generation(self, menu_option=None):
         """

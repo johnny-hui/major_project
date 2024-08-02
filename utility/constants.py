@@ -1,3 +1,7 @@
+# APPLICATION CONSTANTS
+APPLICATION_PORT = 323
+
+
 # GETOPTS CONSTANTS
 MIN_PORT_VALUE = 1
 MAX_PORT_VALUE = 65536
@@ -71,6 +75,10 @@ FORMAT_BYTES = "BYTES"
 # NODE INIT CONSTANTS
 NODE_INIT_MSG = "[+] Now initializing your node..."
 NODE_INIT_SUCCESS_MSG = "[+] Initialization Successful!"
+MONITOR_PENDING_PEERS_THREAD_NAME = "monitor_pending_peers_thread"
+MONITOR_PENDING_PEERS_START_MSG = "[+] Monitor pending peers thread has started!"
+MONITOR_PENDING_PEERS_THREAD_TERMINATE = ("[+] THREAD TERMINATION: Monitor pending peers thread has been "
+                                          "successfully terminated!")
 
 
 # ROLE CONSTANTS
@@ -236,7 +244,6 @@ SAVE_TRANSACTION_SUCCESS = ("[+] REQUEST SAVED: The connection request has been 
                             "following JSON file: {}")
 TRANSACTION_INVALID_SIG_MSG = ("[+] A transaction (connection request) from {} has an invalid signature "
                                "and has been deleted!")
-TRANSACTION_EXPIRED_MSG = "[+] A transaction (connection request) from {} has expired!"
 TRANSACTION_MAX_IMG_SIZE = 1048576
 TIMESTAMP_FORMAT = "%Y-%m-%d %I:%M:%S %p"
 SHARED_KEY_BYTE_MAPPING = {
@@ -257,8 +264,64 @@ MODE_ECB_BYTE_MAPPING = (53, 0x3A)
 MODE_CBC_BYTE_MAPPING = (53, 0x7F)
 
 
+# KEY EXCHANGE CONSTANTS
+MODE_RECEIVE = "RECEIVE"
+MODE_INITIATE = "INITIATE"
+SHARED_SECRET_SUCCESS_MSG = ("[+] KEY EXCHANGE SUCCESS: A shared secret has been derived for "
+                             "the current session ({}) | Number of Bytes = {}")
+
+
+# CLIENT/SERVER PROTOCOL SIGNALS
+PHOTO_SIGNAL = "PHOTO"
+REQUEST_SIGNAL = "SIGNAL"
+APPROVED_SIGNAL = "APPROVED"
+RECEIVED_TRANSACTION_SUCCESS = ("[+] CONNECTION REQUEST RECEIVED: Successfully received and verified peer's "
+                                "Transaction (connection request) from ({})")
+CONNECTION_TIMEOUT_ERROR = ("[+] CONNECTION TIMEOUT: A timeout has occurred while attempting to establish a connection "
+                            "with IP {} (host offline or experiencing congestion); please try again.")
+CONNECTION_ERROR = "[+] CONNECTION ERROR: An error has occurred while connecting to (IP: {}, Port: {})!"
+FIND_HOST_TIMEOUT = 3  # => in seconds
+TARGET_DISCONNECT_MSG = ("[+] TARGET DISCONNECTED: The target peer has unexpectedly closed the connection "
+                         "(or has disconnected); now attempting to reconnect...")
+TARGET_RECONNECT_MSG = ("[+] CONNECTION RE-ESTABLISHED: The connection to target peer has been re-established; "
+                        "now awaiting response...")
+
+
+# CONNECT TO P2P NETWORK CONSTANTS
+CONNECT_METHOD_PROMPT = ("[+] CONNECT OPTIONS: Enter '1' to connect to a specific host; "
+                         "Enter '2' to find an available host within local network; "
+                         "or (Enter '0' to quit): ")
+ENTER_IP_PROMPT = "[+] Enter the IP address of the target peer you would like to connect to: "
+INVALID_IP_ERROR = "[+] CONNECTION ERROR: Invalid IP address or format was provided. Please try again."
+OWN_IP_ERROR_MSG = "[+] CONNECTION ERROR: Cannot connect to yourself! Please try again."
+ACCEPT_NEW_PEER_TIMEOUT = 10  # => in seconds
+SEND_REQUEST_MSG = "[+] Sending request to {}..."
+SEND_REQUEST_SUCCESS = "[+] Your transaction (connection request) has been successfully sent!"
+CONNECTION_AWAIT_RESPONSE_MSG = ("[+] AWAITING RESPONSE: Now awaiting consensus and decision from"
+                                 " peers... [Time before expiry = {}]")
+CONNECTION_AWAIT_TIMEOUT_MSG = ("[+] RESPONSE TIMEOUT: Wait-time has exceeded; unable to reach a consensus within the "
+                                "wait-time allotted for your connection request. Please try again.")
+NO_HOST_FOUND = "[+] NO HOSTS FOUND: No available hosts were found; please try again."
+
+
+# RESPONSE CONSTANTS
+RESPONSE_APPROVED = "APPROVED"
+RESPONSE_REJECTED = "REJECTED"
+RESPONSE_EXPIRED = "EXPIRED"
+RESPONSE_EXISTS = "REQ_EXIST"
+RESPONSE_INVALID_SIG = "INVALID_SIG"
+REQUEST_APPROVED_MSG = "[+] REQUEST ACCEPTED: Your connection request was approved!"
+REQUEST_ALREADY_EXISTS_MSG = ("[+] REQUEST REJECTED: Your connection request has been refused by target peer "
+                              "[Reason: This current IP has already submitted a request; please try again!]")
+REQUEST_REFUSED_MSG = ("[+] REQUEST REJECTED: Your connection request has been refused by the target peer "
+                       "[Reason: Insufficient evidence provided or wrong identity!]")
+REQUEST_INVALID_SIG_MSG = ("[+] REQUEST REJECTED: Your connection request has been refused by the target peer "
+                           "[Reason: An invalid signature provided!]")
+REQUEST_EXPIRED_MSG = ("[+] REQUEST REJECTED: Your connection request has been refused by the target peer "
+                       "[Reason: The connection request has expired!]")
+
+
 # OTHER CONSTANTS
 OP_ENCRYPT = "ENCRYPTION"
 OP_DECRYPT = "DECRYPTION"
 SAVE_FILE_DIR = "data/received/{}"
-

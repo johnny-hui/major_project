@@ -4,10 +4,9 @@ This Python file contains utility functions used by CustomCipher and
 CipherPlayground classes.
 
 """
-from typing import TextIO
 from prettytable import PrettyTable
 from utility.constants import OP_DECRYPT, OP_ENCRYPT, NO_SUBKEYS_ENCRYPT_MSG, \
-    NO_SUBKEYS_DECRYPT_MSG, INVALID_MENU_SELECTION, MENU_ACTION_START_MSG, INVALID_INPUT_MENU_ERROR
+    NO_SUBKEYS_DECRYPT_MSG
 
 
 def is_valid_key(key: str, block_size: int):
@@ -170,32 +169,6 @@ def decrypt_block(self: object, block: bytes):
     return right_half + left_half
 
 
-def get_user_command_option(opt_range: tuple, msg: str):
-    """
-    Prompts a user for a command option.
-
-    @param opt_range:
-        A tuple containing the minimum and maximum
-        values for command options
-
-    @param msg:
-        A string representing the message (prompt) to be printed
-
-    @return: command
-        An integer for the command option to be executed
-    """
-    while True:
-        try:
-            command = int(input(msg))
-            if command in opt_range:
-                break
-            else:
-                print("[+] ERROR: Invalid command provided; please try again.")
-        except (ValueError, TypeError) as e:
-            print(f"[+] ERROR: Invalid option selected; please try again! ({e})")
-    return command
-
-
 def get_subkeys_from_user(block_size: int, rounds: int):
     """
     Prompts the user to provide an X number of sub-keys
@@ -243,35 +216,6 @@ def get_default_subkeys(default_keys: list[int]):
         print(f"[+] ROUND {round}: {hex(key)} <=> {subkey.hex()}")
         sub_keys.append(subkey)
     return sub_keys
-
-
-def get_user_menu_option(fd: TextIO, min_num_options: int, max_num_options: int):
-    """
-    Gets the user selection for the menu.
-
-    @param fd:
-        The file descriptor for stdin
-
-    @param min_num_options:
-        The minimum number of options possible
-
-    @param max_num_options:
-        The maximum number of options possible
-
-    @return: command
-        An integer representing the selection
-    """
-    while True:
-        try:
-            command = int(fd.readline().strip())
-            while not (min_num_options <= command <= max_num_options):
-                print(INVALID_MENU_SELECTION.format(min_num_options, max_num_options))
-                command = int(fd.readline().strip())
-            print(MENU_ACTION_START_MSG.format(command))
-            return command
-        except (ValueError, TypeError) as e:
-            print(INVALID_INPUT_MENU_ERROR.format(e))
-            print(INVALID_MENU_SELECTION.format(min_num_options, max_num_options))
 
 
 def make_table(title: str, columns: list[str], content: list):

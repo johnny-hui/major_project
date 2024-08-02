@@ -8,24 +8,28 @@ import secrets
 import sys
 from datetime import datetime
 from models.Transaction import Transaction
-from utility.aes_utils import AES_encrypt
+from utility.crypto.aes_utils import AES_encrypt
 from utility.constants import BLOCK_SIZE, TIMESTAMP_FORMAT, ECB
-from utility.ec_keys_utils import generate_keys, generate_shared_secret
-from utility.node_utils import save_transaction, load_transactions
-from utility.utils import load_image
+from utility.crypto.ec_keys_utils import generate_keys, generate_shared_secret
+from utility.node.node_utils import save_transaction_to_file, load_transactions
+from utility.utils import load_image, get_img_path
 
 if __name__ == '__main__':
     ip, port, first_name, last_name = "10.0.0.16", 126, "Thompson", "Tristan"
     pvt_key, pub_key = generate_keys()
 
-    obj = Transaction(ip=ip, port=port, first_name=first_name, last_name=last_name, public_key=pub_key)
+    obj = Transaction(ip=ip, port=port, first_name=first_name,
+                      last_name=last_name, public_key=pub_key)
+
+    img_path = get_img_path()
+
     try:
-        img = load_image(path="data/photos/received_image.png")
+        img = load_image(path=img_path)
         obj.set_role("ADMIN")
         obj.set_image(img)
-        obj.sign_transaction(pvt_key=pvt_key)
         obj.set_timestamp(datetime.now().strftime(TIMESTAMP_FORMAT))
-    except ValueError as e:
+        obj.sign_transaction(pvt_key=pvt_key)
+    except (ValueError, FileNotFoundError, IOError) as e:
         sys.exit(str(e))
 
     # Connect to Client: Key Exchange Simulation and Generation of Secret
@@ -37,7 +41,7 @@ if __name__ == '__main__':
     encrypted_object = AES_encrypt(data=data, key=shared_key, mode=ECB, iv=iv)
 
     # The other peer receives it and saves it to a file (encrypted only!)
-    save_transaction(data=encrypted_object, shared_secret=shared_key, iv=iv, mode=ECB)
+    save_transaction_to_file(data=encrypted_object, shared_secret=shared_key, iv=iv, mode=ECB)
 
     # Load Transactions
-    load_transactions()
+    transaction = load_transactions()

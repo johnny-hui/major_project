@@ -5,11 +5,13 @@ This Python file contains utility functions for the Node class.
 """
 import os
 import pickle
+import select
 import socket
+from typing import TextIO
 from prettytable import PrettyTable
+from exceptions.exceptions import RequestAlreadyExistsError
 from models.CustomCipher import CustomCipher
 from models.Transaction import Transaction
-from utility.aes_utils import AES_decrypt
 from utility.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, MENU_OPTIONS_CONNECTED, MENU_OPTIONS,
                                CONNECTION_INFO_TITLE, CONNECTION_INFO_FIELD_NAME,
                                CONNECTION_INFO_FIELD_IP, CONNECTION_INFO_FIELD_CIPHER_MODE,
@@ -18,9 +20,193 @@ from utility.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, M
                                INIT_FACTOR_BYTE_MAPPING,
                                MODE_CBC_BYTE_MAPPING, MODE_ECB_BYTE_MAPPING, SHARED_KEY_BYTE_MAPPING,
                                SAVE_TRANSACTIONS_DIR,
-                               SAVE_TRANSACTION_SUCCESS, CBC_FLAG, ECB_FLAG, ECB, TRANSACTION_INVALID_SIG_MSG,
-                               TRANSACTION_EXPIRED_MSG)
-from utility.utils import create_directory, is_directory_empty, write_to_file
+                               SAVE_TRANSACTION_SUCCESS, CBC_FLAG, ECB_FLAG, ECB,
+                               INVALID_MENU_SELECTION, MENU_ACTION_START_MSG, INVALID_INPUT_MENU_ERROR,
+                               TRANSACTION_INVALID_SIG_MSG)
+from utility.crypto.aes_utils import AES_decrypt
+from utility.node.node_init import get_current_timestamp
+from utility.utils import create_directory, is_directory_empty, write_to_file, get_img_path, load_image
+
+
+def monitor_pending_peers(self: object):
+    """
+    Uses select() to monitor pending peer sockets
+    that are awaiting consensus.
+
+    @return: None
+    """
+    while not self.terminate:
+        readable, _, _ = select.select(self.fd_pending, [], [], 1)
+
+        for fd in readable:
+            try:
+                data = fd.recv(1024)
+                if not data:
+                    print(f"[+] A pending connection request has been closed by ({fd.getpeername()[0]}) due to "
+                          f"a request timeout or manual disconnection!")
+                    remove_pending_peer(self, peer_sock=fd)
+            except (socket.error, socket.timeout) as e:
+                print(f"[+] An error has occurred with socket ({fd.getpeername()}); connection closed! (REASON: {e})")
+                remove_pending_peer(self, peer_sock=fd)
+
+
+def remove_pending_peer(self: object, peer_sock: socket.socket):
+    """
+    Removes all saved peer information and closes the
+    socket connection with the pending peer.
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @param peer_sock:
+        The socket object of the pending peer
+        to be removed
+
+    @return: None
+    """
+    ip = peer_sock.getpeername()[0]
+    try:
+        del self.peer_dict[ip]
+    except KeyError as e:
+        print(f"[+] REMOVE PENDING PEER INFO: An error has occurred while deleting from peer dictionary! ({e})")
+    finally:
+        delete_transaction(self, ip_to_remove=ip)
+        self.fd_pending.remove(peer_sock)
+        peer_sock.close()
+        print(f"[+] REMOVE PENDING PEER: Pending peer (IP: {ip}) has been successfully removed!")
+
+
+def save_pending_peer_info(self: object, peer_socket: socket.socket, peer_ip: str,
+                           first_name: str, last_name: str, shared_secret: bytes,
+                           mode: str, peer_iv: bytes = None):
+    """
+    Saves information for a pending peer.
+
+    @param self:
+        A reference to the calling class object (Node)
+    @param peer_socket:
+        The socket object of the pending peer
+    @param peer_ip:
+        The IP address of the pending peer
+    @param first_name:
+        The first name of the pending peer
+    @param last_name:
+        The last name of the pending peer
+    @param shared_secret:
+        The shared secret of the pending peer
+    @param mode:
+        The selected cipher mode by the pending peer
+    @param peer_iv:
+        The pending peer's IV (if CBC)
+
+    @return: None
+    """
+    self.fd_pending.append(peer_socket)
+    self.peer_dict[peer_ip] = [first_name, last_name, shared_secret, peer_iv, mode]
+
+
+def get_transaction(self: object, ip: str):
+    """
+    Get a specific Transaction (connection request) object
+    from the list based on the input IP address.
+
+    @param self:
+        Reference to the calling class object (Node)
+
+    @param ip:
+        The IP address of a peer (String)
+
+    @return: None
+    """
+    if len(self.pending_transactions) == 0:
+        return None
+    for transaction in self.pending_transactions:
+        if transaction.ip_addr == ip:
+            return transaction
+
+
+def delete_transaction(self: object, ip_to_remove: str):
+    """
+    Removes a Transaction (connection request) object
+    from the list based on the input IP address.
+
+    @param self:
+        Reference to the calling class object (Node)
+
+    @param ip_to_remove:
+        The IP address of the request object
+        to be removed (String)
+
+    @return: None
+    """
+    if len(self.pending_transactions) == 0:
+        return None
+    self.pending_transactions = [
+        transaction for transaction in self.pending_transactions
+        if transaction.ip_addr != ip_to_remove
+    ]
+
+
+def add_new_transaction(self: object, peer_request: Transaction):
+    """
+    Adds a new Transaction (connection request) object
+    to the Node's pending_transaction list.
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @param peer_request:
+        A Transaction object
+
+    @return: None
+    """
+    for request in self.pending_transactions:
+        if peer_request.ip_addr == request.ip_addr:
+            raise RequestAlreadyExistsError(ip=peer_request.ip_addr)
+    self.pending_transactions.append(peer_request)
+
+
+def create_transaction(self: object):
+    """
+    Creates a new Transaction (connection request) object
+    when attempting to connect to the P2P network.
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @return: transaction or None
+        A Transaction object if no errors; otherwise None
+    """
+    try:
+        img_path = get_img_path()
+        img_bytes = load_image(img_path)
+        transaction = Transaction(ip=self.ip, port=self.port, first_name=self.first_name,
+                                  last_name=self.last_name, public_key=self.pub_key)
+        transaction.set_image(img_bytes)
+        transaction.set_role(self.role)
+        return transaction
+    except (ValueError, FileNotFoundError, IOError) as e:
+        print(f"[+] ERROR: An error has occurred while creating Transaction object: {e}")
+        return None
+
+
+def sign_transaction(self: object, transaction: Transaction):
+    """
+    Gets & sets an updated timestamp and signs
+    the Transaction object.
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @param transaction:
+        A Transaction object
+
+    @return: transaction
+        A Transaction object
+    """
+    transaction.set_timestamp(timestamp=get_current_timestamp())
+    transaction.sign_transaction(self.pvt_key)
+    return transaction
 
 
 def display_menu(role: str, is_connected: bool = False):
@@ -55,6 +241,35 @@ def display_menu(role: str, is_connected: bool = False):
             menu.add_row(item)
 
     print(menu)
+
+
+def get_user_menu_option(fd: TextIO, min_num_options: int, max_num_options: int):
+    """
+    Gets the user selection for the menu.
+
+    @param fd:
+        The file descriptor for stdin
+
+    @param min_num_options:
+        The minimum number of options possible
+
+    @param max_num_options:
+        The maximum number of options possible
+
+    @return: command
+        An integer representing the selection
+    """
+    while True:
+        try:
+            command = int(fd.readline().strip())
+            while not (min_num_options <= command <= max_num_options):
+                print(INVALID_MENU_SELECTION.format(min_num_options, max_num_options))
+                command = int(fd.readline().strip())
+            print(MENU_ACTION_START_MSG.format(command))
+            return command
+        except (ValueError, TypeError) as e:
+            print(INVALID_INPUT_MENU_ERROR.format(e))
+            print(INVALID_MENU_SELECTION.format(min_num_options, max_num_options))
 
 
 def view_current_connections(self: object):
@@ -93,8 +308,8 @@ def close_application(self: object):
 
     @return: None
     """
+    self.terminate = True
     print("[+] CLOSE APPLICATION: Now closing the application...")
-    self.terminate = True  # Set a terminate flag to terminate all threads
     print("[+] Application has been successfully terminated!")
 
 
@@ -140,30 +355,29 @@ def get_specific_peer(self: object, prompt: str):
         while True:
             try:
                 # Prompt user selection for a specific client
-                client_index = int(input(prompt.format(1, len(self.client_dict))))
+                client_index = int(input(prompt.format(1, len(self.peer_dict))))
 
-                while client_index not in range(1, (len(self.client_dict) + 1)):
+                while client_index not in range(1, (len(self.peer_dict) + 1)):
                     print("[+] ERROR: Invalid selection range; please enter again.")
-                    client_index = int(input(prompt.format(1, len(self.client_dict))))
+                    client_index = int(input(prompt.format(1, len(self.peer_dict))))
 
                 # Get information of the client (from dictionary)
-                ip, info = list(self.client_dict.items())[client_index - 1]
-                name = info[0]
+                ip, info = list(self.peer_dict.items())[client_index - 1]
+                secret, iv, mode = info[2], info[3], info[4]
 
                 # Iterate over the list of sockets and find the corresponding one
                 for sock in self.fd_list[1:]:
                     if sock.getpeername()[0] == ip:
-                        return sock, ip, name, None  # TODO: Define return info for peer
+                        return sock, ip, secret, iv, mode
 
             except (ValueError, TypeError) as e:
                 print(f"[+] ERROR: An invalid selection provided ({e}); please enter again.")
     else:
         print("[+] ERROR: There are currently no connected peers to perform the selected option!")
-        return None, None, None, None
+        return None, None, None, None, None
 
 
-def obfuscate(data: bytes, shared_secret: bytes,
-              mode: str, iv: bytes = None):
+def _obfuscate(data: bytes, shared_secret: bytes, mode: str, iv: bytes = None):
     """
     Takes the shared secret and IV (if CBC mode) and
     assigns them to random byte positions within the
@@ -184,7 +398,6 @@ def obfuscate(data: bytes, shared_secret: bytes,
 
     @return: None
     """
-
     def update_data_with_mapping(transaction_data: bytearray, item: bytearray,
                                  byte_map: dict, replaced_bytes: bytearray):
         """
@@ -230,12 +443,11 @@ def obfuscate(data: bytes, shared_secret: bytes,
         position, byte = mode_map
         replaced_bytes.append(transaction_data[position])
         transaction_data[position] = byte
+    # ===============================================================================
 
     data_array = bytearray(data)  # Transaction data
     secret_array = bytearray(shared_secret)  # Shared Secret
     original_bytes = bytearray()  # Replaced Bytes
-
-    # ===============================================================================
 
     # Hide IV data in Transaction data (if CBC)
     if mode == CBC:
@@ -253,8 +465,7 @@ def obfuscate(data: bytes, shared_secret: bytes,
     return data_array
 
 
-def save_transaction(data: bytes, shared_secret: bytes,
-                     mode: str, iv: bytes = None):
+def save_transaction_to_file(data: bytes, shared_secret: bytes, mode: str, iv: bytes = None):
     """
     Saves an encrypted Transaction object (pending connection request)
     to a file within the 'data/transactions/' directory.
@@ -274,7 +485,6 @@ def save_transaction(data: bytes, shared_secret: bytes,
 
     @return: None
     """
-
     def find_latest_transaction_number(path: str = SAVE_TRANSACTIONS_DIR):
         """
         Finds the latest transaction (connection request) number
@@ -295,11 +505,10 @@ def save_transaction(data: bytes, shared_secret: bytes,
                 except ValueError:
                     continue
         return max(file_numbers)
-
     # ===============================================================================
 
     create_directory(path=SAVE_TRANSACTIONS_DIR)
-    new_data = obfuscate(data, shared_secret, mode, iv)
+    new_data = _obfuscate(data, shared_secret, mode, iv)
 
     if is_directory_empty(path=SAVE_TRANSACTIONS_DIR):
         file_path = os.path.join(SAVE_TRANSACTIONS_DIR, "request_1.json")
@@ -320,7 +529,7 @@ def load_transactions(self: object):
     stores them into a list.
 
     @param self:
-        Reference to the calling class object
+        Reference to the calling class object (Node)
 
     @return: None
     """
@@ -377,8 +586,10 @@ def load_transactions(self: object):
         """
         Processes the transaction by checking if it has expired
         and verifying the digital signature.
+
         @param request:
             A Transaction object
+
         @return: None
         """
         nonlocal counter
@@ -386,11 +597,10 @@ def load_transactions(self: object):
             os.remove(file_path)
         elif request.is_verified():
             counter += 1
-            self.pendingTransactions.append(transaction)
+            self.pending_transactions.append(transaction)
         else:
             os.remove(file_path)
             print(TRANSACTION_INVALID_SIG_MSG.format(request.ip_addr))
-
     # ===============================================================================
 
     if not is_directory_empty(path=SAVE_TRANSACTIONS_DIR):

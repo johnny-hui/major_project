@@ -1,19 +1,19 @@
 import io
 import pickle
 from base64 import b64encode
-from datetime import datetime
+from datetime import datetime, timedelta
 from PIL import Image
 from tinyec.ec import Point
 from utility.constants import TRANSACTION_TO_STRING, TRANSACTION_EXPIRY_TIME, TRANSACTION_MAX_IMG_SIZE, TIMESTAMP_FORMAT
-from utility.ec_keys_utils import create_signature, verify_signature, compress, compress_signature
+from utility.crypto.ec_keys_utils import create_signature, verify_signature, compress_pub_key, compress_signature
 
 
 class Transaction:
     """A class representing a Block Transaction
     (i.e., Network Connection Request)
     """
-    def __init__(self, ip: str, port: int,
-                 first_name: str, last_name: str, public_key: Point):
+    def __init__(self, ip: str, port: int, first_name: str,
+                 last_name: str, public_key: Point):
         """
         A constructor for a Transaction object.
 
@@ -61,6 +61,7 @@ class Transaction:
             'first_name': self.first_name,
             'last_name': self.last_name,
             'image': b64encode(self.image).decode(),
+            'timestamp': self.timestamp,
         }
 
         # Preprocess the data by serialization
@@ -85,6 +86,7 @@ class Transaction:
             'first_name': self.first_name,
             'last_name': self.last_name,
             'image': b64encode(self.image).decode(),
+            'timestamp': self.timestamp,
         }
 
         # Preprocess the data by serialization
@@ -104,17 +106,36 @@ class Transaction:
         @return: Boolean (T/F)
             True if expired; False otherwise
         """
+        timestamp = datetime.strptime(self.timestamp, TIMESTAMP_FORMAT) + timedelta(minutes=3)
         current_time = datetime.now()
-        timestamp = datetime.strptime(self.timestamp, TIMESTAMP_FORMAT)
 
-        time_difference = current_time - timestamp
+        time_remaining = int((timestamp - current_time).total_seconds())
 
-        if time_difference.total_seconds() > TRANSACTION_EXPIRY_TIME:
+        if time_remaining <= 0:
             print(f"[+] CONNECTION REQUEST EXPIRED: A transaction from (IP: {self.ip_addr}) has exceeded max "
                   f"{TRANSACTION_EXPIRY_TIME} seconds.")
             return True
         else:
             return False
+
+    def get_time_remaining(self):
+        """
+        Gets the current time (at invocation) and
+        determines the remaining time (in seconds)
+        before expiry.
+
+        @return: time_remaining or None
+            time_remaining (in seconds) if positive; None otherwise
+        """
+        timestamp = datetime.strptime(self.timestamp, TIMESTAMP_FORMAT) + timedelta(minutes=3)
+        current_time = datetime.now()
+
+        time_remaining = int((timestamp - current_time).total_seconds())
+
+        if time_remaining <= 0:
+            return None
+        else:
+            return time_remaining
 
     def show_image(self):
         """Shows the image attached to the transaction."""
@@ -169,7 +190,7 @@ class Transaction:
         Transaction object.
         @return: None
         """
-        hashed_pub_key = compress(self.pub_key)
+        hashed_pub_key = compress_pub_key(self.pub_key)
         hashed_signature = compress_signature(self.signature)
         return (TRANSACTION_TO_STRING.format(self.ip_addr, self.port, self.role, hashed_pub_key, self.first_name,
                                              self.last_name, self.timestamp, hashed_signature, self.received_by))

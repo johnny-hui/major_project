@@ -6,6 +6,7 @@ the Node class.
 """
 import getopt
 import ipaddress
+import ntplib
 import re
 import socket
 import sys
@@ -13,23 +14,23 @@ from _socket import SO_REUSEADDR
 from datetime import datetime
 from ssl import SOL_SOCKET
 from time import ctime
-import ntplib
 from utility.constants import (INVALID_SRC_IP_ARG_ERROR, MIN_PORT_VALUE,
                                MAX_PORT_VALUE, INVALID_SRC_PORT_RANGE, INVALID_FORMAT_SRC_PORT_ARG_ERROR,
-                               INVALID_FIRST_NAME_ERROR, INVALID_LAST_NAME_ERROR)
+                               INVALID_FIRST_NAME_ERROR, INVALID_LAST_NAME_ERROR, ECB, CBC)
 
 
 def parse_arguments():
     """
     Parse the command line for arguments.
 
-    @return name, src_ip, src_port:
-        Strings containing name, source IP address and source port
+    @return first_name, last_name, mode, src_ip:
+        Strings containing the first & last name, encryption mode,
+        IP address of the host
     """
     # Initialize variables
-    first_name, last_name, src_ip, src_port = "", "", "", ""
+    first_name, last_name, mode, src_ip = "", "", "", ""
     arguments = sys.argv[1:]
-    opts, user_list_args = getopt.getopt(arguments, 'f:l:s:p:')
+    opts, user_list_args = getopt.getopt(arguments, 'f:l:m:s:')
     pattern = re.compile("^[a-zA-Z]+$")  # For string validation
 
     if len(opts) == 0:
@@ -48,31 +49,30 @@ def parse_arguments():
             else:
                 sys.exit(INVALID_LAST_NAME_ERROR)
 
+        if opt == '-m':  # For mode
+            if argument.lower() in (ECB, CBC):
+                mode = argument.lower()
+            else:
+                sys.exit("[+] INIT ERROR: An invalid mode was provided! (must choose "
+                         "either 'ECB' or 'CBC' mode for -m option)")
+
         if opt == '-s':  # For source IP
             try:
                 src_ip = str(ipaddress.ip_address(argument))
             except ValueError as e:
                 sys.exit(INVALID_SRC_IP_ARG_ERROR.format(e))
 
-        if opt == '-p':  # For source port
-            try:
-                src_port = int(argument)
-                if not (MIN_PORT_VALUE <= src_port < MAX_PORT_VALUE):
-                    sys.exit(INVALID_SRC_PORT_RANGE)
-            except ValueError as e:
-                sys.exit(INVALID_FORMAT_SRC_PORT_ARG_ERROR.format(e))
-
     # Check if parameters are provided
     if len(first_name) == 0:
         sys.exit("[+] INIT ERROR: A first name was not provided! (-f option)")
     if len(last_name) == 0:
         sys.exit("[+] INIT ERROR: A last name was not provided! (-l option)")
+    if len(mode) == 0:
+        mode = ECB
     if len(src_ip) == 0:
         sys.exit("[+] INIT ERROR: A source IP was not provided! (-s option)")
-    if len(str(src_port)) == 0:
-        sys.exit("[+] INIT ERROR: A source port was not provided! (-p option)")
 
-    return first_name, last_name, src_ip, src_port
+    return first_name, last_name, mode, src_ip
 
 
 def initialize_socket(ip: str, port: int):
@@ -99,7 +99,7 @@ def initialize_socket(ip: str, port: int):
         sys.exit("[+] INIT ERROR: An error has occurred while creating socket object ({})".format(e))
 
 
-def get_application_timestamp():
+def get_current_timestamp():
     """
     Gets the current timestamp of when P2P Node application
     was started (from validated NTP server); if no internet
