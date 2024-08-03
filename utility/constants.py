@@ -282,9 +282,14 @@ CONNECTION_TIMEOUT_ERROR = ("[+] CONNECTION TIMEOUT: A timeout has occurred whil
 CONNECTION_ERROR = "[+] CONNECTION ERROR: An error has occurred while connecting to (IP: {}, Port: {})!"
 FIND_HOST_TIMEOUT = 3  # => in seconds
 TARGET_DISCONNECT_MSG = ("[+] TARGET DISCONNECTED: The target peer has unexpectedly closed the connection "
-                         "(or has disconnected); now attempting to reconnect...")
-TARGET_RECONNECT_MSG = ("[+] CONNECTION RE-ESTABLISHED: The connection to target peer has been re-established; "
-                        "now awaiting response...")
+                         "(or has disconnected); now terminating connection request...")
+TARGET_RECONNECT_MSG = ("[+] TARGET DISCONNECTED: The target peer has unexpectedly closed the connection "
+                        "(or has disconnected); now attempting to reconnect...")
+TARGET_RECONNECT_SUCCESS = ("[+] CONNECTION RE-ESTABLISHED: The connection to target peer has been re-established; "
+                            "now awaiting response...")
+TARGET_RECONNECT_TIMEOUT = ("[+] RE-CONNECTION TIMEOUT: The target has failed to respond with a consensus decision "
+                            "within allocated time; connection has been terminated!")
+TARGET_UNSUCCESSFUL_RECONNECT = "[+] RE-CONNECTION FAILED: Failed to reconnect to the target peer!"
 
 
 # CONNECT TO P2P NETWORK CONSTANTS

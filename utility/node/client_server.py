@@ -17,9 +17,10 @@ from utility.constants import CBC, MODE_RECEIVE, MODE_INITIATE, PHOTO_SIGNAL, RE
     RECEIVED_TRANSACTION_SUCCESS, SHARED_SECRET_SUCCESS_MSG, APPROVED_SIGNAL, CONNECTION_TIMEOUT_ERROR, \
     FIND_HOST_TIMEOUT, APPLICATION_PORT, CONNECTION_ERROR, CONNECT_METHOD_PROMPT, BLOCK_SIZE, ACCEPT_NEW_PEER_TIMEOUT, \
     CONNECTION_AWAIT_TIMEOUT_MSG, CONNECTION_AWAIT_RESPONSE_MSG, RESPONSE_EXPIRED, RESPONSE_EXISTS, \
-    RESPONSE_INVALID_SIG, SEND_REQUEST_MSG, SEND_REQUEST_SUCCESS, TARGET_DISCONNECT_MSG, REQUEST_APPROVED_MSG, \
+    RESPONSE_INVALID_SIG, SEND_REQUEST_MSG, SEND_REQUEST_SUCCESS, TARGET_RECONNECT_MSG, REQUEST_APPROVED_MSG, \
     RESPONSE_APPROVED, RESPONSE_REJECTED, REQUEST_REFUSED_MSG, REQUEST_ALREADY_EXISTS_MSG, REQUEST_INVALID_SIG_MSG, \
-    REQUEST_EXPIRED_MSG, TARGET_RECONNECT_MSG
+    REQUEST_EXPIRED_MSG, TARGET_RECONNECT_SUCCESS, TARGET_UNSUCCESSFUL_RECONNECT, TARGET_RECONNECT_TIMEOUT, \
+    TARGET_DISCONNECT_MSG
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import compress_pub_key, derive_shared_secret, compress_shared_secret
 from utility.node.node_utils import save_transaction_to_file, add_new_transaction, save_pending_peer_info, \
@@ -323,33 +324,54 @@ def await_response(self: Node, peer_socket: socket.socket, shared_secret: bytes,
             return True
 
     def _reconnect_to_target(target_ip: str):
-        print(TARGET_DISCONNECT_MSG)
+        print(TARGET_RECONNECT_MSG)
+        peer_socket.close()  # => Close disconnected (old) socket object
         self.fd_list.remove(self.own_socket)  # => temporarily remove to prevent select() conflict
-        self.own_socket.settimeout(transaction.get_time_remaining())
         try:
             while True:
+                self.own_socket.settimeout(transaction.get_time_remaining())
                 target_sock, target_info = self.own_socket.accept()
                 if target_sock.getpeername()[0] == target_ip:  # => Re-established connection
-                    print(TARGET_RECONNECT_MSG)
+                    print(TARGET_RECONNECT_SUCCESS)
                     return target_sock
                 else:
                     target_sock.close()
-                    return None
         except socket.timeout():
+            print(TARGET_UNSUCCESSFUL_RECONNECT)
+            return None
+        finally:
             self.own_socket.settimeout(None)
             self.fd_list.append(self.own_socket)
-            return None
+
+    def _reconnect_response_handler(new_sock: socket.socket):
+        if new_sock is not None:
+            try:
+                new_sock.settimeout(transaction.get_time_remaining())
+                data = new_sock.recv(1024)
+                if not data:  # => If disconnects once again, close connection
+                    print(TARGET_DISCONNECT_MSG)
+                    new_sock.close()
+                    return False
+                response = AES_decrypt(data=data, key=shared_secret, mode=mode, iv=peer_iv).decode()
+                return _response_handler(res=response, target_sock=peer_socket)
+            except socket.timeout:
+                print(TARGET_RECONNECT_TIMEOUT)
+                new_sock.close()
+                return False
+        return False
     # ===============================================================================
     try:
         print(CONNECTION_AWAIT_RESPONSE_MSG.format(transaction.get_time_remaining()))
         peer_socket.settimeout(transaction.get_time_remaining())
         data = peer_socket.recv(1024)
 
-        if not data:  # TODO: If disconnect, attempt reconnection
-            sock = _reconnect_to_target(target_ip=peer_socket.getpeername()[0])
+        if not data:
+            new_sock = _reconnect_to_target(target_ip=peer_socket.getpeername()[0])
+            return _reconnect_response_handler(new_sock)
         else:
             response = AES_decrypt(data=data, key=shared_secret, mode=mode, iv=peer_iv).decode()
             return _response_handler(res=response, target_sock=peer_socket)
+
     except socket.timeout:
         print(CONNECTION_AWAIT_TIMEOUT_MSG)
         peer_socket.close()
