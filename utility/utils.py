@@ -5,7 +5,6 @@ This Python file provides general utility functions.
 """
 import ipaddress
 import os
-
 from utility.constants import ENTER_IP_PROMPT, INVALID_IP_ERROR, OWN_IP_ERROR_MSG
 
 
@@ -113,7 +112,7 @@ def get_user_command_option(opt_range: tuple, prompt: str):
             if command in opt_range:
                 break
             else:
-                print("[+] ERROR: Invalid command provided; please try again.")
+                print("[+] ERROR: Invalid option provided; please try again.")
         except (ValueError, TypeError) as e:
             print(f"[+] ERROR: Invalid option selected; please try again! ({e})")
     return command

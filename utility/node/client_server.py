@@ -9,8 +9,8 @@ import secrets
 import socket
 import time
 from tinyec.ec import Point
-from exceptions.exceptions import RequestAlreadyExistsError, RequestExpiredError, InvalidSignatureError, \
-    InvalidProtocolError
+from exceptions.exceptions import (RequestAlreadyExistsError, RequestExpiredError,
+                                   InvalidSignatureError, InvalidProtocolError)
 from models.Node import Node
 from models.Transaction import Transaction
 from utility.constants import CBC, MODE_RECEIVE, MODE_INITIATE, PHOTO_SIGNAL, REQUEST_SIGNAL, ACK, \
@@ -99,13 +99,14 @@ def establish_secure_connection(self: Node, peer_socket: socket.socket, mode: st
     """
     if mode == MODE_RECEIVE:
         session_iv = None
-        mode = peer_socket.recv(1024).decode()
-        print(f"[+] MODE RECEIVED: The encryption mode selected by the client for this session is {mode.upper()}")
+        encrypt_mode = peer_socket.recv(1024).decode()
+        print(f"[+] MODE RECEIVED: The encryption mode selected by the client for this session "
+              f"is {encrypt_mode.upper()}")
 
-        if mode == CBC:
+        if encrypt_mode == CBC:
             session_iv = peer_socket.recv(1024)
-            print(
-                f"[+] IV RECEIVED: The initialization vector (IV) has been received from the peer ({session_iv.hex()})")
+            print(f"[+] IV RECEIVED: The initialization vector (IV) has been received "
+                  f"from the peer ({session_iv.hex()})")
 
         peer_pub_key = exchange_public_keys(self.pub_key, peer_socket, mode=MODE_RECEIVE)
         print(f"[+] PUBLIC KEY RECEIVED: Successfully received the peer's public key "
@@ -113,7 +114,7 @@ def establish_secure_connection(self: Node, peer_socket: socket.socket, mode: st
 
         shared_secret = derive_shared_secret(self.pvt_key, peer_pub_key)
         print(SHARED_SECRET_SUCCESS_MSG.format(compress_shared_secret(shared_secret), len(shared_secret)))
-        return shared_secret, session_iv, mode
+        return shared_secret, session_iv, encrypt_mode
 
     if mode == MODE_INITIATE:
         session_iv = None
@@ -225,7 +226,7 @@ def _receive_request_handler(self: Node, peer_socket: socket.socket, peer_ip: st
             peer_socket.send(AES_encrypt(data=RESPONSE_INVALID_SIG.encode(), key=shared_secret, mode=mode, iv=peer_iv))
             peer_socket.close()
             raise InvalidSignatureError(ip=peer_ip)
-    # ===============================================================================
+    # ================================================================================
     try:
         encrypted_data = receive_request()
         request = process_request(data=encrypted_data)
@@ -240,9 +241,9 @@ def _receive_request_handler(self: Node, peer_socket: socket.socket, peer_ip: st
         raise RequestExpiredError(ip=peer_ip)
 
 
-def send_request(self: Node, peer_socket: socket.socket,
-                 shared_secret: bytes, mode: str,
-                 transaction: Transaction, peer_iv: bytes = None):
+def _send_request(self: Node, peer_socket: socket.socket,
+                  shared_secret: bytes, mode: str,
+                  transaction: Transaction, peer_iv: bytes = None):
     """
     Sends the Transaction (connection request) to a target peer.
 
@@ -288,8 +289,8 @@ def send_request(self: Node, peer_socket: socket.socket,
     print(SEND_REQUEST_SUCCESS)
 
 
-def await_response(self: Node, peer_socket: socket.socket, shared_secret: bytes,
-                   mode: str, transaction: Transaction, peer_iv: bytes = None):
+def _await_response(self: Node, peer_socket: socket.socket, shared_secret: bytes,
+                    mode: str, transaction: Transaction, peer_iv: bytes = None):
     """
     Awaits a response from the target peer.
 
@@ -312,7 +313,7 @@ def await_response(self: Node, peer_socket: socket.socket, shared_secret: bytes,
         Bytes of the initialization vector (IV)
 
     @return: Boolean (T/F)
-        True if request accepted; False otherwise
+        True if request accepted/approved; False otherwise
     """
     def _response_handler(res: str, target_sock: socket.socket) -> bool:
         if res in ERROR_RESPONSE_MAP:
@@ -366,12 +367,11 @@ def await_response(self: Node, peer_socket: socket.socket, shared_secret: bytes,
         data = peer_socket.recv(1024)
 
         if not data:
-            new_sock = _reconnect_to_target(target_ip=peer_socket.getpeername()[0])
-            return _reconnect_response_handler(new_sock)
+            new_socket = _reconnect_to_target(target_ip=peer_socket.getpeername()[0])
+            return _reconnect_response_handler(new_socket)
         else:
             response = AES_decrypt(data=data, key=shared_secret, mode=mode, iv=peer_iv).decode()
             return _response_handler(res=response, target_sock=peer_socket)
-
     except socket.timeout:
         print(CONNECTION_AWAIT_TIMEOUT_MSG)
         peer_socket.close()
@@ -416,7 +416,7 @@ def accept_new_peer_handler(self: Node, own_sock: socket.socket):
                 raise InvalidProtocolError(ip=peer_socket.getpeername()[0])
         except (InvalidSignatureError, InvalidProtocolError, RequestAlreadyExistsError, RequestExpiredError) as msg:
             print(msg)
-    # ===============================================================================
+    # ===============================================================================================================
     peer_socket, peer_address = own_sock.accept()
     print(f"[+] NEW CONNECTION REQUEST: Accepted a peer connection from ({peer_address[0]}, {peer_address[1]})!")
 
@@ -435,9 +435,40 @@ def accept_new_peer_handler(self: Node, own_sock: socket.socket):
         peer_socket.close()
 
 
-def connect_to_target_peer(ip: str,
-                           port: int = APPLICATION_PORT,
-                           timeout: int = FIND_HOST_TIMEOUT):
+def connect_to_P2P_network(self: Node):
+    """
+    Finds, connects, and sends the connection request to a
+    target peer using sockets.
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @return: None
+    """
+    transaction = create_transaction(self)
+
+    if transaction is not None:
+        option = get_user_command_option(opt_range=tuple(range(3)), prompt=CONNECT_METHOD_PROMPT)
+        if option == 0:
+            return None
+        if option == 1:
+            target_ip = get_target_ip(self)
+            target_sock = _connect_to_target_peer(ip=target_ip)
+            if target_sock is not None:
+                shared_secret, session_iv = establish_secure_connection(self, target_sock, mode=MODE_INITIATE)
+                _send_request(self, target_sock, shared_secret, self.mode, transaction, session_iv)
+                response = _await_response(self, target_sock, shared_secret,
+                                           self.mode, transaction, session_iv)
+                if response:  # => if approved
+                    print("[+] PLACEHOLDER - Follow up")
+        if option == 2:
+            print("[+] Multi-threaded iterative chunk search using timeouts")
+            print("[+] Determine how many CPU cores for current machine, and spawn X threads to start search")
+
+
+def _connect_to_target_peer(ip: str,
+                            port: int = APPLICATION_PORT,
+                            timeout: int = FIND_HOST_TIMEOUT):
     """
     Connects to a target peer using socket connection.
 
@@ -466,34 +497,3 @@ def connect_to_target_peer(ip: str,
     except socket.error:
         print(CONNECTION_ERROR.format(ip, port))
         return None
-
-
-def connect_to_P2P_network(self: Node):
-    """
-    Finds, connects, and sends the connection request to a
-    target peer using sockets.
-
-    @param self:
-        A reference to the calling class object (Node)
-
-    @return: None
-    """
-    transaction = create_transaction(self)
-
-    if transaction is not None:
-        option = get_user_command_option(opt_range=tuple(range(3)), prompt=CONNECT_METHOD_PROMPT)
-        if option == 0:
-            return None
-        if option == 1:
-            target_ip = get_target_ip(self)
-            target_sock = connect_to_target_peer(ip=target_ip)
-            if target_sock is not None:
-                shared_secret, session_iv = establish_secure_connection(self, target_sock, mode=MODE_INITIATE)
-                send_request(self, target_sock, shared_secret, self.mode, transaction, session_iv)
-                response = await_response(self, target_sock, shared_secret,
-                                          self.mode, transaction, session_iv)
-                if response:
-                    print("[+] PLACEHOLDER - Follow up")
-        if option == 2:
-            print("[+] Multi-threaded iterative chunk search using timeouts")
-            print("[+] Determine how many CPU cores for current machine, and spawn X threads to start search")

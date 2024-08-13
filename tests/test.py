@@ -29,6 +29,7 @@ if __name__ == '__main__':
         obj.set_image(img)
         obj.set_timestamp(datetime.now().strftime(TIMESTAMP_FORMAT))
         obj.sign_transaction(pvt_key=pvt_key)
+        obj.set_received_by("10.0.0.153")
     except (ValueError, FileNotFoundError, IOError) as e:
         sys.exit(str(e))
 

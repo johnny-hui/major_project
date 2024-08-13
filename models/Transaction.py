@@ -177,12 +177,12 @@ class Transaction:
         """
         self.role = status
 
-    def set_received_by(self, ip_addr: str):
+    def set_received_by(self, ip: str):
         """
         Set the received_by attribute
         @return: None
         """
-        self.received_by = ip_addr
+        self.received_by = ip
 
     def __str__(self):
         """

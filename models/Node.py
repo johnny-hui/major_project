@@ -6,8 +6,9 @@ from utility.constants import NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_T
     ROLE_PEER, MONITOR_PENDING_PEERS_THREAD_NAME, MONITOR_PENDING_PEERS_START_MSG, APPLICATION_PORT
 from utility.crypto.ec_keys_utils import generate_keys
 from utility.node.node_init import parse_arguments, initialize_socket, get_current_timestamp
-from utility.node.node_utils import display_menu, view_current_connections, close_application, send_message, \
-    get_specific_peer, get_user_menu_option, monitor_pending_peers
+from utility.node.node_utils import (display_menu, view_current_peers, close_application, send_message,
+                                     get_specific_peer_info, get_user_menu_option, monitor_pending_peers,
+                                     load_transactions, view_pending_connection_requests)
 
 
 class Node:
@@ -43,12 +44,13 @@ class Node:
         self.own_socket = initialize_socket(self.ip, self.port)
         self.pvt_key, self.pub_key = generate_keys()
         self.fd_list = [self.own_socket]  # => Monitored by select()
-        self.fd_pending = []  # Stores pending peers awaiting consensus (waiting room)
-        self.peer_dict = {}  # Format {IP: [f_name, l_name, shared_secret, IV, cipher mode]}
+        self.fd_pending = []  # => Stores pending peer sockets awaiting consensus (waiting room)
+        self.peer_dict = {}  # => Format {IP: [f_name, l_name, shared_secret, IV, cipher mode, status]}
         self.pending_transactions = []
         self.app_timestamp = get_current_timestamp()
         self.is_connected = False
         self.terminate = False
+        load_transactions(self)
         print(NODE_INIT_SUCCESS_MSG)
 
     def start(self):
@@ -116,8 +118,8 @@ class Node:
         @return: None
         """
         def send_message_to_specific_peer():
-            client_sock, cipher, _, _ = get_specific_peer(self, prompt=SELECT_CLIENT_SEND_MSG_PROMPT)
-            send_message(client_sock, cipher)
+            client_sock, _, secret, iv, mode = get_specific_peer_info(self, prompt=SELECT_CLIENT_SEND_MSG_PROMPT)
+            send_message(client_sock, mode, secret, iv)
 
         def terminate_application():
             close_application(self)
@@ -134,8 +136,8 @@ class Node:
             2: lambda: None,
             3: lambda: None,
             4: lambda: None,
-            5: lambda: None,
-            6: lambda: view_current_connections(self),
+            5: lambda: view_pending_connection_requests(self),
+            6: lambda: view_current_peers(self),
             7: lambda: terminate_application()
         }
         actions_when_connected = {
@@ -143,8 +145,9 @@ class Node:
             2: lambda: None,
             3: lambda: None,
             4: lambda: None,
-            5: lambda: view_current_connections(self),
-            6: lambda: terminate_application(),
+            5: lambda: view_pending_connection_requests(self),
+            6: lambda: view_current_peers(self),
+            7: lambda: terminate_application(),
         }
 
         # Grab action

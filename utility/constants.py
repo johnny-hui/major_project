@@ -1,7 +1,6 @@
 # APPLICATION CONSTANTS
 APPLICATION_PORT = 323
 
-
 # GETOPTS CONSTANTS
 MIN_PORT_VALUE = 1
 MAX_PORT_VALUE = 65536
@@ -12,7 +11,6 @@ INVALID_SRC_PORT_RANGE = ("[+] INIT ERROR: The value provided for source port (-
 INVALID_FORMAT_SRC_PORT_ARG_ERROR = "[+] INIT ERROR: Invalid format provided for the source port (-p option): {}"
 INVALID_FIRST_NAME_ERROR = "[+] INIT ERROR: First name must not contain any numbers or special characters (-f option)!"
 INVALID_LAST_NAME_ERROR = "[+] INIT ERROR Last name must not contain any numbers or special characters (-l option)!"
-
 
 # CIPHER CONFIG CONSTANTS
 BLOCK_SIZE = 16  # 16 bytes
@@ -52,7 +50,6 @@ S_BOX = [  # 16 x 16 table
 ECB = "ecb"
 CBC = "cbc"
 
-
 # CIPHER INIT CONSTANTS
 CIPHER_INIT_MSG = "[+] Initializing cipher..."
 CIPHER_INIT_SUCCESS_MSG = "[+] The cipher has been successfully initialized!"
@@ -71,7 +68,6 @@ FORMAT_AVALANCHE = "AVALANCHE"
 FORMAT_STRING = "STRING"
 FORMAT_BYTES = "BYTES"
 
-
 # NODE INIT CONSTANTS
 NODE_INIT_MSG = "[+] Now initializing your node..."
 NODE_INIT_SUCCESS_MSG = "[+] Initialization Successful!"
@@ -80,12 +76,12 @@ MONITOR_PENDING_PEERS_START_MSG = "[+] Monitor pending peers thread has started!
 MONITOR_PENDING_PEERS_THREAD_TERMINATE = ("[+] THREAD TERMINATION: Monitor pending peers thread has been "
                                           "successfully terminated!")
 
-
 # ROLE CONSTANTS
 ROLE_PEER = "PEER"
 ROLE_DELEGATE = "DELEGATE"
 ROLE_ADMIN = "ADMIN"
-
+STATUS_PENDING = "PENDING"
+STATUS_APPROVED = "APPROVED"
 
 # MENU CONSTANTS
 MIN_MENU_ITEM_VALUE = 1
@@ -99,7 +95,7 @@ INVALID_INPUT_MENU_ERROR = "[+] ERROR: Invalid input was provided to menu: {}"
 INPUT_PROMPT = "[+] Select a menu option: "
 MENU_OPTIONS = [
     ["1", "Connect to the P2P Network"],
-    ["2", "Approve a Connection Request (Consensus)"],
+    ["2", "Approve a Connection Request (Self-Vote)"],
     ["3", "Revoke Connection Request"],
     ["4", "View Blockchain (Network Connection History)"],
     ["5", "View Pending Connection Requests"],
@@ -108,8 +104,8 @@ MENU_OPTIONS = [
 ]
 MENU_OPTIONS_CONNECTED = [
     ["1", "Send Message to a Peer"],
-    ["2", "Send a Connection Request for Approval"],
-    ["3", "Revoke a Connection Request"],
+    ["2", "Send a Connection Request (for Approval)"],
+    ["3", "Revoke Connection Request"],
     ["4", "View Blockchain (Network Connection History)"],
     ["5", "View Pending Connection Requests"],
     ["6", "View Current Peers"],
@@ -122,15 +118,14 @@ SELECT_ONE_SECOND_TIMEOUT = 1
 CIPHER_MODE_PROMPT = "[+] CHANGE CIPHER MODE: Enter 1 - CBC; Enter 2 - ECB; (or Enter 0 to quit) "
 ACK = "ACK"
 
-
 # ADMIN/DELEGATE MENU CONSTANTS (WHEN CONNECTED)
 ADMIN_MIN_MENU_ITEM_VALUE = 1
 ADMIN_MAX_MENU_ITEM_VALUE = 10
 ADMIN_MENU_OPTIONS = [
     ["1", "Send Message to a Peer"],
     ["2", "Broadcast a Message"],
-    ["3", "Approve a Connection Request (Consensus)"],
-    ["4", "Revoke a Connection Request"],
+    ["3", "Start a Consensus (Approve Connection Request)"],
+    ["4", "Revoke Connection Request"],
     ["5", "View Blockchain (Network Connection History)"],
     ["6", "View Pending Connection Requests"],
     ["7", "View Current Peers"],
@@ -143,14 +138,13 @@ DELEGATE_MAX_MENU_ITEM_VALUE = 8
 DELEGATE_MENU_OPTIONS = [
     ["1", "Send Message to a Peer"],
     ["2", "Broadcast a Message"],
-    ["3", "Approve a Connection Request (Consensus)"],
-    ["4", "Revoke a Connection Request"],
+    ["3", "Start a Consensus (Approve Connection Request)"],
+    ["4", "Revoke Connection Request"],
     ["5", "View Blockchain (Network Connection History)"],
     ["6", "View Pending Connection Requests"],
     ["7", "View Current Peers"],
     ["8", "Disconnect (Close Application)"]
 ]
-
 
 # USER MENU - REGENERATE SUBKEYS CONSTANTS
 REGENERATE_SUBKEY_OPTIONS_PROMPT = ("[+] Enter 1 to enter own main key; Enter 2 to generate main key from "
@@ -163,7 +157,6 @@ REGENERATE_SUBKEY_OPTIONS = [
     "[+] Enter 2 - Use Default Subkeys",
     "[+] Enter 3 - Provide Own Subkeys",
 ]
-
 
 # USER MENU - ENCRYPTION CONSTANTS
 USER_ENCRYPT_OPTIONS_PROMPT = "[+] Please select an option for encryption: "
@@ -212,18 +205,8 @@ GRAPH_LABEL_SKAC = ["1 Bit Change in Key", "2 Bit Change in Key", "3 Bit Change 
 SAVE_GRAPH_DIR = "data/graphs/{}"
 
 
-# CONNECTION INFO CONSTANTS
-CONNECTION_INFO_TITLE = "Current Connections"
-CONNECTION_INFO_FIELD_NAME = "Name"
-CONNECTION_INFO_FIELD_IP = "IP Address"
-CONNECTION_INFO_FIELD_CIPHER_MODE = "Encryption Mode"
-CONNECTION_INFO_FIELD_SECRET = "Shared Secret"
-CONNECTION_INFO_FIELD_IV = "Initialization Vector (IV)"
-
-
 # SEND MESSAGE CONSTANTS
 SELECT_CLIENT_SEND_MSG_PROMPT = "\n[+] Select a specific client to send a message to (enter a number from {} to {}): "
-
 
 # TRANSFER FILE CONSTANTS
 SEND_FILE_MODE_PROMPT = ("[+] SEND FILE: Enter 1 to send in chunks; Enter 2 to send in bulk (as whole);"
@@ -324,6 +307,38 @@ REQUEST_INVALID_SIG_MSG = ("[+] REQUEST REJECTED: Your connection request has be
                            "[Reason: An invalid signature provided!]")
 REQUEST_EXPIRED_MSG = ("[+] REQUEST REJECTED: Your connection request has been refused by the target peer "
                        "[Reason: The connection request has expired!]")
+
+
+# VIEW CURRENT PEERS CONSTANTS
+PEER_TABLE_TITLE = "Current Peers"
+PEER_TABLE_FIELD_PERSON = "Person"
+PEER_TABLE_FIELD_IP = "IP Address"
+PEER_TABLE_FIELD_CIPHER_MODE = "Encryption Mode"
+PEER_TABLE_FIELD_SECRET = "Shared Secret"
+PEER_TABLE_FIELD_IV = "Initialization Vector (IV)"
+PEER_TABLE_FIELD_STATUS = "Status"
+
+# VIEW CONNECTION REQUESTS CONSTANTS
+CONN_REQUEST_TABLE_TITLE = "Pending Connection Requests"
+CONN_REQUEST_TABLE_FIELD_IP = "IP Address"
+CONN_REQUEST_TABLE_FIELD_PORT = "Port"
+CONN_REQUEST_TABLE_FIELD_PERSON = "Person"
+CONN_REQUEST_TABLE_FIELD_ROLE = "Role"
+CONN_REQUEST_TABLE_FIELD_PUB_KEY = "Public Key"
+CONN_REQUEST_TABLE_FIELD_TIMESTAMP = "Timestamp"
+CONN_REQUEST_TABLE_FIELD_RECEIVED_BY = "Received By"
+CONN_REQUEST_TABLE_FIELD_SIGNATURE = "Signature"
+VIEW_REQUEST_FURTHER_ACTION_PROMPT = ("[+] VIEW REQUEST OPTIONS: Enter 1 to select a specific request to view photo "
+                                      "from or (Enter '0' to exit): ")
+VIEW_PHOTO_PROMPT = "[+] VIEW PHOTO: Select a specific request's photo to view from [enter a value from 0 to {}]: "
+
+
+# REVOKE CONNECTION REQUEST CONSTANTS
+REVOKE_REQUEST_INITIAL_PROMPT = "[+] REVOKE REQUEST: Enter 1 to select revoke a request or (Enter '0' to quit): "
+REVOKE_REQUEST_PROMPT = "[+] REVOKE REQUEST: Select a specific request to revoke [enter a value from 0 to {}]: "
+
+
+# APPROVE CONNECTION REQUEST CONSTANTS
 
 
 # OTHER CONSTANTS
