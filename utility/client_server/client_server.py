@@ -4,6 +4,7 @@ This python file is responsible for providing client/server
 functionalities and defining protocols to the Node class.
 
 """
+import multiprocessing
 import pickle
 import secrets
 import socket
@@ -11,11 +12,11 @@ import time
 from tinyec.ec import Point
 from exceptions.exceptions import (RequestAlreadyExistsError, RequestExpiredError,
                                    InvalidSignatureError, InvalidProtocolError)
-from models.Node import Node
 from models.Transaction import Transaction
+from utility.client_server.utils import _perform_iterative_host_search, _connect_to_target_peer
 from utility.constants import CBC, MODE_RECEIVE, MODE_INITIATE, PHOTO_SIGNAL, REQUEST_SIGNAL, ACK, \
-    RECEIVED_TRANSACTION_SUCCESS, SHARED_SECRET_SUCCESS_MSG, APPROVED_SIGNAL, CONNECTION_TIMEOUT_ERROR, \
-    FIND_HOST_TIMEOUT, APPLICATION_PORT, CONNECTION_ERROR, CONNECT_METHOD_PROMPT, BLOCK_SIZE, ACCEPT_NEW_PEER_TIMEOUT, \
+    RECEIVED_TRANSACTION_SUCCESS, SHARED_SECRET_SUCCESS_MSG, APPROVED_SIGNAL, CONNECT_METHOD_PROMPT, BLOCK_SIZE, \
+    ACCEPT_NEW_PEER_TIMEOUT, \
     CONNECTION_AWAIT_TIMEOUT_MSG, CONNECTION_AWAIT_RESPONSE_MSG, RESPONSE_EXPIRED, RESPONSE_EXISTS, \
     RESPONSE_INVALID_SIG, SEND_REQUEST_MSG, SEND_REQUEST_SUCCESS, TARGET_RECONNECT_MSG, REQUEST_APPROVED_MSG, \
     RESPONSE_APPROVED, RESPONSE_REJECTED, REQUEST_REFUSED_MSG, REQUEST_ALREADY_EXISTS_MSG, REQUEST_INVALID_SIG_MSG, \
@@ -25,8 +26,7 @@ from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import compress_pub_key, derive_shared_secret, compress_shared_secret
 from utility.node.node_utils import save_transaction_to_file, add_new_transaction, save_pending_peer_info, \
     create_transaction, sign_transaction
-from utility.utils import get_user_command_option, get_target_ip
-
+from utility.utils import get_user_command_option, get_target_ip, divide_subnet_search
 
 # CONSTANTS
 ERROR_RESPONSE_MAP = {
@@ -79,7 +79,7 @@ def exchange_public_keys(pub_key: Point, sock: socket.socket, mode: str):
         return peer_pub_key
 
 
-def establish_secure_connection(self: Node, peer_socket: socket.socket, mode: str):
+def establish_secure_parameters(self: object, peer_socket: socket.socket, mode: str):
     """
     Establishes a secure connection by exchanging & deriving
     protocol parameters (cipher mode, ECDH public key exchange,
@@ -141,7 +141,7 @@ def establish_secure_connection(self: Node, peer_socket: socket.socket, mode: st
         return shared_secret, session_iv
 
 
-def _receive_request_handler(self: Node, peer_socket: socket.socket, peer_ip: str,
+def _receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: str,
                              shared_secret: bytes, mode: str, peer_iv: bytes = None):
     """
     A helper function that handles the receiving, decrypting, and
@@ -241,7 +241,7 @@ def _receive_request_handler(self: Node, peer_socket: socket.socket, peer_ip: st
         raise RequestExpiredError(ip=peer_ip)
 
 
-def _send_request(self: Node, peer_socket: socket.socket,
+def _send_request(self: object, peer_socket: socket.socket,
                   shared_secret: bytes, mode: str,
                   transaction: Transaction, peer_iv: bytes = None):
     """
@@ -289,7 +289,7 @@ def _send_request(self: Node, peer_socket: socket.socket,
     print(SEND_REQUEST_SUCCESS)
 
 
-def _await_response(self: Node, peer_socket: socket.socket, shared_secret: bytes,
+def _await_response(self: object, peer_socket: socket.socket, shared_secret: bytes,
                     mode: str, transaction: Transaction, peer_iv: bytes = None):
     """
     Awaits a response from the target peer.
@@ -378,7 +378,7 @@ def _await_response(self: Node, peer_socket: socket.socket, shared_secret: bytes
         return False
 
 
-def accept_new_peer_handler(self: Node, own_sock: socket.socket):
+def accept_new_peer_handler(self: object, own_sock: socket.socket):
     """
     A handler to accept a new peer connection request, which
     involves the ECDH public key exchange process and the
@@ -420,8 +420,8 @@ def accept_new_peer_handler(self: Node, own_sock: socket.socket):
     peer_socket, peer_address = own_sock.accept()
     print(f"[+] NEW CONNECTION REQUEST: Accepted a peer connection from ({peer_address[0]}, {peer_address[1]})!")
 
-    shared_secret, session_iv, mode = establish_secure_connection(self, peer_socket, mode=MODE_RECEIVE)
-    peer_socket.settimeout(ACCEPT_NEW_PEER_TIMEOUT)
+    shared_secret, session_iv, mode = establish_secure_parameters(self, peer_socket, mode=MODE_RECEIVE)
+    peer_socket.settimeout(ACCEPT_NEW_PEER_TIMEOUT)  # 10-second Timeout
 
     # Await, Receive and Decrypt Peer Signal
     try:
@@ -435,7 +435,24 @@ def accept_new_peer_handler(self: Node, own_sock: socket.socket):
         peer_socket.close()
 
 
-def connect_to_P2P_network(self: Node):
+def peer_activity_handler(self: object, peer_sock: socket.socket):
+    """
+    Handles incoming data from approved peers and
+    the associated activity (based on a specific
+    signal protool).
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @param peer_sock:
+        The peer socket object
+
+    @return: None
+    """
+    print("[+] TO BE IMPLEMENTED LATER...")
+
+
+def connect_to_P2P_network(self: object):
     """
     Finds, connects, and sends the connection request to a
     target peer using sockets.
@@ -449,51 +466,67 @@ def connect_to_P2P_network(self: Node):
 
     if transaction is not None:
         option = get_user_command_option(opt_range=tuple(range(3)), prompt=CONNECT_METHOD_PROMPT)
+
         if option == 0:
             return None
+
         if option == 1:
             target_ip = get_target_ip(self)
             target_sock = _connect_to_target_peer(ip=target_ip)
-            if target_sock is not None:
-                shared_secret, session_iv = establish_secure_connection(self, target_sock, mode=MODE_INITIATE)
+
+            if target_sock is not None:  # TODO: refactor this code into a function (less code duplication)
+                shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATE)
                 _send_request(self, target_sock, shared_secret, self.mode, transaction, session_iv)
-                response = _await_response(self, target_sock, shared_secret,
-                                           self.mode, transaction, session_iv)
+                response = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
+
                 if response:  # => if approved
                     print("[+] PLACEHOLDER - Follow up")
+
         if option == 2:
-            print("[+] Multi-threaded iterative chunk search using timeouts")
-            print("[+] Determine how many CPU cores for current machine, and spawn X threads to start search")
+            target_sock = _perform_parallel_host_search(host_ip=self.ip)
+
+            if target_sock is not None:
+                shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATE)
+                _send_request(self, target_sock, shared_secret, self.mode, transaction, session_iv)
+                response = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
+
+                if response:  # => if approved
+                    print("[+] PLACEHOLDER - Follow up")
 
 
-def _connect_to_target_peer(ip: str,
-                            port: int = APPLICATION_PORT,
-                            timeout: int = FIND_HOST_TIMEOUT):
+def _perform_parallel_host_search(host_ip: str):
     """
-    Connects to a target peer using socket connection.
+    Performs socket host search in parallel using the
+    multiprocessing module.
 
-    @param ip:
-        The IP address of the target peer
+    @param host_ip:
+        A string representing the host machine's IP address
+        (NOTE: This is used to get the subnet mask)
 
-    @param port:
-        The port number of the target peer (default = 323)
-
-    @param timeout:
-        An integer (in seconds) before a connection
-        timeout is thrown
-
-    @return: target_sock or None
-        A target socket object if successful; otherwise None
+    @return: peer_sock or None
+        The connected peer socket if found; otherwise None
     """
-    try:
-        target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        target_sock.settimeout(timeout)
-        target_sock.connect((ip, port))
-        print(f"[+] CONNECTION EVENT: An available peer has been found ({ip}, {port})!")
-        return target_sock
-    except socket.timeout:
-        print(CONNECTION_TIMEOUT_ERROR.format(ip))
+    def get_peer_socket_from_results(result: list):
+        for item in result:
+            if isinstance(item, socket.socket):
+                return item
+        print("[+] CONNECTION FAILED: There are currently no available hosts within your local network...")
         return None
-    except socket.error:
-        print(CONNECTION_ERROR.format(ip, port))
-        return None
+    # =================================================================
+    # a) Get thread count and divide subnet into chunks
+    thread_count = multiprocessing.cpu_count()
+    search_chunks = divide_subnet_search(num_threads=thread_count)
+
+    # b) Define global stop signal (shared between processes)
+    with multiprocessing.Manager() as manager:
+        stop_signal = manager.Event()
+
+        # c) Call multiprocessing pool to spawn different processes for parallel search
+        with multiprocessing.Pool(processes=thread_count) as pool:
+            args = [(host_ip, stop_signal, start, end) for (start, end) in search_chunks]
+            results = pool.starmap(func=_perform_iterative_host_search, iterable=args)
+            pool.close()
+            pool.join()
+
+    # d) Gather results and get socket
+    return get_peer_socket_from_results(results)

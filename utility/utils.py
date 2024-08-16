@@ -5,7 +5,7 @@ This Python file provides general utility functions.
 """
 import ipaddress
 import os
-from utility.constants import ENTER_IP_PROMPT, INVALID_IP_ERROR, OWN_IP_ERROR_MSG
+from utility.constants import ENTER_IP_PROMPT, INVALID_IP_ERROR, OWN_IP_ERROR_MSG, MAX_IP_VALUE
 
 
 def get_img_path():
@@ -40,9 +40,9 @@ def load_image(path: str):
             img_bytes = f.read()
             return img_bytes
     except FileNotFoundError:
-        raise FileNotFoundError(f"FileNotFoundError: Invalid image path provided ({path})")
+        raise FileNotFoundError(f"FileNotFoundError: An invalid image path was provided ({path})!")
     except IOError:
-        raise IOError(f"IOError: Invalid image path ({path})")
+        raise IOError(f"IOError: An invalid image path was provided ({path})!")
 
 
 def create_directory(path: str):
@@ -136,3 +136,33 @@ def get_target_ip(self: object):
             print(INVALID_IP_ERROR.format(e))
         except ConnectionError:
             print(OWN_IP_ERROR_MSG)
+
+
+def divide_subnet_search(num_threads: int):
+    """
+    Divides the IP subnet search into chunks
+    according to the number of threads available
+    on the host system.
+
+    @param num_threads:
+        An integer representing the number of worker
+        threads available
+
+    @return: ranges
+        A list of tuples [(start, end)] per each
+        worker thread
+    """
+    ranges = []
+    chunk_size = MAX_IP_VALUE // num_threads
+    remainder = MAX_IP_VALUE % num_threads
+
+    # Calculate the (start, end) ranges per worker thread
+    start = 0
+    for i in range(num_threads):
+        end = start + chunk_size - 1
+        if remainder > 0:
+            end += 1
+            remainder -= 1
+        ranges.append((start, end))
+        start = end + 1
+    return ranges

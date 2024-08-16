@@ -8,9 +8,7 @@ import pickle
 import select
 import socket
 from typing import TextIO
-
 from prettytable import PrettyTable
-
 from exceptions.exceptions import RequestAlreadyExistsError
 from models.Transaction import Transaction
 from utility.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, MENU_OPTIONS_CONNECTED, MENU_OPTIONS,
@@ -687,6 +685,7 @@ def revoke_connection_request(self: object):
 
         except socket.timeout:
             return None
+    # ===============================================================================
 
     if len(self.pending_transactions) == 0:
         print("[+] REVOKE ERROR: There are currently no pending connection requests to revoke!")
@@ -716,14 +715,17 @@ def approve_connection_request(self: object):
         print("[+] APPROVE ERROR: There are currently no pending connection requests to approve!")
         return None
 
-    # a) Print transaction table, and prompt for a transaction from list
-    # request = get_transaction()
+    # Print current Transactions and get a specific Transaction from the List
+    view_pending_connection_requests(self, do_prompt=False)
+    command = get_user_command_option(opt_range=tuple(range(2)), prompt=REVOKE_REQUEST_INITIAL_PROMPT)
 
-    # b) If connected to network, send Transaction to admin/delegate for consensus
-    if self.is_connected:
-        print("[+] Select an admin/delegate from fd_list -> get socket -> Send Transaction object for approval")
-    else:
-        print("[+] INITIATE SELF CONSENSUS (Own Vote)")
+    if command == 0:
+        return None
+    if command == 1:
+        if self.is_connected:
+            print("[+] Select an admin/delegate from fd_list -> get socket -> Send Transaction object for approval")
+        else:
+            print("[+] INITIATE SELF CONSENSUS (Own Vote)")
 
 
 def _obfuscate(data: bytes, shared_secret: bytes, mode: str, iv: bytes = None):
