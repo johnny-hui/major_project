@@ -18,7 +18,7 @@ from utility.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, M
                                ROLE_DELEGATE, DELEGATE_MENU_OPTIONS, ROLE_ADMIN, ADMIN_MENU_OPTIONS, ROLE_PEER, CBC,
                                INIT_FACTOR_BYTE_MAPPING,
                                MODE_CBC_BYTE_MAPPING, MODE_ECB_BYTE_MAPPING, SHARED_KEY_BYTE_MAPPING,
-                               SAVE_TRANSACTIONS_DIR,
+                               TRANSACTIONS_DIR,
                                SAVE_TRANSACTION_SUCCESS, CBC_FLAG, ECB_FLAG, ECB,
                                INVALID_MENU_SELECTION, MENU_ACTION_START_MSG, INVALID_INPUT_MENU_ERROR,
                                TRANSACTION_INVALID_SIG_MSG, STATUS_PENDING, PEER_TABLE_FIELD_STATUS,
@@ -509,7 +509,7 @@ def save_transaction_to_file(data: bytes, shared_secret: bytes, mode: str, iv: b
 
     @return: None
     """
-    def find_latest_transaction_number(path: str = SAVE_TRANSACTIONS_DIR):
+    def find_latest_transaction_number(path: str = TRANSACTIONS_DIR):
         """
         Finds the latest transaction (connection request) number
         from the 'data/transactions/' directory.
@@ -531,16 +531,16 @@ def save_transaction_to_file(data: bytes, shared_secret: bytes, mode: str, iv: b
         return max(file_numbers)
     # ===============================================================================
 
-    create_directory(path=SAVE_TRANSACTIONS_DIR)
+    create_directory(path=TRANSACTIONS_DIR)
     new_data = _obfuscate(data, shared_secret, mode, iv)
 
-    if is_directory_empty(path=SAVE_TRANSACTIONS_DIR):
-        file_path = os.path.join(SAVE_TRANSACTIONS_DIR, "request_1.json")
+    if is_directory_empty(path=TRANSACTIONS_DIR):
+        file_path = os.path.join(TRANSACTIONS_DIR, "request_1.json")
         write_to_file(file_path, new_data)
     else:
         latest_transaction_number = find_latest_transaction_number() + 1
         new_file_name = "request_" + str(latest_transaction_number) + ".json"
-        file_path = os.path.join(SAVE_TRANSACTIONS_DIR, new_file_name)
+        file_path = os.path.join(TRANSACTIONS_DIR, new_file_name)
         write_to_file(file_path, new_data)
 
     print(SAVE_TRANSACTION_SUCCESS.format(file_path))
@@ -630,10 +630,13 @@ def load_transactions(self: object):
             print(TRANSACTION_INVALID_SIG_MSG.format(request.ip_addr))
     # ===============================================================================
 
-    if not is_directory_empty(path=SAVE_TRANSACTIONS_DIR):
+    # Create 'data/transactions' directory if it does not exist
+    create_directory(path=TRANSACTIONS_DIR)
+
+    if not is_directory_empty(path=TRANSACTIONS_DIR):
         counter = 0
-        for file_name in os.listdir(SAVE_TRANSACTIONS_DIR):
-            file_path = os.path.join(SAVE_TRANSACTIONS_DIR, file_name)
+        for file_name in os.listdir(TRANSACTIONS_DIR):
+            file_path = os.path.join(TRANSACTIONS_DIR, file_name)
 
             if os.path.isfile(file_path):
                 with open(file_path, 'rb') as file:

@@ -47,7 +47,8 @@ def load_image(path: str):
 
 def create_directory(path: str):
     """
-    Creates a directory.
+    Creates a directory at a specified path
+    (only if it does not exist).
 
     @param path:
         A string representing the directory path to be

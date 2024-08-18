@@ -223,7 +223,7 @@ END_OF_FILE = "EOF"
 TRANSACTION_TO_STRING = ("Transaction <Object>: ip_addr={}, port={}, role={}, pub_key={}, "
                          "first_name={}, last_name={}, timestamp={}, signature(r,s)={}, received_by={}")
 TRANSACTION_EXPIRY_TIME = 180
-SAVE_TRANSACTIONS_DIR = "data/transactions/"
+TRANSACTIONS_DIR = "data/transactions/"
 SAVE_TRANSACTION_SUCCESS = ("[+] REQUEST SAVED: The connection request has been successfully created and saved to the "
                             "following JSON file: {}")
 TRANSACTION_INVALID_SIG_MSG = ("[+] A transaction (connection request) from {} has an invalid signature "
@@ -259,7 +259,7 @@ SHARED_SECRET_SUCCESS_MSG = ("[+] KEY EXCHANGE SUCCESS: A shared secret has been
 ACCEPT_PEER_HANDLER_THREAD_NAME = "accept_new_peer_thread"
 PEER_ACTIVITY_HANDLER_THREAD_NAME = "peer_activity_handler_thread"
 PHOTO_SIGNAL = "PHOTO"
-REQUEST_SIGNAL = "SIGNAL"
+REQUEST_SIGNAL = "REQUEST"
 APPROVED_SIGNAL = "APPROVED"
 RECEIVED_TRANSACTION_SUCCESS = ("[+] CONNECTION REQUEST RECEIVED: Successfully received and verified peer's "
                                 "Transaction (connection request) from ({})")

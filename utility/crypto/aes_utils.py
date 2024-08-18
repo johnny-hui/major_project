@@ -80,4 +80,3 @@ def AES_decrypt(data: bytes, mode: str, key: bytes, iv: bytes = None):
     cipher = __generate_AES_cipher(mode, key, iv)
     decrypted_data = unpad(cipher.decrypt(data), block_size=AES.block_size)
     return decrypted_data
-

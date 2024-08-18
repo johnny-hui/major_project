@@ -97,7 +97,7 @@ def establish_secure_parameters(self: object, peer_socket: socket.socket, mode: 
 
     @return: shared_secret, session_iv, mode
     """
-    if mode == MODE_RECEIVE:
+    if mode == MODE_RECEIVE:  # => Receiver
         session_iv = None
         encrypt_mode = peer_socket.recv(1024).decode()
         print(f"[+] MODE RECEIVED: The encryption mode selected by the client for this session "
@@ -116,7 +116,7 @@ def establish_secure_parameters(self: object, peer_socket: socket.socket, mode: 
         print(SHARED_SECRET_SUCCESS_MSG.format(compress_shared_secret(shared_secret), len(shared_secret)))
         return shared_secret, session_iv, encrypt_mode
 
-    if mode == MODE_INITIATE:
+    if mode == MODE_INITIATE:  # => Sender
         session_iv = None
         time.sleep(0.5)
         peer_socket.send(self.mode.encode())
@@ -124,10 +124,11 @@ def establish_secure_parameters(self: object, peer_socket: socket.socket, mode: 
 
         # Generate new session IV and send to server (if CBC)
         if self.mode == CBC:
-            iv = secrets.token_bytes(BLOCK_SIZE)
+            session_iv = secrets.token_bytes(BLOCK_SIZE)
             time.sleep(0.5)
-            peer_socket.send(iv)
-            print(f"[+] IV GENERATED: An initialization vector (IV) has been generated for this session ({iv.hex()})")
+            peer_socket.send(session_iv)
+            print(f"[+] IV GENERATED: An initialization vector (IV) has been generated for "
+                  f"this session ({session_iv.hex()})")
 
         # Exchange Public Keys with Server
         server_pub_key = exchange_public_keys(self.pub_key, peer_socket, mode=MODE_INITIATE)
@@ -241,6 +242,63 @@ def _receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: 
         raise RequestExpiredError(ip=peer_ip)
 
 
+def accept_new_peer_handler(self: object, own_sock: socket.socket):
+    """
+    A handler to accept a new peer connection request, which
+    involves the ECDH public key exchange process and the
+    generation of shared secret with the client to establish
+    a secure connection.
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @param own_sock:
+        The socket object of the calling class
+
+    @return: None
+    """
+    def signal_handler(signal: str):
+        """
+        Interprets the signal and invokes the appropriate
+        handler to perform the next set of client/server
+        operations.
+
+        @param signal:
+            A string representing a specific signal
+
+        @return: None
+        """
+        try:
+            if signal == PHOTO_SIGNAL:
+                print("[+] Receive photo from app")  # TODO: Implement this part using AES instead
+            elif signal == REQUEST_SIGNAL:
+                _receive_request_handler(self, peer_socket, peer_address[0], shared_secret, mode, session_iv)
+            elif signal == APPROVED_SIGNAL:
+                print("[+] Accept peer")
+            else:
+                peer_socket.close()
+                raise InvalidProtocolError(ip=peer_socket.getpeername()[0])
+        except (InvalidSignatureError, InvalidProtocolError, RequestAlreadyExistsError, RequestExpiredError) as msg:
+            print(msg)
+    # ===============================================================================================================
+    peer_socket, peer_address = own_sock.accept()
+    print(f"[+] NEW CONNECTION REQUEST: Accepted a peer connection from ({peer_address[0]}, {peer_address[1]})!")
+
+    shared_secret, session_iv, mode = establish_secure_parameters(self, peer_socket, mode=MODE_RECEIVE)
+    peer_socket.settimeout(ACCEPT_NEW_PEER_TIMEOUT)  # 10-second Timeout
+
+    # Await, Receive and Decrypt Peer Signal
+    try:
+        decrypted_signal = AES_decrypt(data=peer_socket.recv(1024),
+                                       key=shared_secret,
+                                       mode=mode,
+                                       iv=session_iv).decode()
+        signal_handler(signal=decrypted_signal)
+    except socket.timeout:
+        print("[+] NEW PEER TIMEOUT: A new peer connection has timed out; connection has been terminated!")
+        peer_socket.close()
+
+
 def _send_request(self: object, peer_socket: socket.socket,
                   shared_secret: bytes, mode: str,
                   transaction: Transaction, peer_iv: bytes = None):
@@ -285,7 +343,7 @@ def _send_request(self: object, peer_socket: socket.socket,
     peer_socket.sendall(len(encrypted_request).to_bytes(4, byteorder='big'))
 
     # Send the encrypted request
-    peer_socket.sendall(serialized_request)
+    peer_socket.sendall(encrypted_request)
     print(SEND_REQUEST_SUCCESS)
 
 
@@ -378,68 +436,10 @@ def _await_response(self: object, peer_socket: socket.socket, shared_secret: byt
         return False
 
 
-def accept_new_peer_handler(self: object, own_sock: socket.socket):
-    """
-    A handler to accept a new peer connection request, which
-    involves the ECDH public key exchange process and the
-    generation of shared secret with the client to establish
-    a secure connection.
-
-    @param self:
-        A reference to the calling class object (Node)
-
-    @param own_sock:
-        The socket object of the calling class
-
-    @return: None
-    """
-    def signal_handler(signal: str):
-        """
-        Interprets the signal and invokes the appropriate
-        handler to perform the next set of client/server
-        operations.
-
-        @param signal:
-            A string representing a specific signal
-
-        @return: None
-        """
-        try:
-            if signal == PHOTO_SIGNAL:
-                print("[+] Receive photo from app")  # TODO: Implement this part using AES instead
-            elif signal == REQUEST_SIGNAL:
-                _receive_request_handler(self, peer_socket, peer_address[0], shared_secret, mode, session_iv)
-            elif signal == APPROVED_SIGNAL:
-                print("[+] Accept peer")
-            else:
-                peer_socket.close()
-                raise InvalidProtocolError(ip=peer_socket.getpeername()[0])
-        except (InvalidSignatureError, InvalidProtocolError, RequestAlreadyExistsError, RequestExpiredError) as msg:
-            print(msg)
-    # ===============================================================================================================
-    peer_socket, peer_address = own_sock.accept()
-    print(f"[+] NEW CONNECTION REQUEST: Accepted a peer connection from ({peer_address[0]}, {peer_address[1]})!")
-
-    shared_secret, session_iv, mode = establish_secure_parameters(self, peer_socket, mode=MODE_RECEIVE)
-    peer_socket.settimeout(ACCEPT_NEW_PEER_TIMEOUT)  # 10-second Timeout
-
-    # Await, Receive and Decrypt Peer Signal
-    try:
-        decrypted_signal = AES_decrypt(data=peer_socket.recv(1024),
-                                       key=shared_secret,
-                                       mode=mode,
-                                       iv=session_iv).decode()
-        signal_handler(signal=decrypted_signal)
-    except socket.timeout:
-        print("[+] NEW PEER TIMEOUT: A new peer connection has timed out; connection has been terminated!")
-        peer_socket.close()
-
-
 def peer_activity_handler(self: object, peer_sock: socket.socket):
     """
-    Handles incoming data from approved peers and
-    the associated activity (based on a specific
-    signal protool).
+    Handles incoming data from approved peers and their
+    associated activity (based on a specific signal protool).
 
     @param self:
         A reference to the calling class object (Node)
@@ -472,7 +472,7 @@ def connect_to_P2P_network(self: object):
 
         if option == 1:
             target_ip = get_target_ip(self)
-            target_sock = _connect_to_target_peer(ip=target_ip)
+            target_sock = _connect_to_target_peer(ip=target_ip)  # TODO: prevent connecting to target IP in request
 
             if target_sock is not None:  # TODO: refactor this code into a function (less code duplication)
                 shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATE)
@@ -482,7 +482,7 @@ def connect_to_P2P_network(self: object):
                 if response:  # => if approved
                     print("[+] PLACEHOLDER - Follow up")
 
-        if option == 2:
+        if option == 2:  # TODO: refactor this code into a function (less code duplication)
             target_sock = _perform_parallel_host_search(host_ip=self.ip)
 
             if target_sock is not None:
