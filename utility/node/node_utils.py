@@ -7,6 +7,7 @@ import os
 import pickle
 import select
 import socket
+import time
 from typing import TextIO
 from prettytable import PrettyTable
 from exceptions.exceptions import RequestAlreadyExistsError
@@ -74,11 +75,11 @@ def remove_pending_peer(self: object, peer_sock: socket.socket):
     ip = peer_sock.getpeername()[0]
     try:
         del self.peer_dict[ip]
-    except KeyError as e:
-        print(f"[+] REMOVE PENDING PEER: An error has occurred while deleting from peer dictionary! ({e})")
+        self.fd_pending.remove(peer_sock)
+    except (KeyError, ValueError):
+        pass
     finally:
         delete_transaction(self.pending_transactions, ip_to_remove=ip)
-        self.fd_pending.remove(peer_sock)
         peer_sock.close()
         print(f"[+] REMOVE PENDING PEER: Pending peer (IP: {ip}) has been successfully removed!")
 
@@ -328,7 +329,7 @@ def view_current_peers(self: object):
                          PEER_TABLE_FIELD_IV, PEER_TABLE_FIELD_STATUS]
 
     # Fill table with data
-    if len(self.fd_list) > 1:
+    if len(self.fd_list) > 1 or len(self.fd_pending) > 0:
         for ip, information in self.peer_dict.items():  # (f_name, l_name, shared_secret, IV, cipher mode, status)
             table.add_row(
                 [
@@ -678,14 +679,15 @@ def revoke_connection_request(self: object):
             # Get pending peer info
             _, _, secret_key, iv, mode, _ = _get_pending_peer_info(self.peer_dict, ip=request.ip_addr)
 
-            # Send encrypted rejection response
-            encrypted_data = AES_encrypt(data=RESPONSE_REJECTED.encode(), key=secret_key, mode=mode, iv=iv)
-            peer_socket.send(encrypted_data)
-
+            # Remove peer socket from pending list (prevent select-related errors)
             if peer_socket in self.fd_pending:
                 self.fd_pending.remove(peer_socket)
-            peer_socket.close()
 
+            time.sleep(1)
+
+            # Send encrypted rejection response, close connection and remove pending peer information
+            peer_socket.send(AES_encrypt(data=RESPONSE_REJECTED.encode(), key=secret_key, mode=mode, iv=iv))
+            remove_pending_peer(self, peer_sock)
         except socket.timeout:
             return None
     # ===============================================================================
@@ -708,8 +710,6 @@ def revoke_connection_request(self: object):
             peer_sock = _get_pending_peer_socket(self.fd_pending, ip=request.ip_addr)
             revoke_helper(peer_sock)
 
-        delete_transaction(self.pending_transactions, ip_to_remove=request.ip_addr)
-        del self.peer_dict[request.ip_addr]
         print("[+] REVOKE SUCCESSFUL: The selected connection request has been successfully revoked!")
 
 
