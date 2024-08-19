@@ -523,6 +523,7 @@ def _perform_parallel_host_search(host_ip: str):
 
         # c) Call multiprocessing pool to spawn different processes for parallel search
         with multiprocessing.Pool(processes=thread_count) as pool:
+            print(f"[+] Now finding an available host... [{thread_count} threads being used]")
             args = [(host_ip, stop_signal, start, end) for (start, end) in search_chunks]
             results = pool.starmap(func=_perform_iterative_host_search, iterable=args)
             pool.close()

@@ -56,11 +56,12 @@ def _connect_to_target_peer(ip: str,
             stop_event.set()
 
         print(f"[+] CONNECTION EVENT: An available peer has been found ({ip}, {port})!")
+        target_sock.setblocking(True)
         return target_sock
     except socket.timeout:
         print(CONNECTION_TIMEOUT_ERROR.format(ip)) if verbose else None
         return None
-    except socket.error:
+    except (socket.error, OSError):
         print(CONNECTION_ERROR.format(ip, port)) if verbose else None
         return None
 

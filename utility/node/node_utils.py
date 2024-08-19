@@ -53,7 +53,7 @@ def monitor_pending_peers(self: object):
                     print(f"[+] A pending connection request has been closed by ({fd.getpeername()[0]}) due to "
                           f"a request timeout or manual disconnection!")
                     remove_pending_peer(self, peer_sock=fd)
-            except (socket.error, socket.timeout) as e:
+            except (socket.error, socket.timeout, OSError) as e:
                 print(f"[+] An error has occurred with socket ({fd.getpeername()}); connection closed! (REASON: {e})")
                 remove_pending_peer(self, peer_sock=fd)
 
@@ -171,6 +171,7 @@ def delete_transaction(pending_transactions: list[Transaction], ip_to_remove: st
 
     @return: None
     """
+    # TODO: Also implement functionality to remove it from file
     if len(pending_transactions) == 0:
         return None
     i = 0
@@ -664,6 +665,11 @@ def revoke_connection_request(self: object):
     """
     Revokes a specific connection request.
 
+    @attention peer_socket == None
+        It is 'None' if you disconnect from application while
+        having any pending connection requests from requesting
+        peers (No initial sockets)
+
     @param self:
         A reference to the calling class object (Node)
 
@@ -682,12 +688,11 @@ def revoke_connection_request(self: object):
             # Remove peer socket from pending list (prevent select-related errors)
             if peer_socket in self.fd_pending:
                 self.fd_pending.remove(peer_socket)
-
-            time.sleep(1)
+                time.sleep(1)
 
             # Send encrypted rejection response, close connection and remove pending peer information
             peer_socket.send(AES_encrypt(data=RESPONSE_REJECTED.encode(), key=secret_key, mode=mode, iv=iv))
-            remove_pending_peer(self, peer_sock)
+            remove_pending_peer(self, peer_socket)
         except socket.timeout:
             return None
     # ===============================================================================
