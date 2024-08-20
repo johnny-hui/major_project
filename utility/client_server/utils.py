@@ -8,6 +8,7 @@ import multiprocessing
 import socket
 from utility.constants import (APPLICATION_PORT, FIND_HOST_TIMEOUT,
                                CONNECTION_TIMEOUT_ERROR, CONNECTION_ERROR)
+from utility.node.node_utils import peer_exists
 
 
 def _connect_to_target_peer(ip: str,
@@ -87,12 +88,15 @@ def _generate_new_ip_from_octet(host_ip: str, new_octet: int):
     return new_ip
 
 
-def _perform_iterative_host_search(host_ip: str,
+def _perform_iterative_host_search(peer_dict: dict, host_ip: str,
                                    event: multiprocessing.Event,
                                    start: int, end: int):
     """
     A utility function that iteratively attempts to find an
     available host (based on a given start & end octet range).
+
+    @param peer_dict:
+        A dictionary containing peer information
 
     @param host_ip:
         A string for the host machine's IP address (and subnet mask)
@@ -113,7 +117,7 @@ def _perform_iterative_host_search(host_ip: str,
     for octet in range(start, end + 1):
         target_ip = _generate_new_ip_from_octet(host_ip, octet)
 
-        if target_ip != host_ip:  # => prevent connecting to own socket
+        if target_ip != host_ip and not peer_exists(peer_dict, target_ip):
             peer_sock = _connect_to_target_peer(ip=target_ip, port=APPLICATION_PORT,
                                                 stop_event=event, verbose=False)
             if peer_sock is not None:

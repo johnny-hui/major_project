@@ -28,7 +28,7 @@ from utility.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, M
                                CONN_REQUEST_TABLE_FIELD_SIGNATURE, CONN_REQUEST_TABLE_FIELD_TIMESTAMP,
                                CONN_REQUEST_TABLE_FIELD_ROLE, CONN_REQUEST_TABLE_FIELD_RECEIVED_BY,
                                VIEW_REQUEST_FURTHER_ACTION_PROMPT, VIEW_PHOTO_PROMPT, REVOKE_REQUEST_PROMPT,
-                               REVOKE_REQUEST_INITIAL_PROMPT, RESPONSE_REJECTED, APPLICATION_PORT, CONNECTION_ERROR)
+                               REVOKE_REQUEST_INITIAL_PROMPT, RESPONSE_REJECTED, APPLICATION_PORT, TAMPER_DETECTED_MSG)
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import hash_data, compress_pub_key, compress_signature
 from utility.node.node_init import get_current_timestamp
@@ -128,6 +128,30 @@ def get_specific_peer_info(self: object, prompt: str):
     else:
         print("[+] ERROR: There are currently no connected peers to perform the selected option!")
         return None, None, None, None, None
+
+
+def peer_exists(peer_dict: dict, ip: str, prompt: str = None):
+    """
+    Determines if a peer already exists in a peer dictionary
+    (based on an input IP address).
+
+    @param peer_dict:
+        A dictionary containing peer information
+
+    @param ip:
+        The IP address used to search for an existing peer
+
+    @param prompt:
+        A string for the message to be printed if peer exists
+
+    @return: Boolean (T/F)
+        True if peer exists; False otherwise
+    """
+    if ip in peer_dict:
+        print(prompt) if prompt else None
+        return True
+    else:
+        return False
 
 
 def save_pending_peer_info(self: object, peer_socket: socket.socket, peer_ip: str,
@@ -663,12 +687,17 @@ def load_transactions(self: object):
                     mode, shared_key, iv = extract_mode_secret_iv(data=content)
                     restore_original_bytes(data=content, mode=mode)
 
-                    if mode == CBC_FLAG:
-                        decrypted_data = AES_decrypt(data=content[:-33], key=shared_key, mode=CBC, iv=iv)
-                        mode = CBC
-                    else:
-                        decrypted_data = AES_decrypt(data=content[:-17], key=shared_key, mode=ECB)
-                        mode = ECB
+                    try:
+                        if mode == CBC_FLAG:
+                            decrypted_data = AES_decrypt(data=content[:-33], key=shared_key, mode=CBC, iv=iv)
+                            mode = CBC
+                        else:
+                            decrypted_data = AES_decrypt(data=content[:-17], key=shared_key, mode=ECB)
+                            mode = ECB
+                    except ValueError:
+                        print(TAMPER_DETECTED_MSG.format(file_path))
+                        os.remove(file_path)
+                        continue
 
                     transaction = pickle.loads(decrypted_data)
                     process_transaction(request=transaction)

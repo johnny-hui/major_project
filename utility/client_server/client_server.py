@@ -21,11 +21,11 @@ from utility.constants import CBC, MODE_RECEIVE, MODE_INITIATE, PHOTO_SIGNAL, RE
     RESPONSE_INVALID_SIG, SEND_REQUEST_MSG, SEND_REQUEST_SUCCESS, TARGET_RECONNECT_MSG, REQUEST_APPROVED_MSG, \
     RESPONSE_APPROVED, RESPONSE_REJECTED, REQUEST_REFUSED_MSG, REQUEST_ALREADY_EXISTS_MSG, REQUEST_INVALID_SIG_MSG, \
     REQUEST_EXPIRED_MSG, TARGET_RECONNECT_SUCCESS, TARGET_UNSUCCESSFUL_RECONNECT, TARGET_RECONNECT_TIMEOUT, \
-    TARGET_DISCONNECT_MSG
+    TARGET_DISCONNECT_MSG, CONNECT_PEER_EXISTS_ERROR
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import compress_pub_key, derive_shared_secret, compress_shared_secret
 from utility.node.node_utils import save_transaction_to_file, add_new_transaction, save_pending_peer_info, \
-    create_transaction, sign_transaction
+    create_transaction, sign_transaction, peer_exists
 from utility.utils import get_user_command_option, get_target_ip, divide_subnet_search
 
 # CONSTANTS
@@ -396,7 +396,8 @@ def _await_response(self: object, peer_socket: socket.socket, shared_secret: byt
                     return target_sock
                 else:
                     target_sock.close()
-        except socket.timeout():
+
+        except socket.timeout:
             print(TARGET_UNSUCCESSFUL_RECONNECT)
             return None
         finally:
@@ -473,18 +474,20 @@ def connect_to_P2P_network(self: object):
 
         if option == 1:
             target_ip = get_target_ip(self)
-            target_sock = _connect_to_target_peer(ip=target_ip)  # TODO: prevent connecting to target IP in request
 
-            if target_sock is not None:  # TODO: refactor this code into a function (less code duplication)
-                shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATE)
-                _send_request(self, target_sock, shared_secret, self.mode, transaction, session_iv)
-                response = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
+            if not peer_exists(self.peer_dict, target_ip, prompt=CONNECT_PEER_EXISTS_ERROR):
+                target_sock = _connect_to_target_peer(ip=target_ip)
 
-                if response:  # => if approved
-                    print("[+] PLACEHOLDER - Follow up")
+                if target_sock is not None:  # TODO: refactor this code into a function (less code duplication)
+                    shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATE)
+                    _send_request(self, target_sock, shared_secret, self.mode, transaction, session_iv)
+                    response = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
+
+                    if response:  # => if approved
+                        print("[+] PLACEHOLDER - Follow up")
 
         if option == 2:  # TODO: refactor this code into a function (less code duplication)
-            target_sock = _perform_parallel_host_search(host_ip=self.ip)
+            target_sock = _perform_parallel_host_search(self.ip, self.peer_dict)
 
             if target_sock is not None:
                 shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATE)
@@ -495,7 +498,7 @@ def connect_to_P2P_network(self: object):
                     print("[+] PLACEHOLDER - Follow up")
 
 
-def _perform_parallel_host_search(host_ip: str):
+def _perform_parallel_host_search(host_ip: str, peer_dict: dict):
     """
     Performs socket host search in parallel using the
     multiprocessing module.
@@ -525,7 +528,7 @@ def _perform_parallel_host_search(host_ip: str):
         # c) Call multiprocessing pool to spawn different processes for parallel search
         with multiprocessing.Pool(processes=thread_count) as pool:
             print(f"[+] Now finding an available host... [{thread_count} threads being used]")
-            args = [(host_ip, stop_signal, start, end) for (start, end) in search_chunks]
+            args = [(peer_dict, host_ip, stop_signal, start, end) for (start, end) in search_chunks]
             results = pool.starmap(func=_perform_iterative_host_search, iterable=args)
             pool.close()
             pool.join()

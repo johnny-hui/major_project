@@ -71,11 +71,10 @@ class Node:
                                       name=thread_name)
             thread.start()
         # =====================================================================
-
         self.__start_user_menu_thread()
         self.__start_monitor_pending_peers_thread()
 
-        while self.terminate is False:
+        while not self.terminate:
             readable, _, _ = select.select(self.fd_list, [], [], 1)
 
             for sock in readable:

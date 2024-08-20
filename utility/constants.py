@@ -288,6 +288,8 @@ CONNECT_METHOD_PROMPT = ("[+] CONNECT OPTIONS: Enter '1' to connect to a specifi
 ENTER_IP_PROMPT = "[+] Enter the IP address of the target peer you would like to connect to: "
 INVALID_IP_ERROR = "[+] CONNECTION ERROR: Invalid IP address or format was provided. Please try again."
 OWN_IP_ERROR_MSG = "[+] CONNECTION ERROR: Cannot connect to yourself! Please try again."
+CONNECT_PEER_EXISTS_ERROR = ("[+] CONNECTION ERROR: You cannot connect to the provided IP as it already "
+                             "belongs to a peer that is requesting a connection to you; please try again.")
 ACCEPT_NEW_PEER_TIMEOUT = 10  # => in seconds
 SEND_REQUEST_MSG = "[+] Sending request to {}..."
 SEND_REQUEST_SUCCESS = "[+] Your transaction (connection request) has been successfully sent!"
@@ -351,3 +353,5 @@ REVOKE_REQUEST_PROMPT = "[+] REVOKE REQUEST: Select a specific request to revoke
 OP_ENCRYPT = "ENCRYPTION"
 OP_DECRYPT = "DECRYPTION"
 SAVE_FILE_DIR = "data/received/{}"
+TAMPER_DETECTED_MSG = ("[+] An error has occurred while loading a transaction from the following file: {} "
+                       "(REASON: possible tampering or incorrect decryption parameters were present)")
