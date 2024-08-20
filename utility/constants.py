@@ -222,7 +222,10 @@ END_OF_FILE = "EOF"
 # TRANSACTION (CONNECTION REQUESTS) CONSTANTS
 TRANSACTION_TO_STRING = ("Transaction <Object>: ip_addr={}, port={}, role={}, pub_key={}, "
                          "first_name={}, last_name={}, timestamp={}, signature(r,s)={}, received_by={}")
-TRANSACTION_EXPIRY_TIME = 180
+
+TRANSACTION_EXPIRY_TIME_SECONDS = 180  # => Controls peer wait-time (before timeout)
+TRANSACTION_EXPIRY_TIME_MINUTES = 3    # => Controls peer wait-time (before timeout)
+
 TRANSACTIONS_DIR = "data/transactions/"
 SAVE_TRANSACTION_SUCCESS = ("[+] REQUEST SAVED: The connection request has been successfully created and saved to the "
                             "following JSON file: {}")

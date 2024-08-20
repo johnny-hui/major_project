@@ -82,6 +82,12 @@ def write_to_file(file_path: str, data: bytes):
         return None
 
 
+def delete_file(file_path: str):
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        print(f"[+] The following file has been deleted: {file_path}")
+
+
 def is_directory_empty(path: str):
     """
     Checks if a directory is empty.

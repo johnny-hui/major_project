@@ -49,7 +49,7 @@ class Node:
         self.pvt_key, self.pub_key = generate_keys()
         self.fd_list = [self.own_socket]  # => Monitored by select()
         self.fd_pending = []  # => Stores pending peer sockets awaiting consensus (waiting room)
-        self.peer_dict = {}  # => Format {IP: [f_name, l_name, shared_secret, IV, cipher mode, status]}
+        self.peer_dict = {}  # => Format {IP: [f_name, l_name, shared_secret, IV, cipher mode, status, file_path]}
         self.pending_transactions = []
         self.app_timestamp = get_current_timestamp()
         self.is_connected = False

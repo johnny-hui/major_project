@@ -4,7 +4,8 @@ from base64 import b64encode
 from datetime import datetime, timedelta
 from PIL import Image
 from tinyec.ec import Point
-from utility.constants import TRANSACTION_TO_STRING, TRANSACTION_EXPIRY_TIME, TRANSACTION_MAX_IMG_SIZE, TIMESTAMP_FORMAT
+from utility.constants import TRANSACTION_TO_STRING, TRANSACTION_EXPIRY_TIME_SECONDS, TRANSACTION_MAX_IMG_SIZE, \
+    TIMESTAMP_FORMAT, TRANSACTION_EXPIRY_TIME_MINUTES
 from utility.crypto.ec_keys_utils import create_signature, verify_signature, compress_pub_key, compress_signature
 
 
@@ -106,14 +107,14 @@ class Transaction:
         @return: Boolean (T/F)
             True if expired; False otherwise
         """
-        timestamp = datetime.strptime(self.timestamp, TIMESTAMP_FORMAT) + timedelta(minutes=3)
+        timestamp = datetime.strptime(self.timestamp, TIMESTAMP_FORMAT) + timedelta(minutes=TRANSACTION_EXPIRY_TIME_MINUTES)
         current_time = datetime.now()
 
         time_remaining = int((timestamp - current_time).total_seconds())
 
         if time_remaining <= 0:
             print(f"[+] CONNECTION REQUEST EXPIRED: A transaction from (IP: {self.ip_addr}) has exceeded max "
-                  f"{TRANSACTION_EXPIRY_TIME} seconds.")
+                  f"{TRANSACTION_EXPIRY_TIME_SECONDS} seconds.")
             return True
         else:
             return False

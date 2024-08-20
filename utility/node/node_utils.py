@@ -28,12 +28,12 @@ from utility.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, M
                                CONN_REQUEST_TABLE_FIELD_SIGNATURE, CONN_REQUEST_TABLE_FIELD_TIMESTAMP,
                                CONN_REQUEST_TABLE_FIELD_ROLE, CONN_REQUEST_TABLE_FIELD_RECEIVED_BY,
                                VIEW_REQUEST_FURTHER_ACTION_PROMPT, VIEW_PHOTO_PROMPT, REVOKE_REQUEST_PROMPT,
-                               REVOKE_REQUEST_INITIAL_PROMPT, RESPONSE_REJECTED, APPLICATION_PORT)
+                               REVOKE_REQUEST_INITIAL_PROMPT, RESPONSE_REJECTED, APPLICATION_PORT, CONNECTION_ERROR)
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import hash_data, compress_pub_key, compress_signature
 from utility.node.node_init import get_current_timestamp
 from utility.utils import create_directory, is_directory_empty, write_to_file, get_img_path, load_image, \
-    get_user_command_option
+    get_user_command_option, delete_file
 
 
 def monitor_pending_peers(self: object):
@@ -52,13 +52,13 @@ def monitor_pending_peers(self: object):
                 if not data:
                     print(f"[+] A pending connection request has been closed by ({fd.getpeername()[0]}) due to "
                           f"a request timeout or manual disconnection!")
-                    remove_pending_peer(self, peer_sock=fd)
+                    remove_pending_peer(self, peer_sock=fd, ip=fd.getpeername()[0])
             except (socket.error, socket.timeout, OSError) as e:
                 print(f"[+] An error has occurred with socket ({fd.getpeername()}); connection closed! (REASON: {e})")
-                remove_pending_peer(self, peer_sock=fd)
+                remove_pending_peer(self, peer_sock=fd, ip=fd.getpeername()[0])
 
 
-def remove_pending_peer(self: object, peer_sock: socket.socket):
+def remove_pending_peer(self: object, peer_sock: socket.socket, ip: str):
     """
     Removes a saved peer information and closes the
     socket connection with the pending peer.
@@ -67,19 +67,21 @@ def remove_pending_peer(self: object, peer_sock: socket.socket):
         A reference to the calling class object (Node)
 
     @param peer_sock:
-        The socket object of the pending peer
-        to be removed
+        The socket object of the pending peer to be removed
+
+    @param ip:
+        The IP address of the pending peer to be removed (String)
 
     @return: None
     """
-    ip = peer_sock.getpeername()[0]
+    file_path = self.peer_dict[ip][6]  # get the file path to remove from 'data/transactions/'
     try:
         del self.peer_dict[ip]
         self.fd_pending.remove(peer_sock)
     except (KeyError, ValueError):
         pass
     finally:
-        delete_transaction(self.pending_transactions, ip_to_remove=ip)
+        delete_transaction(self.pending_transactions, ip_to_remove=ip, request_path=file_path)
         peer_sock.close()
         print(f"[+] REMOVE PENDING PEER: Pending peer (IP: {ip}) has been successfully removed!")
 
@@ -113,7 +115,7 @@ def get_specific_peer_info(self: object, prompt: str):
                     client_index = int(input(prompt.format(1, len(self.peer_dict))))
 
                 # Get information of the client (from dictionary)
-                ip, info = list(self.peer_dict.items())[client_index - 1]
+                ip, info = list(self.peer_dict.items())[client_index - 1]  # info = list
                 secret, iv, mode = info[2], info[3], info[4]
 
                 # Iterate over the list of sockets and find the corresponding one
@@ -130,7 +132,7 @@ def get_specific_peer_info(self: object, prompt: str):
 
 def save_pending_peer_info(self: object, peer_socket: socket.socket, peer_ip: str,
                            first_name: str, last_name: str, shared_secret: bytes,
-                           mode: str, peer_iv: bytes = None):
+                           mode: str, file_path: str, peer_iv: bytes = None):
     """
     Saves information for a pending peer.
 
@@ -148,16 +150,20 @@ def save_pending_peer_info(self: object, peer_socket: socket.socket, peer_ip: st
         The shared secret of the pending peer
     @param mode:
         The selected cipher mode by the pending peer
+    @param file_path:
+        The file path of the saved connection request
     @param peer_iv:
         The pending peer's IV (if CBC)
 
     @return: None
     """
     self.fd_pending.append(peer_socket)
-    self.peer_dict[peer_ip] = [first_name, last_name, shared_secret, peer_iv, mode, STATUS_PENDING]
+    self.peer_dict[peer_ip] = [first_name, last_name, shared_secret,
+                               peer_iv, mode, STATUS_PENDING, file_path]
 
 
-def delete_transaction(pending_transactions: list[Transaction], ip_to_remove: str):
+def delete_transaction(pending_transactions: list[Transaction],
+                       ip_to_remove: str, request_path: str):
     """
     Removes a Transaction (connection request) object
     from the list based on an input IP address.
@@ -169,11 +175,16 @@ def delete_transaction(pending_transactions: list[Transaction], ip_to_remove: st
         The IP address of the request object
         to be removed (String)
 
+    @param request_path:
+        The file path of the saved connection request belonging
+        to the pending peer to be removed (String)
+
     @return: None
     """
-    # TODO: Also implement functionality to remove it from file
     if len(pending_transactions) == 0:
         return None
+
+    # Iterate and delete transaction from memory
     i = 0
     while i < len(pending_transactions):
         if pending_transactions[i].ip_addr == ip_to_remove:
@@ -181,6 +192,9 @@ def delete_transaction(pending_transactions: list[Transaction], ip_to_remove: st
             break
         else:
             i += 1
+
+    # Delete transaction file from system storage ('data/transactions/')
+    delete_file(file_path=request_path)
 
 
 def add_new_transaction(self: object, peer_request: Transaction):
@@ -509,7 +523,8 @@ def save_transaction_to_file(data: bytes, shared_secret: bytes, mode: str, iv: b
     @param iv:
         Bytes containing the IV between peers (default=None)
 
-    @return: None
+    @return: file_path
+        The file path of the saved Transaction (string)
     """
     def find_latest_transaction_number(path: str = TRANSACTIONS_DIR):
         """
@@ -546,6 +561,7 @@ def save_transaction_to_file(data: bytes, shared_secret: bytes, mode: str, iv: b
         write_to_file(file_path, new_data)
 
     print(SAVE_TRANSACTION_SUCCESS.format(file_path))
+    return file_path
 
 
 def load_transactions(self: object):
@@ -626,7 +642,7 @@ def load_transactions(self: object):
             request.received_by = self.ip
             self.pending_transactions.append(request)
             self.peer_dict[request.ip_addr] = [request.first_name, request.last_name,
-                                               shared_key, iv, mode, STATUS_PENDING]
+                                               shared_key, iv, mode, STATUS_PENDING, file_path]
         else:
             os.remove(file_path)
             print(TRANSACTION_INVALID_SIG_MSG.format(request.ip_addr))
@@ -683,7 +699,7 @@ def revoke_connection_request(self: object):
                 peer_socket.connect((request.ip_addr, APPLICATION_PORT))
 
             # Get pending peer info
-            _, _, secret_key, iv, mode, _ = _get_pending_peer_info(self.peer_dict, ip=request.ip_addr)
+            _, _, secret_key, iv, mode, _, file_path = _get_pending_peer_info(self.peer_dict, ip=request.ip_addr)
 
             # Remove peer socket from pending list (prevent select-related errors)
             if peer_socket in self.fd_pending:
@@ -692,9 +708,11 @@ def revoke_connection_request(self: object):
 
             # Send encrypted rejection response, close connection and remove pending peer information
             peer_socket.send(AES_encrypt(data=RESPONSE_REJECTED.encode(), key=secret_key, mode=mode, iv=iv))
-            remove_pending_peer(self, peer_socket)
-        except socket.timeout:
+
+        except (socket.error, socket.timeout, OSError):
             return None
+        finally:
+            remove_pending_peer(self, peer_socket, ip=request.ip_addr)
     # ===============================================================================
 
     if len(self.pending_transactions) == 0:
@@ -835,12 +853,10 @@ def _get_pending_peer_info(peer_dict: dict, ip: str):
     @param ip:
         A string for the target IP
 
-    @return: f_name, l_name, shared_secret, iv, mode
-        The first & last name, secret key, initialization factor,
-        and the encryption mode
+    @return: f_name, l_name, shared_secret, iv, mode, status, file_path
     """
-    f_name, l_name, shared_secret, iv, mode, status = peer_dict[ip]
-    return f_name, l_name, shared_secret, iv, mode, status
+    f_name, l_name, shared_secret, iv, mode, status, file_path = peer_dict[ip]
+    return f_name, l_name, shared_secret, iv, mode, status, file_path
 
 
 def _get_pending_peer_socket(pending_list: list[socket.socket], ip: str):

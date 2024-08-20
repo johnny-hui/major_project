@@ -202,8 +202,9 @@ def _receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: 
         @param data:
             Encrypted data in bytearray
 
-        @return: request
-            A decrypted and verified Transaction object
+        @return: request & file_path
+            A decrypted, verified Transaction object and the
+            file path where it is saved
         """
         buf_copy = data.copy()
         decrypted_data = AES_decrypt(data=buf_copy, key=shared_secret, mode=mode, iv=peer_iv)
@@ -216,9 +217,9 @@ def _receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: 
         elif request.is_verified():
             try:
                 add_new_transaction(self, request)
-                save_transaction_to_file(data=data, shared_secret=shared_secret, iv=peer_iv, mode=mode)
+                transaction_path = save_transaction_to_file(data=data, shared_secret=shared_secret, iv=peer_iv, mode=mode)
                 print(RECEIVED_TRANSACTION_SUCCESS.format(peer_ip))
-                return request
+                return request, transaction_path
             except RequestAlreadyExistsError:
                 peer_socket.send(AES_encrypt(data=RESPONSE_EXISTS.encode(), key=shared_secret, mode=mode, iv=peer_iv))
                 peer_socket.close()
@@ -230,9 +231,9 @@ def _receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: 
     # ================================================================================
     try:
         encrypted_data = receive_request()
-        request = process_request(data=encrypted_data)
+        request, file_path = process_request(data=encrypted_data)
         save_pending_peer_info(self, peer_socket, peer_ip, request.first_name,
-                               request.last_name, shared_secret, mode, peer_iv)
+                               request.last_name, shared_secret, mode, file_path, peer_iv)
         peer_socket.settimeout(None)
     except InvalidSignatureError:
         raise InvalidSignatureError(ip=peer_ip)
