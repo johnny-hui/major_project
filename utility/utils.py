@@ -5,7 +5,15 @@ This Python file provides general utility functions.
 """
 import ipaddress
 import os
-from utility.constants import ENTER_IP_PROMPT, INVALID_IP_ERROR, OWN_IP_ERROR_MSG, MAX_IP_VALUE
+import threading
+import time
+from prettytable import PrettyTable
+from models.Transaction import Transaction
+from utility.constants import ENTER_IP_PROMPT, INVALID_IP_ERROR, OWN_IP_ERROR_MSG, MAX_IP_VALUE, \
+    CONN_REQUEST_TABLE_TITLE, CONN_REQUEST_TABLE_FIELD_IP, CONN_REQUEST_TABLE_FIELD_PORT, \
+    CONN_REQUEST_TABLE_FIELD_PERSON, CONN_REQUEST_TABLE_FIELD_ROLE, CONN_REQUEST_TABLE_FIELD_SIGNATURE, \
+    CONN_REQUEST_TABLE_FIELD_PUB_KEY, CONN_REQUEST_TABLE_FIELD_RECEIVED_BY, CONN_REQUEST_TABLE_FIELD_TIMESTAMP
+from utility.crypto.ec_keys_utils import compress_pub_key, compress_signature
 
 
 def get_img_path():
@@ -173,3 +181,88 @@ def divide_subnet_search(num_threads: int):
         ranges.append((start, end))
         start = end + 1
     return ranges
+
+
+def create_transaction_table(req_list: list[Transaction]):
+    """
+    Constructs a PrettyTable that displays Transaction
+    objects (connection requests).
+
+    @param req_list:
+        A list of Transaction objects
+
+    @return: table
+        A PrettyTable object
+    """
+    def process_name(first_name: str, last_name: str) -> str:
+        return first_name + " " + last_name
+    # ===============================================================================
+    table = PrettyTable()
+    table.title = CONN_REQUEST_TABLE_TITLE
+    table.field_names = [CONN_REQUEST_TABLE_FIELD_IP, CONN_REQUEST_TABLE_FIELD_PORT,
+                         CONN_REQUEST_TABLE_FIELD_PERSON, CONN_REQUEST_TABLE_FIELD_ROLE,
+                         CONN_REQUEST_TABLE_FIELD_PUB_KEY, CONN_REQUEST_TABLE_FIELD_SIGNATURE,
+                         CONN_REQUEST_TABLE_FIELD_RECEIVED_BY, CONN_REQUEST_TABLE_FIELD_TIMESTAMP]
+
+    # Print each transaction object into rows of table
+    for transaction in req_list:
+        table.add_row(
+            [
+                transaction.ip_addr, transaction.port,
+                process_name(transaction.first_name, transaction.last_name),
+                transaction.role, compress_pub_key(transaction.pub_key),
+                compress_signature(transaction.signature),
+                transaction.received_by, transaction.timestamp
+            ]
+        )
+    return table
+
+
+def timer(time_limit: int, interval: int, prompt: str, stop_event: threading.Event):
+    """
+    A live timer that prints the time-elapsed per interval
+    until a time limit (or event) is reached.
+
+    @attention Use Case:
+        Used to notify the user of the time remaining against
+        a time limit
+
+    @param time_limit:
+        An integer representing the time limit (in seconds)
+
+    @param interval:
+        An integer representing the print interval (in seconds)
+
+    @param prompt:
+        A string representing the message to be printed
+
+    @param stop_event:
+        An event object that terminates the function
+        once set
+
+    @return: None
+    """
+    print(prompt.format(time_limit))
+    start_time = time.time()
+    end_time = start_time + time_limit
+
+    while True:
+        if stop_event.is_set():
+            print("[+] TIMER STOPPED: A stop event has been set; timer has been terminated!")
+            return None
+
+        current_time = time.time()
+        elapsed_time = current_time - start_time
+
+        # Print elapsed time if the interval has passed
+        if elapsed_time // interval * interval == elapsed_time:
+            print(f"[+] Time Elapsed: {int(elapsed_time)} seconds")
+
+        # Check if the time limit has been reached
+        if current_time >= end_time:
+            break
+
+        # Sleep briefly to reduce CPU usage
+        time.sleep(1)
+
+    print(f"[+] TIME EXPIRED: Time limit of {time_limit} seconds has been reached!")

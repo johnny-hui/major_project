@@ -13,6 +13,7 @@ REQUEST_EXPIRED_MSG = ("[+] REQUEST EXPIRED: The received transaction (connectio
 INVALID_SIGNATURE_MSG = ("[+] INVALID SIGNATURE: A transaction (connection request) from (IP: {}) contains "
                          "an invalid signature and has been deleted!; connection has been terminated!")
 INVALID_PROTOCOL_MSG = "[+] ERROR: Invalid protocol; connection with peer has been terminated (IP: {})!"
+TRANSACTION_NOT_FOUND_MSG = "[+] ERROR: Cannot find the Transaction object for the following IP ({})!"
 
 
 class RequestAlreadyExistsError(Exception):
@@ -70,4 +71,20 @@ class InvalidProtocolError(Exception):
     """
     def __init__(self, ip: str):
         self.message = INVALID_PROTOCOL_MSG.format(ip)
+        super().__init__(self.message)
+
+
+class TransactionNotFoundError(Exception):
+    """
+    An exception that raises a TransactionNotFoundError.
+
+    @attention Use Case:
+        Thrown when a Transaction object is not found
+        in the 'pending_transactions' list of the Node
+        class
+
+    @return: None
+    """
+    def __init__(self, ip: str):
+        self.message = TRANSACTION_NOT_FOUND_MSG.format(ip)
         super().__init__(self.message)

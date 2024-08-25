@@ -10,7 +10,7 @@ import socket
 import time
 from typing import TextIO
 from prettytable import PrettyTable
-from exceptions.exceptions import RequestAlreadyExistsError
+from exceptions.exceptions import RequestAlreadyExistsError, TransactionNotFoundError
 from models.Transaction import Transaction
 from utility.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, MENU_OPTIONS_CONNECTED, MENU_OPTIONS,
                                PEER_TABLE_TITLE, PEER_TABLE_FIELD_PERSON,
@@ -23,17 +23,13 @@ from utility.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, M
                                SAVE_TRANSACTION_SUCCESS, CBC_FLAG, ECB_FLAG, ECB,
                                INVALID_MENU_SELECTION, MENU_ACTION_START_MSG, INVALID_INPUT_MENU_ERROR,
                                TRANSACTION_INVALID_SIG_MSG, STATUS_PENDING, PEER_TABLE_FIELD_STATUS,
-                               CONN_REQUEST_TABLE_TITLE, CONN_REQUEST_TABLE_FIELD_IP, CONN_REQUEST_TABLE_FIELD_PORT,
-                               CONN_REQUEST_TABLE_FIELD_PERSON, CONN_REQUEST_TABLE_FIELD_PUB_KEY,
-                               CONN_REQUEST_TABLE_FIELD_SIGNATURE, CONN_REQUEST_TABLE_FIELD_TIMESTAMP,
-                               CONN_REQUEST_TABLE_FIELD_ROLE, CONN_REQUEST_TABLE_FIELD_RECEIVED_BY,
                                VIEW_REQUEST_FURTHER_ACTION_PROMPT, VIEW_PHOTO_PROMPT, REVOKE_REQUEST_PROMPT,
                                REVOKE_REQUEST_INITIAL_PROMPT, RESPONSE_REJECTED, APPLICATION_PORT, TAMPER_DETECTED_MSG)
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
-from utility.crypto.ec_keys_utils import hash_data, compress_pub_key, compress_signature
+from utility.crypto.ec_keys_utils import hash_data
 from utility.node.node_init import get_current_timestamp
 from utility.utils import create_directory, is_directory_empty, write_to_file, get_img_path, load_image, \
-    get_user_command_option, delete_file
+    get_user_command_option, delete_file, create_transaction_table
 
 
 def monitor_pending_peers(self: object):
@@ -190,7 +186,7 @@ def delete_transaction(pending_transactions: list[Transaction],
                        ip_to_remove: str, request_path: str):
     """
     Removes a Transaction (connection request) object
-    from the list based on an input IP address.
+    from the list (and in file) based on an input IP address.
 
     @param pending_transactions:
         A list of Transaction objects
@@ -415,9 +411,6 @@ def view_pending_connection_requests(self: object, do_prompt: bool = True):
 
     @return: None
     """
-    def process_name(first_name: str, last_name: str) -> str:
-        return first_name + " " + last_name
-
     def view_photo_prompt(req_list: list[Transaction]):
         command = get_user_command_option(opt_range=tuple(range(2)),
                                           prompt=VIEW_REQUEST_FURTHER_ACTION_PROMPT)
@@ -435,36 +428,24 @@ def view_pending_connection_requests(self: object, do_prompt: bool = True):
         print("[+] VIEW PENDING CONNECTION REQUESTS: There are currently no pending connection requests!")
         return None
 
-    table = PrettyTable()
-    table.title = CONN_REQUEST_TABLE_TITLE
-    table.field_names = [CONN_REQUEST_TABLE_FIELD_IP, CONN_REQUEST_TABLE_FIELD_PORT,
-                         CONN_REQUEST_TABLE_FIELD_PERSON, CONN_REQUEST_TABLE_FIELD_ROLE,
-                         CONN_REQUEST_TABLE_FIELD_PUB_KEY, CONN_REQUEST_TABLE_FIELD_SIGNATURE,
-                         CONN_REQUEST_TABLE_FIELD_RECEIVED_BY, CONN_REQUEST_TABLE_FIELD_TIMESTAMP]
-
-    # Print each transaction object into rows of table
-    for transaction in self.pending_transactions:
-        table.add_row(
-            [
-                transaction.ip_addr, transaction.port,
-                process_name(transaction.first_name, transaction.last_name),
-                transaction.role, compress_pub_key(transaction.pub_key),
-                compress_signature(transaction.signature),
-                transaction.received_by, transaction.timestamp
-            ]
-        )
-    print(table)
+    print(create_transaction_table(req_list=self.pending_transactions))
 
     # Prompt user the option to view the photo of a specific request (or quit)
     if do_prompt:
         view_photo_prompt(self.pending_transactions)
 
 
-def get_transaction(req_list: list[Transaction], prompt: str):
+def get_transaction(req_list: list[Transaction],
+                    prompt: str = None,
+                    ip: str = None):
     """
     Prompts the user to select a specific Transaction
     (connection request) from the pending connections
     list.
+
+    @attention Alternative Use Case:
+        Can be used to get a Transaction object without prompt
+        based on IP
 
     @param req_list:
         A list of Transaction (requests) objects
@@ -472,9 +453,23 @@ def get_transaction(req_list: list[Transaction], prompt: str):
     @param prompt:
         A string for the printed prompt
 
+    @param ip:
+        An optional parameter to get a Transaction from the
+        list (based on an IP address)
+
+    @raise TransactionNotFoundError:
+        If an IP is provided and a corresponding Transaction
+        object is not found within the list.
+
     @return: req_list[index] or None
         The Transaction object if not expired; otherwise, None
     """
+    if ip is not None:
+        for transaction in req_list:
+            if transaction.ip_addr == ip:
+                return transaction
+        raise TransactionNotFoundError(ip)
+
     while True:
         try:
             index = int(input(prompt))

@@ -13,19 +13,19 @@ from tinyec.ec import Point
 from exceptions.exceptions import (RequestAlreadyExistsError, RequestExpiredError,
                                    InvalidSignatureError, InvalidProtocolError)
 from models.Transaction import Transaction
-from utility.client_server.utils import _perform_iterative_host_search, _connect_to_target_peer
-from utility.constants import CBC, MODE_RECEIVE, MODE_INITIATE, PHOTO_SIGNAL, REQUEST_SIGNAL, ACK, \
-    RECEIVED_TRANSACTION_SUCCESS, SHARED_SECRET_SUCCESS_MSG, APPROVED_SIGNAL, CONNECT_METHOD_PROMPT, BLOCK_SIZE, \
+from utility.client_server.utils import _perform_iterative_host_search, _connect_to_target_peer, \
+    _receive_request_handler, approved_handler
+from utility.constants import CBC, MODE_RECEIVER, MODE_INITIATOR, PHOTO_SIGNAL, REQUEST_SIGNAL, SHARED_SECRET_SUCCESS_MSG, \
+    APPROVED_SIGNAL, CONNECT_METHOD_PROMPT, BLOCK_SIZE, \
     ACCEPT_NEW_PEER_TIMEOUT, \
     CONNECTION_AWAIT_TIMEOUT_MSG, CONNECTION_AWAIT_RESPONSE_MSG, RESPONSE_EXPIRED, RESPONSE_EXISTS, \
     RESPONSE_INVALID_SIG, SEND_REQUEST_MSG, SEND_REQUEST_SUCCESS, TARGET_RECONNECT_MSG, REQUEST_APPROVED_MSG, \
     RESPONSE_APPROVED, RESPONSE_REJECTED, REQUEST_REFUSED_MSG, REQUEST_ALREADY_EXISTS_MSG, REQUEST_INVALID_SIG_MSG, \
     REQUEST_EXPIRED_MSG, TARGET_RECONNECT_SUCCESS, TARGET_UNSUCCESSFUL_RECONNECT, TARGET_RECONNECT_TIMEOUT, \
-    TARGET_DISCONNECT_MSG, CONNECT_PEER_EXISTS_ERROR
+    TARGET_DISCONNECT_MSG, CONNECT_PEER_EXISTS_ERROR, PURPOSE_REQUEST, PURPOSE_CONSENSUS, CONSENSUS_SIGNAL
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import compress_pub_key, derive_shared_secret, compress_shared_secret
-from utility.node.node_utils import save_transaction_to_file, add_new_transaction, save_pending_peer_info, \
-    create_transaction, sign_transaction, peer_exists
+from utility.node.node_utils import create_transaction, sign_transaction, peer_exists
 from utility.utils import get_user_command_option, get_target_ip, divide_subnet_search
 
 # CONSTANTS
@@ -54,7 +54,7 @@ def exchange_public_keys(pub_key: Point, sock: socket.socket, mode: str):
     @return: Public Key
         The other end's public key
     """
-    if mode == MODE_RECEIVE:
+    if mode == MODE_RECEIVER:
         print("[+] PUBLIC KEY EXCHANGE: Now exchanging public keys with the requesting peer...")
 
         # Receive public key from requesting peer
@@ -66,7 +66,7 @@ def exchange_public_keys(pub_key: Point, sock: socket.socket, mode: str):
         sock.sendall(serialized_key)
         return peer_pub_key
 
-    if mode == MODE_INITIATE:
+    if mode == MODE_INITIATOR:
         print("[+] PUBLIC KEY EXCHANGE: Now exchanging public keys with the target peer...")
 
         # Send Public Key to Target
@@ -97,7 +97,7 @@ def establish_secure_parameters(self: object, peer_socket: socket.socket, mode: 
 
     @return: shared_secret, session_iv, mode
     """
-    if mode == MODE_RECEIVE:  # => Receiver
+    if mode == MODE_RECEIVER:  # => Receiver
         session_iv = None
         encrypt_mode = peer_socket.recv(1024).decode()
         print(f"[+] MODE RECEIVED: The encryption mode selected by the client for this session "
@@ -108,7 +108,7 @@ def establish_secure_parameters(self: object, peer_socket: socket.socket, mode: 
             print(f"[+] IV RECEIVED: The initialization vector (IV) has been received "
                   f"from the peer ({session_iv.hex()})")
 
-        peer_pub_key = exchange_public_keys(self.pub_key, peer_socket, mode=MODE_RECEIVE)
+        peer_pub_key = exchange_public_keys(self.pub_key, peer_socket, mode=MODE_RECEIVER)
         print(f"[+] PUBLIC KEY RECEIVED: Successfully received the peer's public key "
               f"({compress_pub_key(peer_pub_key)})")
 
@@ -116,7 +116,7 @@ def establish_secure_parameters(self: object, peer_socket: socket.socket, mode: 
         print(SHARED_SECRET_SUCCESS_MSG.format(compress_shared_secret(shared_secret), len(shared_secret)))
         return shared_secret, session_iv, encrypt_mode
 
-    if mode == MODE_INITIATE:  # => Sender
+    if mode == MODE_INITIATOR:  # => Sender
         session_iv = None
         time.sleep(0.5)
         peer_socket.send(self.mode.encode())
@@ -131,7 +131,7 @@ def establish_secure_parameters(self: object, peer_socket: socket.socket, mode: 
                   f"this session ({session_iv.hex()})")
 
         # Exchange Public Keys with Server
-        server_pub_key = exchange_public_keys(self.pub_key, peer_socket, mode=MODE_INITIATE)
+        server_pub_key = exchange_public_keys(self.pub_key, peer_socket, mode=MODE_INITIATOR)
         print(f"[+] PUBLIC KEY RECEIVED: Successfully received the server's public key "
               f"({compress_pub_key(server_pub_key)})")
 
@@ -140,107 +140,6 @@ def establish_secure_parameters(self: object, peer_socket: socket.socket, mode: 
         self.shared_secret = shared_secret.hex()
         print(SHARED_SECRET_SUCCESS_MSG.format(compress_shared_secret(shared_secret), len(shared_secret)))
         return shared_secret, session_iv
-
-
-def _receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: str,
-                             shared_secret: bytes, mode: str, peer_iv: bytes = None):
-    """
-    A helper function that handles the receiving, decrypting, and
-    validation of a requesting peer's Transaction (connection request).
-
-    @attention Use Case:
-        Invoked when requesting peer wants to connect
-        to the target Node and sends an encrypted Transaction
-        object over the network
-
-    @param self:
-        A reference to the calling class object (Node)
-
-    @param peer_socket:
-        The requesting peer's socket
-
-    @param peer_ip:
-        The requesting peer's IP address (String)
-
-    @param shared_secret:
-        Bytes of the shared secret
-
-    @param mode:
-        A string containing the cipher mode (CBC or ECB)
-
-    @param peer_iv:
-        Bytes of the initialization vector (IV)
-
-    @return: None
-    """
-    def receive_request():
-        """
-        Receives data for Transaction (connection request)
-        from the requesting peer.
-
-        @return: buffer
-            A bytearray containing encrypted data
-        """
-        buffer = bytearray()
-        peer_socket.send(AES_encrypt(data=ACK.encode(), key=shared_secret, mode=mode, iv=peer_iv))  # Send ACK
-        size = int.from_bytes(peer_socket.recv(4), byteorder='big')  # Get the size of transaction
-
-        while len(buffer) < size:
-            chunk = peer_socket.recv(min(size - len(buffer), 4096))
-            if not chunk:
-                break
-            buffer += chunk
-
-        return buffer
-
-    def process_request(data: bytearray):
-        """
-        Decrypts, verifies and processes the requesting peer's
-        connection request and if valid, saves peer's request,
-        information and socket.
-
-        @param data:
-            Encrypted data in bytearray
-
-        @return: request & file_path
-            A decrypted, verified Transaction object and the
-            file path where it is saved
-        """
-        buf_copy = data.copy()
-        decrypted_data = AES_decrypt(data=buf_copy, key=shared_secret, mode=mode, iv=peer_iv)
-        request = pickle.loads(decrypted_data)
-
-        if request.is_expired():
-            peer_socket.send(AES_encrypt(data=RESPONSE_EXPIRED.encode(), key=shared_secret, mode=mode, iv=peer_iv))
-            peer_socket.close()
-            raise RequestExpiredError(ip=peer_ip)
-        elif request.is_verified():
-            try:
-                add_new_transaction(self, request)
-                transaction_path = save_transaction_to_file(data=data, shared_secret=shared_secret, iv=peer_iv, mode=mode)
-                print(RECEIVED_TRANSACTION_SUCCESS.format(peer_ip))
-                return request, transaction_path
-            except RequestAlreadyExistsError:
-                peer_socket.send(AES_encrypt(data=RESPONSE_EXISTS.encode(), key=shared_secret, mode=mode, iv=peer_iv))
-                peer_socket.close()
-                raise RequestAlreadyExistsError(ip=peer_ip)
-        else:
-            peer_socket.send(AES_encrypt(data=RESPONSE_INVALID_SIG.encode(), key=shared_secret, mode=mode, iv=peer_iv))
-            peer_socket.close()
-            raise InvalidSignatureError(ip=peer_ip)
-    # ================================================================================
-    try:
-        encrypted_data = receive_request()
-        request, file_path = process_request(data=encrypted_data)
-        save_pending_peer_info(self, peer_socket, peer_ip, request.first_name,
-                               request.last_name, shared_secret, mode, file_path, peer_iv)
-        peer_socket.settimeout(None)
-    except InvalidSignatureError:
-        raise InvalidSignatureError(ip=peer_ip)
-    except RequestAlreadyExistsError:
-        raise RequestAlreadyExistsError(ip=peer_ip)
-    except RequestExpiredError:
-        raise RequestExpiredError(ip=peer_ip)
 
 
 def accept_new_peer_handler(self: object, own_sock: socket.socket):
@@ -285,7 +184,7 @@ def accept_new_peer_handler(self: object, own_sock: socket.socket):
     peer_socket, peer_address = own_sock.accept()
     print(f"[+] NEW CONNECTION REQUEST: Accepted a peer connection from ({peer_address[0]}, {peer_address[1]})!")
 
-    shared_secret, session_iv, mode = establish_secure_parameters(self, peer_socket, mode=MODE_RECEIVE)
+    shared_secret, session_iv, mode = establish_secure_parameters(self, peer_socket, mode=MODE_RECEIVER)
     peer_socket.settimeout(ACCEPT_NEW_PEER_TIMEOUT)  # 10-second Timeout
 
     # Await, Receive and Decrypt Peer Signal
@@ -298,19 +197,31 @@ def accept_new_peer_handler(self: object, own_sock: socket.socket):
     except socket.timeout:
         print("[+] NEW PEER TIMEOUT: A new peer connection has timed out; connection has been terminated!")
         peer_socket.close()
+    finally:
+        print(f"[+] THREAD TERMINATED: A thread handling new peer ({peer_address}) has been successfully terminated!")
 
 
-def _send_request(self: object, peer_socket: socket.socket,
-                  shared_secret: bytes, mode: str,
-                  transaction: Transaction, peer_iv: bytes = None):
+def send_request(peer_socket: socket.socket, ip: str,
+                 shared_secret: bytes, mode: str, purpose: str,
+                 transaction: Transaction, peer_iv: bytes = None):
     """
     Sends the Transaction (connection request) to a target peer.
 
-    @param self:
-        A reference to the calling class object (Node)
+    @attention Consensus (Use Case):
+        The Consensus class uses this to send requests in parallel
+        using multiprocessing module and in the event of peer socket
+        disconnection, their IP is returned to handle cleanup
+        (such as socket closure, removal of peer info, etc).
+
+    @raise (BrokenPipeError, ConnectionResetError, OSError, socket.timeout):
+        This exception is primarily used to prevent multiple processes
+        from stalling while executing this function during Consensus
 
     @param peer_socket:
         The target peer's socket object
+
+    @param ip:
+        The IP address of the target peer (String)
 
     @param shared_secret:
         Bytes of the shared secret
@@ -318,34 +229,110 @@ def _send_request(self: object, peer_socket: socket.socket,
     @param mode:
         A string containing the cipher mode (CBC or ECB)
 
+    @param purpose:
+        A string containing the purpose of the sending (Consensus, Request)
+
     @param transaction:
         A Transaction object
 
     @param peer_iv:
         Bytes of the initialization vector (IV)
 
+    @return: None, ip
+        None if successful; otherwise, the IP of the disconnected peer
+    """
+    print(SEND_REQUEST_MSG.format(ip))
+    try:
+        # Send a signal (according to the purpose)
+        if purpose == PURPOSE_REQUEST:
+            peer_socket.send(AES_encrypt(data=REQUEST_SIGNAL.encode(), key=shared_secret, mode=mode, iv=peer_iv))
+        if purpose == PURPOSE_CONSENSUS:
+            peer_socket.send(AES_encrypt(data=CONSENSUS_SIGNAL.encode(), key=shared_secret, mode=mode, iv=peer_iv))
+
+        # Wait for ACK
+        peer_socket.recv(1024)
+
+        # Serialize and AES encrypt the object
+        serialized_request = pickle.dumps(transaction)
+        encrypted_request = AES_encrypt(data=serialized_request, key=shared_secret, mode=mode, iv=peer_iv)
+
+        # Send the size of the serialized object
+        size = len(encrypted_request).to_bytes(4, byteorder='big')
+        peer_socket.sendall(AES_encrypt(data=size, key=shared_secret, mode=mode, iv=peer_iv))
+
+        # Send the encrypted request
+        peer_socket.sendall(encrypted_request)
+
+        # Wait for ACK
+        peer_socket.recv(1024)
+        print(SEND_REQUEST_SUCCESS.format(peer_socket.getpeername()[0]))
+        return None
+    except (BrokenPipeError, ConnectionResetError, OSError) as e:  # Used for consensus (parallel)
+        print(f"[+] ERROR: An error has occurred while sending a request to peer ({ip}) [REASON: {e}]")
+        return ip
+
+
+def approved_peer_activity_handler(self: object, peer_sock: socket.socket):
+    """
+    Handles incoming data from approved peers and their
+    associated activity (based on a specific signal protool).
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @param peer_sock:
+        The peer socket object
+
     @return: None
     """
-    # Send REQUEST signal
-    print(SEND_REQUEST_MSG.format(peer_socket.getpeername()[0]))
-    peer_socket.send(AES_encrypt(data=REQUEST_SIGNAL.encode(), key=shared_secret, mode=mode, iv=peer_iv))
+    print("[+] TO BE IMPLEMENTED LATER...")
 
-    # Wait for ACK
-    peer_socket.recv(1024)
 
-    # Sign the Transaction (connection request)
-    sign_transaction(self, transaction)
+def connect_to_P2P_network(self: object):
+    """
+    Finds, connects, and sends the connection request to a
+    target peer using sockets.
 
-    # Serialize and AES encrypt the object
-    serialized_request = pickle.dumps(transaction)
-    encrypted_request = AES_encrypt(data=serialized_request, key=shared_secret, mode=mode, iv=peer_iv)
+    @param self:
+        A reference to the calling class object (Node)
 
-    # Send the size of the serialized object
-    peer_socket.sendall(len(encrypted_request).to_bytes(4, byteorder='big'))
+    @return: None
+    """
+    transaction = create_transaction(self)
 
-    # Send the encrypted request
-    peer_socket.sendall(encrypted_request)
-    print(SEND_REQUEST_SUCCESS)
+    if transaction is not None:
+        option = get_user_command_option(opt_range=tuple(range(3)), prompt=CONNECT_METHOD_PROMPT)
+
+        if option == 0:
+            return None
+
+        if option == 1:
+            target_ip = get_target_ip(self)
+
+            if not peer_exists(self.peer_dict, target_ip, prompt=CONNECT_PEER_EXISTS_ERROR):
+                target_sock = _connect_to_target_peer(ip=target_ip)
+
+                if target_sock is not None:  # TODO: refactor this code into a function (less code duplication)
+                    shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATOR)
+                    sign_transaction(self, transaction)
+                    send_request(target_sock, target_ip, shared_secret, PURPOSE_REQUEST, self.mode, transaction, session_iv)
+                    response = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
+
+                    if response:  # => if approved
+                        approved_handler(self, target_sock, shared_secret, session_iv)
+
+        if option == 2:  # TODO: refactor this code into a function (less code duplication)
+            target_sock = _perform_parallel_host_search(self.ip, self.peer_dict)
+            target_ip = target_sock.getpeername()[0]
+
+            if target_sock is not None:
+                shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATOR)
+                sign_transaction(self, transaction)
+                send_request(target_sock, target_ip, shared_secret, PURPOSE_REQUEST, self.mode, transaction, session_iv)
+                response = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
+
+                if response:  # => if approved
+                    approved_handler(self, target_sock, shared_secret, session_iv)
 
 
 def _await_response(self: object, peer_socket: socket.socket, shared_secret: bytes,
@@ -436,66 +423,6 @@ def _await_response(self: object, peer_socket: socket.socket, shared_secret: byt
         print(CONNECTION_AWAIT_TIMEOUT_MSG)
         peer_socket.close()
         return False
-
-
-def peer_activity_handler(self: object, peer_sock: socket.socket):
-    """
-    Handles incoming data from approved peers and their
-    associated activity (based on a specific signal protool).
-
-    @param self:
-        A reference to the calling class object (Node)
-
-    @param peer_sock:
-        The peer socket object
-
-    @return: None
-    """
-    print("[+] TO BE IMPLEMENTED LATER...")
-
-
-def connect_to_P2P_network(self: object):
-    """
-    Finds, connects, and sends the connection request to a
-    target peer using sockets.
-
-    @param self:
-        A reference to the calling class object (Node)
-
-    @return: None
-    """
-    transaction = create_transaction(self)
-
-    if transaction is not None:
-        option = get_user_command_option(opt_range=tuple(range(3)), prompt=CONNECT_METHOD_PROMPT)
-
-        if option == 0:
-            return None
-
-        if option == 1:
-            target_ip = get_target_ip(self)
-
-            if not peer_exists(self.peer_dict, target_ip, prompt=CONNECT_PEER_EXISTS_ERROR):
-                target_sock = _connect_to_target_peer(ip=target_ip)
-
-                if target_sock is not None:  # TODO: refactor this code into a function (less code duplication)
-                    shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATE)
-                    _send_request(self, target_sock, shared_secret, self.mode, transaction, session_iv)
-                    response = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
-
-                    if response:  # => if approved
-                        print("[+] PLACEHOLDER - Follow up")
-
-        if option == 2:  # TODO: refactor this code into a function (less code duplication)
-            target_sock = _perform_parallel_host_search(self.ip, self.peer_dict)
-
-            if target_sock is not None:
-                shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATE)
-                _send_request(self, target_sock, shared_secret, self.mode, transaction, session_iv)
-                response = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
-
-                if response:  # => if approved
-                    print("[+] PLACEHOLDER - Follow up")
 
 
 def _perform_parallel_host_search(host_ip: str, peer_dict: dict):

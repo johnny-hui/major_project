@@ -77,12 +77,15 @@ MONITOR_PENDING_PEERS_START_MSG = "[+] Monitor pending peers thread has started!
 MONITOR_PENDING_PEERS_THREAD_TERMINATE = ("[+] THREAD TERMINATION: Monitor pending peers thread has been "
                                           "successfully terminated!")
 
-# ROLE CONSTANTS
+# NODE CONSTANTS
 ROLE_PEER = "PEER"
 ROLE_DELEGATE = "DELEGATE"
 ROLE_ADMIN = "ADMIN"
 STATUS_PENDING = "PENDING"
 STATUS_APPROVED = "APPROVED"
+STATUS_CONNECTED = "CONNECTED"
+STATUS_NOT_CONNECTED = "NOT CONNECTED"
+
 
 # MENU CONSTANTS
 MIN_MENU_ITEM_VALUE = 1
@@ -223,8 +226,8 @@ END_OF_FILE = "EOF"
 TRANSACTION_TO_STRING = ("Transaction <Object>: ip_addr={}, port={}, role={}, pub_key={}, "
                          "first_name={}, last_name={}, timestamp={}, signature(r,s)={}, received_by={}")
 
-TRANSACTION_EXPIRY_TIME_SECONDS = 180  # => Controls peer wait-time (before timeout)
-TRANSACTION_EXPIRY_TIME_MINUTES = 3    # => Controls peer wait-time (before timeout)
+TRANSACTION_EXPIRY_TIME_SECONDS = 300  # => Controls peer wait-time (before timeout)
+TRANSACTION_EXPIRY_TIME_MINUTES = 5    # => Controls peer wait-time (before timeout)
 
 TRANSACTIONS_DIR = "data/transactions/"
 SAVE_TRANSACTION_SUCCESS = ("[+] REQUEST SAVED: The connection request has been successfully created and saved to the "
@@ -252,8 +255,8 @@ MODE_CBC_BYTE_MAPPING = (53, 0x7F)
 
 
 # KEY EXCHANGE CONSTANTS
-MODE_RECEIVE = "RECEIVE"
-MODE_INITIATE = "INITIATE"
+MODE_RECEIVER = "RECEIVE"
+MODE_INITIATOR = "INITIATE"
 SHARED_SECRET_SUCCESS_MSG = ("[+] KEY EXCHANGE SUCCESS: A shared secret has been derived for "
                              "the current session ({}) | Number of Bytes = {}")
 
@@ -264,6 +267,7 @@ PEER_ACTIVITY_HANDLER_THREAD_NAME = "peer_activity_handler_thread"
 PHOTO_SIGNAL = "PHOTO"
 REQUEST_SIGNAL = "REQUEST"
 APPROVED_SIGNAL = "APPROVED"
+CONSENSUS_SIGNAL = "CONSENSUS"
 RECEIVED_TRANSACTION_SUCCESS = ("[+] CONNECTION REQUEST RECEIVED: Successfully received and verified peer's "
                                 "Transaction (connection request) from ({})")
 CONNECTION_TIMEOUT_ERROR = ("[+] CONNECTION TIMEOUT: A timeout has occurred while attempting to establish a connection "
@@ -292,7 +296,7 @@ CONNECT_PEER_EXISTS_ERROR = ("[+] CONNECTION ERROR: You cannot connect to the pr
                              "belongs to a peer that is requesting a connection to you; please try again.")
 ACCEPT_NEW_PEER_TIMEOUT = 10  # => in seconds
 SEND_REQUEST_MSG = "[+] Sending request to {}..."
-SEND_REQUEST_SUCCESS = "[+] Your transaction (connection request) has been successfully sent!"
+SEND_REQUEST_SUCCESS = "[+] The transaction (connection request) has been successfully sent and received by ({})!"
 CONNECTION_AWAIT_RESPONSE_MSG = ("[+] AWAITING RESPONSE: Now awaiting consensus and decision from"
                                  " peers... [Time before expiry = {}]")
 CONNECTION_AWAIT_TIMEOUT_MSG = ("[+] RESPONSE TIMEOUT: Wait-time has exceeded; unable to reach a consensus within the "
@@ -347,6 +351,23 @@ REVOKE_REQUEST_PROMPT = "[+] REVOKE REQUEST: Select a specific request to revoke
 
 
 # APPROVE CONNECTION REQUEST CONSTANTS
+TARGET_TRANSACTION_WAIT_TIME = 300
+TARGET_WAIT_REQUEST_MSG = "[+] Now waiting for the target peer to send their request (max wait-time = {} seconds)"
+
+
+# CONSENSUS CONSTANTS
+MODE_VOTER = "VOTER"
+VOTE_YES = 'Yes'
+VOTE_NO = 'No'
+VOTE_YES_KEY = 'y'
+VOTE_NO_KEY = 'n'
+VOTE_SHOW_IMAGE_KEY = '1'
+VOTE_PROMPT = "[+] Enter 'y' to vote yes; Enter 'n' to vote no; Enter '1' to view photo (Timeout = {} seconds): "
+VOTE_RESULTS_WAIT_MSG = "[+] Please wait for consensus results... (approximate wait-time = {})"
+CONSENSUS_SUCCESS = "SUCCESS"
+CONSENSUS_FAILURE = "FAILURE"
+BUFFER_TIME_VOTER = 60  # => subtracted with request.get_time_remaining()
+BUFFER_TIME_INITIATOR = 30  # => subtracted with request.get_time_remaining()
 
 
 # OTHER CONSTANTS
@@ -355,3 +376,6 @@ OP_DECRYPT = "DECRYPTION"
 SAVE_FILE_DIR = "data/received/{}"
 TAMPER_DETECTED_MSG = ("[+] An error has occurred while loading a transaction from the following file: {} "
                        "(REASON: possible tampering or incorrect decryption parameters were present)")
+TIMER_INTERVAL = 30
+PURPOSE_REQUEST = "REQUEST"
+PURPOSE_CONSENSUS = "CONSENSUS"

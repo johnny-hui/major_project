@@ -7,7 +7,7 @@ from utility.constants import NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_T
     ROLE_PEER, MONITOR_PENDING_PEERS_THREAD_NAME, MONITOR_PENDING_PEERS_START_MSG, APPLICATION_PORT, \
     ACCEPT_PEER_HANDLER_THREAD_NAME, PEER_ACTIVITY_HANDLER_THREAD_NAME
 from utility.crypto.ec_keys_utils import generate_keys
-from utility.client_server.client_server import accept_new_peer_handler, connect_to_P2P_network, peer_activity_handler
+from utility.client_server.client_server import accept_new_peer_handler, connect_to_P2P_network, approved_peer_activity_handler
 from utility.node.node_init import parse_arguments, initialize_socket, get_current_timestamp
 from utility.node.node_utils import (display_menu, view_current_peers, close_application, send_message,
                                      get_specific_peer_info, get_user_menu_option, monitor_pending_peers,
@@ -32,8 +32,7 @@ class Node:
         fd_pending - A list that stores sockets of pending peers awaiting consensus
         peer_dict - A dictionary containing information about each connected peer
         pending_transactions - A list containing pending Transaction objects of requesting peers
-        app_timestamp - A string containing the timestamp (from NTP Server) of when
-                        the Node application was started
+        app_timestamp - A string containing the timestamp (from NTP Server) of when the Node application was started
         is_connected - A boolean flag indicating whether the Node is connected
         terminate - A boolean flag that determines if the server should terminate
     """
@@ -66,9 +65,11 @@ class Node:
         @return: None
         """
         def __start_socket_handler_thread(target_sock: socket.socket, handler, thread_name: str):
-            thread = threading.Thread(target=handler,
-                                      args=(self, target_sock),
-                                      name=thread_name)
+            """
+            Handles each socket activity on a new thread.
+            @return: None
+            """
+            thread = threading.Thread(target=handler, args=(self, target_sock), name=thread_name)
             thread.start()
         # =====================================================================
         self.__start_user_menu_thread()
@@ -84,7 +85,7 @@ class Node:
                                                   thread_name=ACCEPT_PEER_HANDLER_THREAD_NAME)
                 else:
                     __start_socket_handler_thread(target_sock=sock,
-                                                  handler=peer_activity_handler,
+                                                  handler=approved_peer_activity_handler,
                                                   thread_name=PEER_ACTIVITY_HANDLER_THREAD_NAME)
 
     def __start_user_menu_thread(self):
