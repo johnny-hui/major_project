@@ -356,6 +356,11 @@ TARGET_WAIT_REQUEST_MSG = "[+] Now waiting for the target peer to send their req
 
 
 # CONSENSUS CONSTANTS
+CONSENSUS_INIT_MSG = "[+] CONSENSUS: A consensus has been launched, now initializing..."
+CONSENSUS_INIT_SUCCESS_MSG = "[+] CONSENSUS: Initialization Successful!"
+REQ_BUFFER_TIME_INITIAL = 65 # => used to determine if sufficient time left to initiate a consensus
+REQ_BUFFER_TIME_VOTER = 60  # => subtracted with request.get_time_remaining()
+REQ_BUFFER_TIME_INITIATOR = 30  # => subtracted with request.get_time_remaining()
 MODE_VOTER = "VOTER"
 VOTE_YES = 'Yes'
 VOTE_NO = 'No'
@@ -366,8 +371,21 @@ VOTE_PROMPT = "[+] Enter 'y' to vote yes; Enter 'n' to vote no; Enter '1' to vie
 VOTE_RESULTS_WAIT_MSG = "[+] Please wait for consensus results... (approximate wait-time = {})"
 CONSENSUS_SUCCESS = "SUCCESS"
 CONSENSUS_FAILURE = "FAILURE"
-BUFFER_TIME_VOTER = 60  # => subtracted with request.get_time_remaining()
-BUFFER_TIME_INITIATOR = 30  # => subtracted with request.get_time_remaining()
+PEER_LIST_NOT_PROVIDED_ERROR = "Initiator: Peer list not provided!"
+PEER_LIST_EMPTY_ERROR = "Initiator: Peer list empty!"
+INITIATOR_SOCK_NOT_PROVIDED_ERROR = "Voter: Initiator socket not provided!"
+INITIATOR_NO_PEER_SEND_REQ_ERROR = "[+] CONSENSUS ERROR: There are no peers to initiate a consensus and send a request to!"
+INITIATOR_NO_PEER_GET_VOTES_ERROR = "[+] CONSENSUS ERROR: There are currently no peers to get consensus results from!"
+INITIATOR_NO_PEER_SEND_RESULTS_ERROR = "[+] CONSENSUS ERROR: There are currently no peers to send the consensus results to!"
+PURPOSE_VOTER_GET_PEER_INFO = "VOTER_GET_PEER_INFO"
+PURPOSE_SEND_FINAL_DECISION = "FINAL_DECISION"
+PURPOSE_GET_PEER_VOTES = "GET_PEER_VOTES"
+PURPOSE_SEND_REQ = "SEND_REQ"
+SEND_REQ_PEER_START_MSG = "[+] Now sending the request to all peers..."
+SEND_FINAL_DECISION_START_MSG = "[+] Now sending the final consensus decision to all peers..."
+GET_PEER_VOTE_TIMEOUT_MSG = ("[+] VOTE TIMEOUT: No response received from peer (IP: {}); an automatic 'No' vote will "
+                             "added towards consensus result.")
+GET_PEER_VOTE_START_MSG = "[+] Now gathering vote results from connected peers, please wait..."
 
 
 # OTHER CONSTANTS

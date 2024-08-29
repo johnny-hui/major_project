@@ -1,5 +1,5 @@
 from models.Node import Node
-from utility.constants import ROLE_ADMIN
+from utility.general.constants import ROLE_ADMIN
 
 
 class AdminNode(Node):

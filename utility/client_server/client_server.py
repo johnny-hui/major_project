@@ -13,9 +13,12 @@ from tinyec.ec import Point
 from exceptions.exceptions import (RequestAlreadyExistsError, RequestExpiredError,
                                    InvalidSignatureError, InvalidProtocolError)
 from models.Transaction import Transaction
-from utility.client_server.utils import _perform_iterative_host_search, _connect_to_target_peer, \
-    _receive_request_handler, approved_handler
-from utility.constants import CBC, MODE_RECEIVER, MODE_INITIATOR, PHOTO_SIGNAL, REQUEST_SIGNAL, SHARED_SECRET_SUCCESS_MSG, \
+from utility.client_server.utils import (_perform_iterative_host_search, _connect_to_target_peer,
+                                         _receive_request_handler, approved_handler)
+from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
+from utility.crypto.ec_keys_utils import compress_pub_key, derive_shared_secret, compress_shared_secret
+from utility.general.constants import CBC, MODE_RECEIVER, MODE_INITIATOR, PHOTO_SIGNAL, REQUEST_SIGNAL, \
+    SHARED_SECRET_SUCCESS_MSG, \
     APPROVED_SIGNAL, CONNECT_METHOD_PROMPT, BLOCK_SIZE, \
     ACCEPT_NEW_PEER_TIMEOUT, \
     CONNECTION_AWAIT_TIMEOUT_MSG, CONNECTION_AWAIT_RESPONSE_MSG, RESPONSE_EXPIRED, RESPONSE_EXISTS, \
@@ -23,10 +26,8 @@ from utility.constants import CBC, MODE_RECEIVER, MODE_INITIATOR, PHOTO_SIGNAL, 
     RESPONSE_APPROVED, RESPONSE_REJECTED, REQUEST_REFUSED_MSG, REQUEST_ALREADY_EXISTS_MSG, REQUEST_INVALID_SIG_MSG, \
     REQUEST_EXPIRED_MSG, TARGET_RECONNECT_SUCCESS, TARGET_UNSUCCESSFUL_RECONNECT, TARGET_RECONNECT_TIMEOUT, \
     TARGET_DISCONNECT_MSG, CONNECT_PEER_EXISTS_ERROR, PURPOSE_REQUEST, PURPOSE_CONSENSUS, CONSENSUS_SIGNAL
-from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
-from utility.crypto.ec_keys_utils import compress_pub_key, derive_shared_secret, compress_shared_secret
+from utility.general.utils import get_user_command_option, get_target_ip, divide_subnet_search
 from utility.node.node_utils import create_transaction, sign_transaction, peer_exists
-from utility.utils import get_user_command_option, get_target_ip, divide_subnet_search
 
 # CONSTANTS
 ERROR_RESPONSE_MAP = {

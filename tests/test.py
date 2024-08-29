@@ -9,10 +9,10 @@ import sys
 from datetime import datetime
 from models.Transaction import Transaction
 from utility.crypto.aes_utils import AES_encrypt
-from utility.constants import BLOCK_SIZE, TIMESTAMP_FORMAT, ECB
+from utility.general.constants import BLOCK_SIZE, TIMESTAMP_FORMAT, ECB
 from utility.crypto.ec_keys_utils import generate_keys, generate_shared_secret
 from utility.node.node_utils import save_transaction_to_file, load_transactions
-from utility.utils import load_image, get_img_path
+from utility.general.utils import load_image, get_img_path
 
 if __name__ == '__main__':
     ip, port, first_name, last_name = "10.0.0.16", 126, "Thompson", "Tristan"

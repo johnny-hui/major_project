@@ -4,7 +4,7 @@ from base64 import b64encode
 from datetime import datetime, timedelta
 from PIL import Image
 from tinyec.ec import Point
-from utility.constants import TRANSACTION_TO_STRING, TRANSACTION_EXPIRY_TIME_SECONDS, TRANSACTION_MAX_IMG_SIZE, \
+from utility.general.constants import TRANSACTION_TO_STRING, TRANSACTION_EXPIRY_TIME_SECONDS, TRANSACTION_MAX_IMG_SIZE, \
     TIMESTAMP_FORMAT, TRANSACTION_EXPIRY_TIME_MINUTES
 from utility.crypto.ec_keys_utils import create_signature, verify_signature, compress_pub_key, compress_signature
 

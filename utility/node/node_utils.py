@@ -12,23 +12,23 @@ from typing import TextIO
 from prettytable import PrettyTable
 from exceptions.exceptions import RequestAlreadyExistsError, TransactionNotFoundError
 from models.Transaction import Transaction
-from utility.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, MENU_OPTIONS_CONNECTED, MENU_OPTIONS,
-                               PEER_TABLE_TITLE, PEER_TABLE_FIELD_PERSON,
-                               PEER_TABLE_FIELD_IP, PEER_TABLE_FIELD_CIPHER_MODE,
-                               PEER_TABLE_FIELD_SECRET, PEER_TABLE_FIELD_IV,
-                               ROLE_DELEGATE, DELEGATE_MENU_OPTIONS, ROLE_ADMIN, ADMIN_MENU_OPTIONS, ROLE_PEER, CBC,
-                               INIT_FACTOR_BYTE_MAPPING,
-                               MODE_CBC_BYTE_MAPPING, MODE_ECB_BYTE_MAPPING, SHARED_KEY_BYTE_MAPPING,
-                               TRANSACTIONS_DIR,
-                               SAVE_TRANSACTION_SUCCESS, CBC_FLAG, ECB_FLAG, ECB,
-                               INVALID_MENU_SELECTION, MENU_ACTION_START_MSG, INVALID_INPUT_MENU_ERROR,
-                               TRANSACTION_INVALID_SIG_MSG, STATUS_PENDING, PEER_TABLE_FIELD_STATUS,
-                               VIEW_REQUEST_FURTHER_ACTION_PROMPT, VIEW_PHOTO_PROMPT, REVOKE_REQUEST_PROMPT,
-                               REVOKE_REQUEST_INITIAL_PROMPT, RESPONSE_REJECTED, APPLICATION_PORT, TAMPER_DETECTED_MSG)
+from utility.general.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, MENU_OPTIONS_CONNECTED, MENU_OPTIONS,
+                                       PEER_TABLE_TITLE, PEER_TABLE_FIELD_PERSON,
+                                       PEER_TABLE_FIELD_IP, PEER_TABLE_FIELD_CIPHER_MODE,
+                                       PEER_TABLE_FIELD_SECRET, PEER_TABLE_FIELD_IV,
+                                       ROLE_DELEGATE, DELEGATE_MENU_OPTIONS, ROLE_ADMIN, ADMIN_MENU_OPTIONS, ROLE_PEER, CBC,
+                                       INIT_FACTOR_BYTE_MAPPING,
+                                       MODE_CBC_BYTE_MAPPING, MODE_ECB_BYTE_MAPPING, SHARED_KEY_BYTE_MAPPING,
+                                       TRANSACTIONS_DIR,
+                                       SAVE_TRANSACTION_SUCCESS, CBC_FLAG, ECB_FLAG, ECB,
+                                       INVALID_MENU_SELECTION, MENU_ACTION_START_MSG, INVALID_INPUT_MENU_ERROR,
+                                       TRANSACTION_INVALID_SIG_MSG, STATUS_PENDING, PEER_TABLE_FIELD_STATUS,
+                                       VIEW_REQUEST_FURTHER_ACTION_PROMPT, VIEW_PHOTO_PROMPT, REVOKE_REQUEST_PROMPT,
+                                       REVOKE_REQUEST_INITIAL_PROMPT, RESPONSE_REJECTED, APPLICATION_PORT, TAMPER_DETECTED_MSG)
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import hash_data
 from utility.node.node_init import get_current_timestamp
-from utility.utils import create_directory, is_directory_empty, write_to_file, get_img_path, load_image, \
+from utility.general.utils import create_directory, is_directory_empty, write_to_file, get_img_path, load_image, \
     get_user_command_option, delete_file, create_transaction_table
 
 

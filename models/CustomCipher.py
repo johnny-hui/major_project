@@ -1,8 +1,8 @@
 import hashlib
 import secrets
-from utility.constants import (ROUNDS, BLOCK_SIZE, DEFAULT_ROUND_KEYS,
-                               OP_ENCRYPT, OP_DECRYPT, ECB, CBC, S_BOX, FORMAT_FILE,
-                               FORMAT_PICTURE, FORMAT_AVALANCHE)
+from utility.general.constants import (ROUNDS, BLOCK_SIZE, DEFAULT_ROUND_KEYS,
+                                       OP_ENCRYPT, OP_DECRYPT, ECB, CBC, S_BOX, FORMAT_FILE,
+                                       FORMAT_PICTURE, FORMAT_AVALANCHE)
 from utility.crypto.cipher_utils import (pad_block, encrypt_block, decrypt_block,
                                          unpad_block, get_subkeys_from_user, get_default_subkeys,
                                          is_sub_keys_generated)

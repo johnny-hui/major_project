@@ -4,16 +4,17 @@ This Python file provides general utility functions.
 
 """
 import ipaddress
+import multiprocessing
 import os
 import threading
 import time
 from prettytable import PrettyTable
 from models.Transaction import Transaction
-from utility.constants import ENTER_IP_PROMPT, INVALID_IP_ERROR, OWN_IP_ERROR_MSG, MAX_IP_VALUE, \
+from utility.crypto.ec_keys_utils import compress_pub_key, compress_signature
+from utility.general.constants import ENTER_IP_PROMPT, INVALID_IP_ERROR, OWN_IP_ERROR_MSG, MAX_IP_VALUE, \
     CONN_REQUEST_TABLE_TITLE, CONN_REQUEST_TABLE_FIELD_IP, CONN_REQUEST_TABLE_FIELD_PORT, \
     CONN_REQUEST_TABLE_FIELD_PERSON, CONN_REQUEST_TABLE_FIELD_ROLE, CONN_REQUEST_TABLE_FIELD_SIGNATURE, \
     CONN_REQUEST_TABLE_FIELD_PUB_KEY, CONN_REQUEST_TABLE_FIELD_RECEIVED_BY, CONN_REQUEST_TABLE_FIELD_TIMESTAMP
-from utility.crypto.ec_keys_utils import compress_pub_key, compress_signature
 
 
 def get_img_path():
@@ -266,3 +267,31 @@ def timer(time_limit: int, interval: int, prompt: str, stop_event: threading.Eve
         time.sleep(1)
 
     print(f"[+] TIME EXPIRED: Time limit of {time_limit} seconds has been reached!")
+
+
+def start_parallel_operation(task, task_args: list,
+                             num_processes: int, prompt: str):
+    """
+    Executes a function in parallel using the multiprocessing module.
+
+    @param task:
+        The task/function to be executed in parallel
+
+    @param task_args:
+        A list containing arguments for the defined function
+
+    @param num_processes:
+        An integer for number of threads to spawn
+
+    @param prompt:
+        A string representing the message to be printed
+
+    @return: results
+        A list of returned values (according to task return)
+    """
+    with multiprocessing.Pool(processes=num_processes) as pool:
+        print(prompt + f" [{num_processes} threads being used]")
+        results = pool.starmap(func=task, iterable=task_args)
+        pool.close()
+        pool.join()
+    return results

@@ -9,17 +9,17 @@ import pickle
 import socket
 import threading
 from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError,
-                                   InvalidSignatureError, TransactionNotFoundError)
-from models.Consensus import Consensus
-from utility.constants import (APPLICATION_PORT, FIND_HOST_TIMEOUT,
-                               CONNECTION_TIMEOUT_ERROR, CONNECTION_ERROR, ACK, STATUS_NOT_CONNECTED, STATUS_CONNECTED,
-                               BLOCK_SIZE, RESPONSE_EXPIRED, RECEIVED_TRANSACTION_SUCCESS, RESPONSE_EXISTS,
-                               RESPONSE_INVALID_SIG, TARGET_TRANSACTION_WAIT_TIME, TIMER_INTERVAL,
-                               TARGET_WAIT_REQUEST_MSG, VOTE_YES, VOTE_NO, MODE_VOTER)
+                                   InvalidSignatureError, TransactionNotFoundError,
+                                   ConsensusInitError)
+from utility.general.constants import (APPLICATION_PORT, FIND_HOST_TIMEOUT,
+                                       CONNECTION_TIMEOUT_ERROR, CONNECTION_ERROR, ACK, STATUS_NOT_CONNECTED, STATUS_CONNECTED,
+                                       BLOCK_SIZE, RESPONSE_EXPIRED, RECEIVED_TRANSACTION_SUCCESS, RESPONSE_EXISTS,
+                                       RESPONSE_INVALID_SIG, TARGET_TRANSACTION_WAIT_TIME, TIMER_INTERVAL,
+                                       TARGET_WAIT_REQUEST_MSG, VOTE_YES, VOTE_NO, MODE_VOTER)
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.node.node_utils import peer_exists, add_new_transaction, save_transaction_to_file, save_pending_peer_info, \
     get_transaction, remove_pending_peer
-from utility.utils import timer
+from utility.general.utils import timer
 
 
 def _connect_to_target_peer(ip: str,
@@ -270,9 +270,8 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
     # ================================================================================
 
     # Define exceptions
-    exceptions = (InvalidSignatureError, TransactionNotFoundError,
-                  RequestAlreadyExistsError, RequestExpiredError,
-                  socket.timeout)
+    exceptions = (ConsensusInitError, InvalidSignatureError, TransactionNotFoundError,
+                  RequestAlreadyExistsError, RequestExpiredError, socket.timeout)
 
     # Send ACK for synchronization
     target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=self.mode, iv=iv))
@@ -298,6 +297,7 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
             stop_event.set()
 
             # Start Consensus (a trust vote)
+            from models.Consensus import Consensus
             consensus = Consensus(request=request,
                                   mode=MODE_VOTER,
                                   peer_socket=target_sock,

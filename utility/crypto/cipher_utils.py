@@ -5,7 +5,7 @@ CipherPlayground classes.
 
 """
 from prettytable import PrettyTable
-from utility.constants import OP_DECRYPT, OP_ENCRYPT, NO_SUBKEYS_ENCRYPT_MSG, \
+from utility.general.constants import OP_DECRYPT, OP_ENCRYPT, NO_SUBKEYS_ENCRYPT_MSG, \
     NO_SUBKEYS_DECRYPT_MSG
 
 

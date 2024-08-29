@@ -1,14 +1,21 @@
-import multiprocessing
 import select
 import socket
 import sys
 from models.Transaction import Transaction
 from utility.client_server.client_server import send_request
-from utility.constants import (VOTE_YES, VOTE_NO, CONSENSUS_SUCCESS, CONSENSUS_FAILURE, MODE_INITIATOR,
-                               VOTE_PROMPT, VOTE_YES_KEY, VOTE_NO_KEY, VOTE_SHOW_IMAGE_KEY, MODE_VOTER,
-                               BUFFER_TIME_VOTER, BUFFER_TIME_INITIATOR, PURPOSE_CONSENSUS, VOTE_RESULTS_WAIT_MSG)
-from utility.crypto.aes_utils import AES_encrypt
-from utility.utils import create_transaction_table
+from utility.consensus.utils import (arg_check, check_peer_list_empty,
+                                     process_peer_info, get_vote_from_peer,
+                                     send_decision_to_peer)
+from utility.crypto.aes_utils import AES_encrypt, AES_decrypt
+from utility.general.constants import (VOTE_YES, VOTE_NO, CONSENSUS_SUCCESS, CONSENSUS_FAILURE, MODE_INITIATOR,
+                                       VOTE_PROMPT, VOTE_YES_KEY, VOTE_NO_KEY, VOTE_SHOW_IMAGE_KEY, MODE_VOTER,
+                                       REQ_BUFFER_TIME_VOTER, REQ_BUFFER_TIME_INITIATOR, VOTE_RESULTS_WAIT_MSG,
+                                       INITIATOR_NO_PEER_SEND_REQ_ERROR, INITIATOR_NO_PEER_GET_VOTES_ERROR,
+                                       INITIATOR_NO_PEER_SEND_RESULTS_ERROR, PURPOSE_SEND_REQ, PURPOSE_GET_PEER_VOTES,
+                                       GET_PEER_VOTE_START_MSG, SEND_REQ_PEER_START_MSG, PURPOSE_VOTER_GET_PEER_INFO,
+                                       CONSENSUS_INIT_SUCCESS_MSG, CONSENSUS_INIT_MSG, PURPOSE_SEND_FINAL_DECISION,
+                                       SEND_FINAL_DECISION_START_MSG)
+from utility.general.utils import create_transaction_table, start_parallel_operation
 
 
 # NOTE: MUST TAKE OUT ALL PEER SOCKETS (to prevent interference with select() function)
@@ -33,17 +40,27 @@ class Consensus:
 
         @param request:
             A Transaction object (must be signed beforehand)
+
         @param is_connected:
             A boolean to determine if host is connected to the network
+
         @param mode:
-            A string to determine the mode of operation (VOTER or INITIATOR)
+            A string to determine the host's mode of operation (VOTER or INITIATOR)
+
         @param peer_dict:
             A dictionary containing IP (key), information such as security params (value)
+
         @param peer_socket:
             The initiating peer socket (required by the VOTER)
+
         @param peer_list:
             A list of peer sockets (required by the INITIATOR)
+
+        @return Consensus:
+            A Consensus object
         """
+        arg_check(mode, peer_list, peer_socket)
+        print(CONSENSUS_INIT_MSG)
         self.votes = {VOTE_YES: 0, VOTE_NO: 0}
         self.request = request
         self.is_connected = is_connected
@@ -52,49 +69,49 @@ class Consensus:
         self.peer_socket = peer_socket
         self.peer_list = peer_list
         self.final_decision = None
+        print(CONSENSUS_INIT_SUCCESS_MSG)
 
     def start(self):
         """
-        Starts a consensus.
+        Starts a consensus (as a voter or initiator).
 
         @return: final_decision
             A string that determines the consensus results (SUCCESS | FAILURE)
         """
         if self.peer_socket and self.mode == MODE_VOTER: # => VOTER
-            vote = self.__vote_on_request()
+            vote = self.__perform_vote()
             if self.is_connected:
-                return self.__get_vote_results()  # => wait for consensus results
-            else:
-                return vote
+                return self.__get_vote_results()
+            return vote
 
         if self.peer_list and self.mode == MODE_INITIATOR:  # => INITIATOR
             self.__send_request_to_peers()
             self.__get_vote_results()
 
             # ONLY IF CONNECTED: Host must include their vote on the request
-            self.__vote_on_request() if self.is_connected else None
+            self.__perform_vote() if self.is_connected else None
 
             # Tally and determine the results
             self.__determine_results()
 
             # ONLY IF CONNECTED: Send results back to all connected peers
-            self.__send_results_to_peers() if self.is_connected else None
+            self.__send_final_decision() if self.is_connected else None
             return self.final_decision
 
     def __add_vote(self, vote: str):
         if vote in self.votes:
             self.votes[vote] += 1
 
-    def __get_total_votes(self):
-        return self.votes[VOTE_YES] + self.votes[VOTE_NO]
-
     def __determine_results(self):
-        if self.__get_total_votes() == 0:
+        def get_total_votes():
+            return self.votes[VOTE_YES] + self.votes[VOTE_NO]
+        # ===============================================================================
+        if get_total_votes() == 0:
             print("[+] CONSENSUS ERROR: There are currently no votes to determine results!")
             return None
 
-        yes_percentage = (self.votes[VOTE_YES] / self.__get_total_votes()) * 100
-        no_percentage = (self.votes[VOTE_NO] / self.__get_total_votes()) * 100
+        yes_percentage = (self.votes[VOTE_YES] / get_total_votes()) * 100
+        no_percentage = (self.votes[VOTE_NO] / get_total_votes()) * 100
 
         if yes_percentage > 50:
             print(f"[+] MAJORITY VOTE: A majority consensus has been reached towards the request from "
@@ -109,7 +126,12 @@ class Consensus:
                   f"has occurred; request from IP ({self.request.ip_addr}) will be revoked.")
             self.final_decision = CONSENSUS_FAILURE
 
-    def __vote_on_request(self):
+    def __perform_vote(self):
+        """
+        Initiates a vote on a specific request.
+        @return: vote or None
+            A string containing (VOTE_YES or VOTE_NO) or None
+        """
         def get_vote(prompt: str):
             """
             Prompts the user to vote for the current request.
@@ -130,9 +152,9 @@ class Consensus:
 
             # Set buffer time to prevent request expiry
             if self.mode == MODE_INITIATOR:
-                buffer_time = BUFFER_TIME_INITIATOR
+                buffer_time = REQ_BUFFER_TIME_INITIATOR
             if self.mode == MODE_VOTER:
-                buffer_time = BUFFER_TIME_VOTER
+                buffer_time = REQ_BUFFER_TIME_VOTER
 
             while vote not in (VOTE_YES_KEY, VOTE_NO_KEY):
                 print(prompt.format(self.request.get_time_remaining() - buffer_time), end='', flush=True)
@@ -153,61 +175,32 @@ class Consensus:
                     timeout_flag = True
                     return VOTE_NO, timeout_flag  # Automatically vote 'NO' on timeout
         # ===============================================================================
-        # Display the request and get user vote
+        # Display the request and prompt vote
         print(create_transaction_table(req_list=[self.request]))
         vote, timeout = get_vote(VOTE_PROMPT)
 
-        # Voter will send their vote (if no timeout)
+        # Voter will send their vote
         if self.mode == MODE_VOTER:
-            if not timeout:
-                peer_ip = self.peer_socket.getpeername()[0]
-                secret, iv, mode = self.peer_dict[peer_ip][2:5]  # => get security params
+            if not timeout:  # => dont send if timeout
+                secret, iv, mode = process_peer_info(self, purpose=PURPOSE_VOTER_GET_PEER_INFO)
                 self.peer_socket.send(AES_encrypt(data=vote.encode(), key=secret, mode=mode, iv=iv))
+            return vote
 
         # Initiator will only add their vote to total
         if self.mode == MODE_INITIATOR:
             self.__add_vote(vote)
 
-        return vote
-
-    def __get_vote_results(self):
-        if self.mode == MODE_INITIATOR:
-            if len(self.peer_list) == 0:
-                print("[+] CONSENSUS ERROR: There are currently no peers to get vote results from!")
-                return None
-
-            print("[+] Gather all vote results from all peers in list (using parallel multiprocessing)")
-            print("[+] Use the BUFFER_TIME_VOTER and setSockTimeout on each peer socket; if timeout, then auto 'NO' vote")
-
-        if self.mode == MODE_VOTER:
-            print(VOTE_RESULTS_WAIT_MSG.format(self.request.get_time_remaining()))
-
     def __send_request_to_peers(self):
         """
         A utility function that uses the multiprocessing
-        module for the sending of a request to be voted on
-        by other peers.
+        module for the simultaneous sending of the request
+        to be voted on by other peers.
+
+        @attention Use Case:
+            Function is used exclusively by initiators only
 
         @return: None
         """
-        def process_peer_info(request: Transaction):
-            """
-            Processes peer information into arguments suitable for
-            multiprocessing.pool().
-
-            @param request:
-                A Transaction object
-
-            @return: info_list
-                A list of tuples containing information per peer
-            """
-            info_list = []
-            for peer_sock in self.peer_list:
-                ip = peer_sock.getpeername()[0]
-                secret, iv, mode = self.peer_dict[ip][2:5]  # => get security params
-                info_list.append((peer_sock, ip, secret, mode, PURPOSE_CONSENSUS, request, iv))
-            return info_list
-
         def perform_cleanup(result: list):
             """
             Performs cleanup if any peer disconnection occurs
@@ -235,27 +228,64 @@ class Consensus:
                         else:
                             i += 1
         # ===============================================================================
-        if len(self.peer_list) == 0:
-            print("[+] CONSENSUS ERROR: There are no peers to initiate a consensus and send a request to!")
-            return None
+        if not check_peer_list_empty(self, msg=INITIATOR_NO_PEER_SEND_REQ_ERROR):
+            peer_info_list = process_peer_info(self, purpose=PURPOSE_SEND_REQ)
 
-        # Process peer information suitable for send_request()
-        peer_info = process_peer_info(self.request)
+            # Use multiprocessing to send to request to multiple peers (in parallel)
+            results = start_parallel_operation(task=send_request,
+                                               task_args=peer_info_list,
+                                               num_processes=len(self.peer_list),
+                                               prompt=SEND_REQ_PEER_START_MSG)
 
-        # Use multiprocessing to send to request to multiple peers (in parallel)
-        with multiprocessing.Pool(processes=len(self.peer_list)) as pool:
-            print(f"[+] Now sending the request to all peers... [{len(self.peer_list)} threads being used]")
-            results = pool.starmap(func=send_request, iterable=peer_info)
-            pool.close()
-            pool.join()
+            # Perform any cleanup (for any disconnections that may occur)
+            perform_cleanup(results)
 
-        # Perform any cleanup (for any disconnections that may occur)
-        perform_cleanup(results)
+    def __get_vote_results(self):
+        """
+        Wait and gather individual vote results from peers (if initiator);
+        Get consensus vote results from an initiator (if voter).
 
+        @return: None or consensus_result
+            None (if initiator); the consensus result (if voter)
+        """
+        def process_votes(result: list):
+            for vote in result:
+                self.__add_vote(vote)
+        # ===============================================================================
+        if self.mode == MODE_INITIATOR:
+            if not check_peer_list_empty(self, msg=INITIATOR_NO_PEER_GET_VOTES_ERROR):
+                peer_info_list = process_peer_info(self, purpose=PURPOSE_GET_PEER_VOTES)
 
-    def __send_results_to_peers(self):
-        if len(self.peer_list) == 0:
-            print("[+] CONSENSUS ERROR: There are currently no peers to send the consensus results to!")
-            return None
+                # Use multiprocessing to get votes from peers (in parallel)
+                results = start_parallel_operation(task=get_vote_from_peer,
+                                                   task_args=peer_info_list,
+                                                   num_processes=len(self.peer_list),
+                                                   prompt=GET_PEER_VOTE_START_MSG)
+                # Gather and tally the votes
+                process_votes(results)
 
-        print("[+] IMPLEMENT using multiprocessing and send (self.final_decision)")
+        if self.mode == MODE_VOTER:
+            print(VOTE_RESULTS_WAIT_MSG.format(self.request.get_time_remaining()))
+            secret, iv, mode = process_peer_info(self, purpose=PURPOSE_VOTER_GET_PEER_INFO)
+            consensus_result = AES_decrypt(data=self.peer_socket.recv(1024), key=secret, mode=mode, iv=iv).decode()
+            return consensus_result
+
+    def __send_final_decision(self):
+        """
+        A utility function that uses the multiprocessing
+        module for the simultaneous sending of the final
+        consensus decision to all connected peers.
+
+        @attention Use Case:
+            Function is used exclusively by initiators only
+
+        @return: None
+        """
+        if not check_peer_list_empty(self, msg=INITIATOR_NO_PEER_SEND_RESULTS_ERROR):
+            peer_info_list = process_peer_info(self, purpose=PURPOSE_SEND_FINAL_DECISION)
+
+            # Use multiprocessing to get votes from peers (in parallel)
+            start_parallel_operation(task=send_decision_to_peer,
+                                     task_args=peer_info_list,
+                                     num_processes=len(self.peer_list),
+                                     prompt=SEND_FINAL_DECISION_START_MSG)

@@ -14,9 +14,7 @@ from _socket import SO_REUSEADDR
 from datetime import datetime
 from ssl import SOL_SOCKET
 from time import ctime
-from utility.constants import (INVALID_SRC_IP_ARG_ERROR, MIN_PORT_VALUE,
-                               MAX_PORT_VALUE, INVALID_SRC_PORT_RANGE, INVALID_FORMAT_SRC_PORT_ARG_ERROR,
-                               INVALID_FIRST_NAME_ERROR, INVALID_LAST_NAME_ERROR, ECB, CBC)
+from utility.general.constants import (INVALID_SRC_IP_ARG_ERROR, INVALID_FIRST_NAME_ERROR, INVALID_LAST_NAME_ERROR, ECB, CBC)
 
 
 def parse_arguments():

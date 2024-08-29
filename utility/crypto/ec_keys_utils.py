@@ -9,7 +9,7 @@ import secrets
 from hashlib import sha3_256
 from tinyec import registry
 from tinyec.ec import Point
-from utility.constants import BLOCK_SIZE
+from utility.general.constants import BLOCK_SIZE
 
 # CONSTANTS
 BRAINPOOLP256r1 = "brainpoolP256r1"

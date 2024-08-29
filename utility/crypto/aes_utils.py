@@ -6,7 +6,7 @@ encryption and decryption.
 """
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
-from utility.constants import CBC, ECB
+from utility.general.constants import CBC, ECB
 
 
 def __generate_AES_cipher(mode: str, key: bytes, iv: bytes = None):

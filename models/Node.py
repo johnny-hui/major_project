@@ -2,12 +2,14 @@ import select
 import socket
 import sys
 import threading
-from utility.constants import NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_THREAD_NAME, USER_INPUT_START_MSG, \
+from utility.general.constants import NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_THREAD_NAME, USER_INPUT_START_MSG, \
     INPUT_PROMPT, MIN_MENU_ITEM_VALUE, MAX_MENU_ITEM_VALUE, SELECT_CLIENT_SEND_MSG_PROMPT, \
     ROLE_PEER, MONITOR_PENDING_PEERS_THREAD_NAME, MONITOR_PENDING_PEERS_START_MSG, APPLICATION_PORT, \
     ACCEPT_PEER_HANDLER_THREAD_NAME, PEER_ACTIVITY_HANDLER_THREAD_NAME
 from utility.crypto.ec_keys_utils import generate_keys
-from utility.client_server.client_server import accept_new_peer_handler, connect_to_P2P_network, approved_peer_activity_handler
+from utility.client_server.client_server import (accept_new_peer_handler,
+                                                 connect_to_P2P_network,
+                                                 approved_peer_activity_handler)
 from utility.node.node_init import parse_arguments, initialize_socket, get_current_timestamp
 from utility.node.node_utils import (display_menu, view_current_peers, close_application, send_message,
                                      get_specific_peer_info, get_user_menu_option, monitor_pending_peers,
