@@ -68,7 +68,7 @@ class Consensus:
         self.peer_dict = peer_dict
         self.peer_socket = peer_socket
         self.peer_list = peer_list
-        self.final_decision = None
+        self.final_decision = CONSENSUS_FAILURE  # => default value
         print(CONSENSUS_INIT_SUCCESS_MSG)
 
     def start(self):

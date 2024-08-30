@@ -3,18 +3,111 @@ Description:
 This Python file provides general utility functions.
 
 """
+import gc
 import ipaddress
 import multiprocessing
 import os
+import socket
 import threading
 import time
+from datetime import datetime
 from prettytable import PrettyTable
 from models.Transaction import Transaction
+from utility.crypto.aes_utils import AES_encrypt, AES_decrypt
 from utility.crypto.ec_keys_utils import compress_pub_key, compress_signature
 from utility.general.constants import ENTER_IP_PROMPT, INVALID_IP_ERROR, OWN_IP_ERROR_MSG, MAX_IP_VALUE, \
     CONN_REQUEST_TABLE_TITLE, CONN_REQUEST_TABLE_FIELD_IP, CONN_REQUEST_TABLE_FIELD_PORT, \
     CONN_REQUEST_TABLE_FIELD_PERSON, CONN_REQUEST_TABLE_FIELD_ROLE, CONN_REQUEST_TABLE_FIELD_SIGNATURE, \
-    CONN_REQUEST_TABLE_FIELD_PUB_KEY, CONN_REQUEST_TABLE_FIELD_RECEIVED_BY, CONN_REQUEST_TABLE_FIELD_TIMESTAMP
+    CONN_REQUEST_TABLE_FIELD_PUB_KEY, CONN_REQUEST_TABLE_FIELD_RECEIVED_BY, CONN_REQUEST_TABLE_FIELD_TIMESTAMP, \
+    MODE_INITIATOR, MODE_RECEIVER, MEMORY_CLEANUP_SUCCESS
+
+
+def convert_to_datetime(timestamp: str):
+    """
+    Converts a timestamp to a datetime object.
+
+    @param timestamp:
+        A string for the timestamp
+
+    @return: datetime.strptime()
+        A DateTime object for the converted timestamp
+    """
+    return datetime.strptime(timestamp, '%Y-%m-%d %I:%M:%S %p')
+
+
+def compare_timestamps(timestamp_1: str, timestamp_2: str):
+    """
+    Compares two timestamps and determines which one is older.
+
+    @param timestamp_1:
+        A DateTime object of the first timestamp
+
+    @param timestamp_2:
+        A DateTime object of the second timestamp
+
+    @return: timestamp
+        The older timestamp (String)
+    """
+    converted_timestamp_1 = convert_to_datetime(timestamp_1)
+    converted_timestamp_2 = convert_to_datetime(timestamp_2)
+
+    if converted_timestamp_1 < converted_timestamp_2:
+        return timestamp_1
+    elif converted_timestamp_1 > converted_timestamp_2:
+        return timestamp_2
+    else:
+        return None
+
+
+def determine_delegate_status(target_sock: socket.socket, own_timestamp: str,
+                              mode: str, enc_mode: str, secret: bytes, iv: bytes = None):
+    """
+    Determines 'delegate' status by exchanging application timestamps
+    between the host machine and the target peer and comparing them
+    for the oldest.
+
+    @attention Use Case:
+        Used during connection to the P2P network between
+        two unconnected peers to determine which gets promoted
+        to the 'DELEGATE' role
+
+    @param target_sock:
+        The target socket object
+
+    @param own_timestamp:
+        A string for the application timestamp
+
+    @param mode:
+        A string for the initiator or receiver
+
+    @param enc_mode:
+        The encryption mode (ECB or CBC)
+
+    @param secret:
+        Bytes of the shared secret
+
+    @param iv:
+        Bytes of the initialization vector (IV)
+
+    @return: Boolean (T/F)
+        True if Delegate, False otherwise
+    """
+    # ===============================================================================
+    print("[+] Now comparing the application timestamp with the target peer to determine the 'Delegate' role"
+          "for establishment of new P2P network...")
+    peer_timestamp = None
+
+    # Exchange timestamps (based on mode)
+    if mode == MODE_INITIATOR:
+        target_sock.send(AES_encrypt(data=own_timestamp.encode(), key=secret, mode=enc_mode, iv=iv))
+        peer_timestamp = AES_decrypt(data=target_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
+
+    if mode == MODE_RECEIVER:
+        peer_timestamp = AES_decrypt(data=target_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
+        target_sock.send(AES_encrypt(data=own_timestamp.encode(), key=secret, mode=enc_mode, iv=iv))
+
+    # Compare the timestamps to determine the oldest
+    return compare_timestamps(own_timestamp, peer_timestamp) == own_timestamp
 
 
 def get_img_path():
@@ -106,6 +199,28 @@ def is_directory_empty(path: str):
         A boolean indicating if the directory is empty
     """
     return len(os.listdir(path)) == 0
+
+
+def perform_cleanup(node: object):
+    """
+    Performs memory cleanup by deleting reference to the
+    given Node object.
+
+    @param node:
+        A Node object
+
+    @raise NameError:
+        Raised when the reference to the Node object
+        is successfully deleted
+
+    @return: None
+    """
+    try:
+        del node
+        print(node)  # => Raises NameError
+    except NameError:
+        gc.collect()
+        print(MEMORY_CLEANUP_SUCCESS)
 
 
 def get_user_command_option(opt_range: tuple, prompt: str):

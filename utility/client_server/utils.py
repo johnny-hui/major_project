@@ -8,18 +8,25 @@ import multiprocessing
 import pickle
 import socket
 import threading
+import time
+
 from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError,
                                    InvalidSignatureError, TransactionNotFoundError,
                                    ConsensusInitError)
+from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.general.constants import (APPLICATION_PORT, FIND_HOST_TIMEOUT,
-                                       CONNECTION_TIMEOUT_ERROR, CONNECTION_ERROR, ACK, STATUS_NOT_CONNECTED, STATUS_CONNECTED,
+                                       CONNECTION_TIMEOUT_ERROR, CONNECTION_ERROR, ACK, STATUS_NOT_CONNECTED,
+                                       STATUS_CONNECTED,
                                        BLOCK_SIZE, RESPONSE_EXPIRED, RECEIVED_TRANSACTION_SUCCESS, RESPONSE_EXISTS,
                                        RESPONSE_INVALID_SIG, TARGET_TRANSACTION_WAIT_TIME, TIMER_INTERVAL,
-                                       TARGET_WAIT_REQUEST_MSG, VOTE_YES, VOTE_NO, MODE_VOTER)
-from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
-from utility.node.node_utils import peer_exists, add_new_transaction, save_transaction_to_file, save_pending_peer_info, \
-    get_transaction, remove_pending_peer
-from utility.general.utils import timer
+                                       TARGET_WAIT_REQUEST_MSG, VOTE_YES, VOTE_NO, MODE_VOTER,
+                                       APPROVED_TO_NETWORK_MSG_INITIAL, ZERO_TRUST_POLICY_MSG, STATUS_APPROVED,
+                                       TARGET_PEER_APPROVED_MSG, MODE_RECEIVER, JOIN_NETWORK_SUCCESS_MSG,
+                                       ROLE_PEER, ROLE_DELEGATE, TARGET_NOT_CONNECTED_MSG)
+from utility.general.utils import timer, determine_delegate_status
+from utility.node.node_utils import (peer_exists, add_new_transaction, save_transaction_to_file,
+                                     save_pending_peer_info, get_transaction, remove_pending_peer,
+                                     delete_transaction, get_pending_peer_info, change_peer_status, change_peer_role)
 
 
 def _connect_to_target_peer(ip: str,
@@ -229,7 +236,8 @@ def _receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: 
         encrypted_data = receive_request()
         request, file_path = process_request(data=encrypted_data)
         save_pending_peer_info(self, peer_socket, peer_ip, request.first_name,
-                               request.last_name, shared_secret, mode, file_path, peer_iv)
+                               request.last_name, shared_secret, mode, file_path,
+                               request.role, peer_iv)
         peer_socket.send(AES_encrypt(data=ACK.encode(), key=shared_secret, mode=self.mode, iv=peer_iv))
         peer_socket.settimeout(None)
     except InvalidSignatureError:
@@ -267,28 +275,18 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
                                                       TARGET_WAIT_REQUEST_MSG,
                                                       event))
         thread.start()
-    # ================================================================================
 
-    # Define exceptions
-    exceptions = (ConsensusInitError, InvalidSignatureError, TransactionNotFoundError,
-                  RequestAlreadyExistsError, RequestExpiredError, socket.timeout)
-
-    # Send ACK for synchronization
-    target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=self.mode, iv=iv))
-
-    # Receive status from target (connected or not connected)
-    status = AES_decrypt(data=target_sock.recv(1024), key=secret, mode=self.mode, iv=iv).decode()
-
-    if status == STATUS_NOT_CONNECTED:
+    def not_connected_handler():
         try:
-            # Set a 5-minute timeout while waiting for target peer to select image for request to be received
+            # Set a 5-minute timeout while waiting for target peer's Transaction object
+            print(TARGET_NOT_CONNECTED_MSG)
             target_sock.settimeout(TARGET_TRANSACTION_WAIT_TIME)
 
             # Start a live timer (countdown 5 minutes)
             stop_event = threading.Event()
             start_timer_thread(event=stop_event)
 
-            # Wait for REQUEST signal (here, the target must choose a photo to include with their Transaction obj.)
+            # Wait for REQUEST signal (here, the target must choose a photo to include with their Transaction object)
             target_sock.recv(1024)
 
             # Receive target request
@@ -296,7 +294,12 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
             request = get_transaction(self.pending_transactions, ip=target_sock.getpeername()[0])
             stop_event.set()
 
-            # Start Consensus (a trust vote)
+            # Remove target socket from pending list (prevent select-related errors)
+            if target_sock in self.fd_pending:
+                self.fd_pending.remove(target_sock)
+                time.sleep(1)
+
+            # Start Consensus (a trust vote on verifying target peer)
             from models.Consensus import Consensus
             consensus = Consensus(request=request,
                                   mode=MODE_VOTER,
@@ -305,16 +308,54 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
                                   is_connected=False)
             vote = consensus.start()
 
-            # Based on vote result (yes/no), perform follow-up or remove pending peer
+            # Based on vote result, perform follow-up or remove pending peer
             if vote == VOTE_YES:
-                print("[+] IMPLEMENT HANDLER")
+                print(TARGET_PEER_APPROVED_MSG.format(request.ip_addr))
+
+                # Compare application timestamp and determine who gets delegate (if not admin)
+                if request.role == ROLE_PEER and self.role == ROLE_PEER:
+                    is_delegate = determine_delegate_status(target_sock, self.app_timestamp,
+                                                            mode=MODE_RECEIVER, enc_mode=self.mode,
+                                                            secret=secret, iv=iv)
+                    if is_delegate:
+                        print("[+] PROMOTION: You have been selected to be a 'Delegate' node!")
+                        self.is_promoted = True
+                    else:
+                        change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
+
+                # Perform finishing steps
+                self.fd_list.append(target_sock)
+                _, _, _, _, _, _, file_path, _ = get_pending_peer_info(self.peer_dict, ip=request.ip_addr)
+                change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
+                delete_transaction(self.pending_transactions, request.ip_addr, file_path)
+                self.is_connected = True
+                print(JOIN_NETWORK_SUCCESS_MSG.format(target_sock.getpeername()[0]))
 
             if vote == VOTE_NO:
+                print("[+] You have declined the target peer's identity (in their request); returning to main menu...")
                 remove_pending_peer(self, target_sock, ip=target_sock.getpeername()[0])
 
         except exceptions as msg:
             print(f"[+] ERROR: An error has occurred while performing approved_handler() (REASON: {msg})")
             remove_pending_peer(self, target_sock, ip=target_sock.getpeername()[0])
+    # ================================================================================
+    print(APPROVED_TO_NETWORK_MSG_INITIAL)
+    print(ZERO_TRUST_POLICY_MSG)
+
+    # Define exceptions
+    exceptions = (ConsensusInitError, InvalidSignatureError, TransactionNotFoundError,
+                  RequestAlreadyExistsError, RequestExpiredError, socket.timeout)
+
+    # Send ACK for synchronization
+    target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=self.mode, iv=iv))
+
+    # Receive status from target (connected or not connected to a P2P network)
+    status = AES_decrypt(data=target_sock.recv(1024), key=secret, mode=self.mode, iv=iv).decode()
+
+    if status == STATUS_NOT_CONNECTED:
+        not_connected_handler()
 
     if status == STATUS_CONNECTED:
         print("[+] IMPLEMENT")
+
+

@@ -2,10 +2,12 @@ import select
 import socket
 import sys
 import threading
-from utility.general.constants import NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_THREAD_NAME, USER_INPUT_START_MSG, \
+from utility.general.constants import NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_THREAD_NAME, \
+    USER_INPUT_START_MSG, \
     INPUT_PROMPT, MIN_MENU_ITEM_VALUE, MAX_MENU_ITEM_VALUE, SELECT_CLIENT_SEND_MSG_PROMPT, \
     ROLE_PEER, MONITOR_PENDING_PEERS_THREAD_NAME, MONITOR_PENDING_PEERS_START_MSG, APPLICATION_PORT, \
-    ACCEPT_PEER_HANDLER_THREAD_NAME, PEER_ACTIVITY_HANDLER_THREAD_NAME
+    ACCEPT_PEER_HANDLER_THREAD_NAME, PEER_ACTIVITY_HANDLER_THREAD_NAME, ROLE_DELEGATE, DELEGATE_MIN_MENU_ITEM_VALUE, \
+    DELEGATE_MAX_MENU_ITEM_VALUE, ROLE_ADMIN, ADMIN_MAX_MENU_ITEM_VALUE, ADMIN_MIN_MENU_ITEM_VALUE
 from utility.crypto.ec_keys_utils import generate_keys
 from utility.client_server.client_server import (accept_new_peer_handler,
                                                  connect_to_P2P_network,
@@ -36,6 +38,7 @@ class Node:
         pending_transactions - A list containing pending Transaction objects of requesting peers
         app_timestamp - A string containing the timestamp (from NTP Server) of when the Node application was started
         is_connected - A boolean flag indicating whether the Node is connected
+        is_promoted - A boolean flag indicating whether the Node is promoted to DelegateNode
         terminate - A boolean flag that determines if the server should terminate
     """
     def __init__(self):
@@ -50,13 +53,14 @@ class Node:
         self.pvt_key, self.pub_key = generate_keys()
         self.fd_list = [self.own_socket]  # => Monitored by select()
         self.fd_pending = []  # => Stores pending peer sockets awaiting consensus (waiting room)
-        self.peer_dict = {}  # => Format {IP: [f_name, l_name, shared_secret, IV, cipher mode, status, file_path]}
+        self.peer_dict = {}  # => Format {IP: [f_name, l_name, shared_secret, IV, cipher mode, status, file_path, role]}
         self.pending_transactions = []
         self.app_timestamp = get_current_timestamp()
         self.is_connected = False
+        self.is_promoted = False
         self.terminate = False
         load_transactions(self)
-        print(NODE_INIT_SUCCESS_MSG)
+        print(NODE_INIT_SUCCESS_MSG.format(self.role))
 
     def start(self):
         """
@@ -73,11 +77,14 @@ class Node:
             """
             thread = threading.Thread(target=handler, args=(self, target_sock), name=thread_name)
             thread.start()
-        # =====================================================================
+        # =========================================================================================
         self.__start_user_menu_thread()
         self.__start_monitor_pending_peers_thread()
 
-        while not self.terminate:
+        while not self.is_promoted:
+            if self.terminate is True:
+                break
+
             readable, _, _ = select.select(self.fd_list, [], [], 1)
 
             for sock in readable:
@@ -96,7 +103,15 @@ class Node:
         for the menu.
         @return: None
         """
-        thread = threading.Thread(target=self._menu, name=USER_INPUT_THREAD_NAME)
+        role_menu_values = {
+            ROLE_PEER: (MIN_MENU_ITEM_VALUE, MAX_MENU_ITEM_VALUE),
+            ROLE_DELEGATE: (DELEGATE_MIN_MENU_ITEM_VALUE, DELEGATE_MAX_MENU_ITEM_VALUE),
+            ROLE_ADMIN: (ADMIN_MIN_MENU_ITEM_VALUE, ADMIN_MAX_MENU_ITEM_VALUE)
+        }
+
+        thread = threading.Thread(target=self._menu,
+                                  args=(role_menu_values.get(self.role)),
+                                  name=USER_INPUT_THREAD_NAME)
         thread.start()
         print(USER_INPUT_START_MSG)
 
@@ -105,6 +120,7 @@ class Node:
         Stores and monitors pending peers and their
         corresponding socket objects for any timeouts
         or disconnections.
+
         @return: None
         """
         thread = threading.Thread(target=monitor_pending_peers, args=(self,),
@@ -112,35 +128,48 @@ class Node:
         thread.start()
         print(MONITOR_PENDING_PEERS_START_MSG)
 
-    def _menu(self):
+    def _menu(self, min_menu_value: int, max_menu_value: int):
         """
         Displays the menu and handles user input
         using stdin and select().
 
+        @param min_menu_value:
+            An integer for the minimum menu value allowed
+
+        @param max_menu_value:
+            An integer for the maximum menu value allowed
+
         @return: None
         """
         inputs = [sys.stdin]
-        print("=" * 80)
+        print("=" * 100)
         display_menu(role=self.role, is_connected=self.is_connected)
         print(INPUT_PROMPT)
 
-        while not self.terminate:
-            readable, _, _ = select.select(inputs, [], [])
+        while not self.is_promoted:
+            if self.terminate is True:
+                print("=" * 100)
+                break
+
+            readable, _, _ = select.select(inputs, [], [], 1)
 
             # Get User Command from the Menu and perform the task
             for fd in readable:
                 if fd == sys.stdin:
-                    command = get_user_menu_option(fd, MIN_MENU_ITEM_VALUE, MAX_MENU_ITEM_VALUE)
-                    self._handle_command(command)
+                    command = get_user_menu_option(fd, min_menu_value, max_menu_value)
+                    self._handle_command(command, max_menu_value)
 
-    def _handle_command(self, command: int):
+
+    def _handle_command(self, command: int, max_menu_value: int):
         """
-        Handles and performs user menu command options
-        for the Server.
+        Handles and performs user menu command options.
 
         @param command:
             An integer representing the menu option
             to be performed
+
+        @param max_menu_value:
+            An integer for the maximum menu value allowed
 
         @return: None
         """
@@ -148,14 +177,12 @@ class Node:
             client_sock, _, secret, iv, mode = get_specific_peer_info(self, prompt=SELECT_CLIENT_SEND_MSG_PROMPT)
             send_message(client_sock, mode, secret, iv)
 
-        def terminate_application():
-            close_application(self)
-
         def perform_post_action_steps():
-            if command == 7:  # If terminate application, don't print the menu again
+            if command == max_menu_value:  # If terminate application, don't print the menu again
                 return None
             display_menu(role=self.role, is_connected=self.is_connected)
             print(INPUT_PROMPT)
+        # ===============================================================================================
 
         # Define Actions
         actions_when_not_connected = {
@@ -165,7 +192,7 @@ class Node:
             4: lambda: None,
             5: lambda: view_pending_connection_requests(self),
             6: lambda: view_current_peers(self),
-            7: lambda: terminate_application()
+            7: lambda: close_application(self)
         }
         actions_when_connected = {
             1: lambda: send_message_to_specific_peer(),
@@ -174,7 +201,7 @@ class Node:
             4: lambda: None,
             5: lambda: view_pending_connection_requests(self),
             6: lambda: view_current_peers(self),
-            7: lambda: terminate_application(),
+            7: lambda: close_application(self),
         }
 
         # Grab action

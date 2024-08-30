@@ -71,7 +71,7 @@ FORMAT_BYTES = "BYTES"
 
 # NODE INIT CONSTANTS
 NODE_INIT_MSG = "[+] Now initializing your node..."
-NODE_INIT_SUCCESS_MSG = "[+] Initialization Successful!"
+NODE_INIT_SUCCESS_MSG = "[+] Initialization Successful! (Current Role: {})"
 MONITOR_PENDING_PEERS_THREAD_NAME = "monitor_pending_peers_thread"
 MONITOR_PENDING_PEERS_START_MSG = "[+] Monitor pending peers thread has started!"
 MONITOR_PENDING_PEERS_THREAD_TERMINATE = ("[+] THREAD TERMINATION: Monitor pending peers thread has been "
@@ -128,7 +128,7 @@ ADMIN_MAX_MENU_ITEM_VALUE = 10
 ADMIN_MENU_OPTIONS = [
     ["1", "Send Message to a Peer"],
     ["2", "Broadcast a Message"],
-    ["3", "Start a Consensus (Approve Connection Request)"],
+    ["3", "Initiate a Consensus [Approve Connection Request]"],
     ["4", "Revoke Connection Request"],
     ["5", "View Blockchain (Network Connection History)"],
     ["6", "View Pending Connection Requests"],
@@ -142,7 +142,7 @@ DELEGATE_MAX_MENU_ITEM_VALUE = 8
 DELEGATE_MENU_OPTIONS = [
     ["1", "Send Message to a Peer"],
     ["2", "Broadcast a Message"],
-    ["3", "Start a Consensus (Approve Connection Request)"],
+    ["3", "Initiate a Consensus [Approve Connection Request]"],
     ["4", "Revoke Connection Request"],
     ["5", "View Blockchain (Network Connection History)"],
     ["6", "View Pending Connection Requests"],
@@ -302,6 +302,14 @@ CONNECTION_AWAIT_RESPONSE_MSG = ("[+] AWAITING RESPONSE: Now awaiting consensus 
 CONNECTION_AWAIT_TIMEOUT_MSG = ("[+] RESPONSE TIMEOUT: Wait-time has exceeded; unable to reach a consensus within the "
                                 "wait-time allotted for your connection request. Please try again.")
 NO_HOST_FOUND = "[+] NO HOSTS FOUND: No available hosts were found; please try again."
+APPROVED_TO_NETWORK_MSG_INITIAL = "[+] APPROVED: You have been approved by the target peer!"
+ZERO_TRUST_POLICY_MSG = "[+] As per zero-trust policy, you will have to approve the identity of the target peer..."
+TARGET_PEER_APPROVED_MSG = ("[+] You have approved and verified the target peer ({}); now setting up "
+                            "network parameters...")
+TARGET_NOT_CONNECTED_MSG = ("[+] Target peer is not connected to a P2P network; now establishing a new P2P "
+                            "network with them...")
+JOIN_NETWORK_SUCCESS_MSG = ("[+] CONNECTION SUCCESS: You have successfully joined the P2P network with "
+                            "the target peer (IP: {})!")
 
 
 # RESPONSE CONSTANTS
@@ -329,6 +337,8 @@ PEER_TABLE_FIELD_CIPHER_MODE = "Encryption Mode"
 PEER_TABLE_FIELD_SECRET = "Shared Secret"
 PEER_TABLE_FIELD_IV = "Initialization Vector (IV)"
 PEER_TABLE_FIELD_STATUS = "Status"
+PEER_TABLE_FIELD_ROLE = "Role"
+
 
 # VIEW CONNECTION REQUESTS CONSTANTS
 CONN_REQUEST_TABLE_TITLE = "Pending Connection Requests"
@@ -342,17 +352,25 @@ CONN_REQUEST_TABLE_FIELD_RECEIVED_BY = "Received By"
 CONN_REQUEST_TABLE_FIELD_SIGNATURE = "Signature"
 VIEW_REQUEST_FURTHER_ACTION_PROMPT = ("[+] VIEW REQUEST OPTIONS: Enter 1 to select a specific request to view photo "
                                       "from or (Enter '0' to exit): ")
-VIEW_PHOTO_PROMPT = "[+] VIEW PHOTO: Select a specific request's photo to view from [enter a value from 0 to {}]: "
+VIEW_PHOTO_PROMPT = "[+] VIEW PHOTO: Select a specific request's photo to view from [enter a value from 1 to {}]: "
 
 
 # REVOKE CONNECTION REQUEST CONSTANTS
 REVOKE_REQUEST_INITIAL_PROMPT = "[+] REVOKE REQUEST: Enter 1 to select revoke a request or (Enter '0' to quit): "
-REVOKE_REQUEST_PROMPT = "[+] REVOKE REQUEST: Select a specific request to revoke [enter a value from 0 to {}]: "
+REVOKE_REQUEST_PROMPT = "[+] REVOKE REQUEST: Select a specific request to revoke [enter a value from 1 to {}]: "
 
 
 # APPROVE CONNECTION REQUEST CONSTANTS
 TARGET_TRANSACTION_WAIT_TIME = 300
 TARGET_WAIT_REQUEST_MSG = "[+] Now waiting for the target peer to send their request (max wait-time = {} seconds)"
+APPROVE_REQUEST_INITIAL_PROMPT = "[+] APPROVE REQUEST: Enter 1 to select approve a request or (Enter '0' to quit): "
+APPROVE_REQUEST_PROMPT = "[+] APPROVE REQUEST: Select a specific request to approve [enter a value from 1 to {}]: "
+APPROVED_PEER_MSG = ("[+] PEER APPROVED: The following peer has been approved (IP: {})!, now setting up "
+                     "network parameters...")
+APPROVE_NOT_CONNECTED_MSG = ("[+] You are not connected to a P2P network; now establishing a new P2P network with "
+                             "requesting peer (IP: {})...")
+ESTABLISHED_NETWORK_SUCCESS_MSG = ("[+] P2P NETWORK ESTABLISHED: You have successfully established a P2P network "
+                                   "with new peer (IP: {})!")
 
 
 # CONSENSUS CONSTANTS
@@ -397,3 +415,4 @@ TAMPER_DETECTED_MSG = ("[+] An error has occurred while loading a transaction fr
 TIMER_INTERVAL = 30
 PURPOSE_REQUEST = "REQUEST"
 PURPOSE_CONSENSUS = "CONSENSUS"
+MEMORY_CLEANUP_SUCCESS = '[+] MEMORY CLEANUP SUCCESSFUL: The old Node object has been terminated!'

@@ -12,11 +12,15 @@ from typing import TextIO
 from prettytable import PrettyTable
 from exceptions.exceptions import RequestAlreadyExistsError, TransactionNotFoundError
 from models.Transaction import Transaction
-from utility.general.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, MENU_OPTIONS_CONNECTED, MENU_OPTIONS,
+from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
+from utility.crypto.ec_keys_utils import hash_data
+from utility.general.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, MENU_OPTIONS_CONNECTED,
+                                       MENU_OPTIONS,
                                        PEER_TABLE_TITLE, PEER_TABLE_FIELD_PERSON,
                                        PEER_TABLE_FIELD_IP, PEER_TABLE_FIELD_CIPHER_MODE,
                                        PEER_TABLE_FIELD_SECRET, PEER_TABLE_FIELD_IV,
-                                       ROLE_DELEGATE, DELEGATE_MENU_OPTIONS, ROLE_ADMIN, ADMIN_MENU_OPTIONS, ROLE_PEER, CBC,
+                                       ROLE_DELEGATE, DELEGATE_MENU_OPTIONS, ROLE_ADMIN, ADMIN_MENU_OPTIONS, ROLE_PEER,
+                                       CBC,
                                        INIT_FACTOR_BYTE_MAPPING,
                                        MODE_CBC_BYTE_MAPPING, MODE_ECB_BYTE_MAPPING, SHARED_KEY_BYTE_MAPPING,
                                        TRANSACTIONS_DIR,
@@ -24,12 +28,15 @@ from utility.general.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD
                                        INVALID_MENU_SELECTION, MENU_ACTION_START_MSG, INVALID_INPUT_MENU_ERROR,
                                        TRANSACTION_INVALID_SIG_MSG, STATUS_PENDING, PEER_TABLE_FIELD_STATUS,
                                        VIEW_REQUEST_FURTHER_ACTION_PROMPT, VIEW_PHOTO_PROMPT, REVOKE_REQUEST_PROMPT,
-                                       REVOKE_REQUEST_INITIAL_PROMPT, RESPONSE_REJECTED, APPLICATION_PORT, TAMPER_DETECTED_MSG)
-from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
-from utility.crypto.ec_keys_utils import hash_data
-from utility.node.node_init import get_current_timestamp
+                                       REVOKE_REQUEST_INITIAL_PROMPT, RESPONSE_REJECTED, APPLICATION_PORT,
+                                       TAMPER_DETECTED_MSG, APPROVE_REQUEST_INITIAL_PROMPT, APPROVE_REQUEST_PROMPT,
+                                       RESPONSE_APPROVED, STATUS_NOT_CONNECTED, MODE_INITIATOR,
+                                       CONSENSUS_SUCCESS, CONSENSUS_FAILURE, REQUEST_REFUSED_MSG, APPROVED_PEER_MSG,
+                                       STATUS_APPROVED, PEER_TABLE_FIELD_ROLE, ESTABLISHED_NETWORK_SUCCESS_MSG,
+                                       APPROVE_NOT_CONNECTED_MSG)
 from utility.general.utils import create_directory, is_directory_empty, write_to_file, get_img_path, load_image, \
-    get_user_command_option, delete_file, create_transaction_table
+    get_user_command_option, delete_file, create_transaction_table, determine_delegate_status
+from utility.node.node_init import get_current_timestamp
 
 
 def monitor_pending_peers(self: object):
@@ -39,7 +46,10 @@ def monitor_pending_peers(self: object):
 
     @return: None
     """
-    while not self.terminate:
+    while not self.is_promoted:
+        if self.terminate is True:
+            break
+
         readable, _, _ = select.select(self.fd_pending, [], [], 1)
 
         for fd in readable:
@@ -150,9 +160,25 @@ def peer_exists(peer_dict: dict, ip: str, prompt: str = None):
         return False
 
 
+def get_pending_peer_info(peer_dict: dict, ip: str):
+    """
+    Returns information regarding a pending peer based on input IP.
+
+    @param peer_dict:
+        A dictionary containing peer information
+
+    @param ip:
+        A string for the target IP
+
+    @return: f_name, l_name, shared_secret, iv, mode, status, file_path, role
+    """
+    f_name, l_name, shared_secret, iv, mode, status, file_path, role = peer_dict[ip]
+    return f_name, l_name, shared_secret, iv, mode, status, file_path, role
+
+
 def save_pending_peer_info(self: object, peer_socket: socket.socket, peer_ip: str,
                            first_name: str, last_name: str, shared_secret: bytes,
-                           mode: str, file_path: str, peer_iv: bytes = None):
+                           mode: str, file_path: str, role: str, peer_iv: bytes = None):
     """
     Saves information for a pending peer.
 
@@ -172,6 +198,8 @@ def save_pending_peer_info(self: object, peer_socket: socket.socket, peer_ip: st
         The selected cipher mode by the pending peer
     @param file_path:
         The file path of the saved connection request
+    @param role:
+        The role of the pending peer (PEER/DELEGATE/ADMIN)
     @param peer_iv:
         The pending peer's IV (if CBC)
 
@@ -179,7 +207,49 @@ def save_pending_peer_info(self: object, peer_socket: socket.socket, peer_ip: st
     """
     self.fd_pending.append(peer_socket)
     self.peer_dict[peer_ip] = [first_name, last_name, shared_secret,
-                               peer_iv, mode, STATUS_PENDING, file_path]
+                               peer_iv, mode, STATUS_PENDING, file_path, role]
+
+
+def change_peer_role(peer_dict: dict, ip: str, role: str):
+    """
+    Changes a role for a specific peer.
+
+    @param peer_dict:
+        A dictionary containing peer information
+
+    @param ip:
+        A string for the target IP (dictionary key)
+
+    @param role:
+        A string for the role (PEER, DELEGATE, ADMIN)
+
+    @return: None
+    """
+    if role in (ROLE_PEER, ROLE_DELEGATE, ROLE_ADMIN):
+        peer_dict[ip][7] = role
+    else:
+        print("[+] CHANGE PEER ROLE ERROR: Invalid role provided!")
+
+
+def change_peer_status(peer_dict: dict, ip: str, status: str):
+    """
+    Changes the status for a specific peer.
+
+    @param peer_dict:
+        A dictionary containing peer information
+
+    @param ip:
+        A string for the target IP (dictionary key)
+
+    @param status:
+        A string for the status (PENDING, APPROVED)
+
+    @return: None
+    """
+    if status in (STATUS_PENDING, STATUS_APPROVED):
+        peer_dict[ip][5] = status
+    else:
+        print("[+] CHANGE PEER STATUS ERROR: Invalid status provided!")
 
 
 def delete_transaction(pending_transactions: list[Transaction],
@@ -361,18 +431,20 @@ def view_current_peers(self: object):
     table.title = PEER_TABLE_TITLE
     table.field_names = [PEER_TABLE_FIELD_PERSON, PEER_TABLE_FIELD_IP,
                          PEER_TABLE_FIELD_CIPHER_MODE, PEER_TABLE_FIELD_SECRET,
-                         PEER_TABLE_FIELD_IV, PEER_TABLE_FIELD_STATUS]
+                         PEER_TABLE_FIELD_IV, PEER_TABLE_FIELD_STATUS, PEER_TABLE_FIELD_ROLE]
 
     # Fill table with data
     if len(self.fd_list) > 1 or len(self.fd_pending) > 0:
-        for ip, information in self.peer_dict.items():  # (f_name, l_name, shared_secret, IV, cipher mode, status)
+        for ip, information in self.peer_dict.items():
             table.add_row(
                 [
-                    process_name(information), ip,
-                    information[4].upper(),
+                    process_name(information),
+                    ip,
+                    information[4].upper(),     # encryption mode
                     hash_data(information[2]),  # secret
                     hash_data(information[3]),  # IV
-                    information[5]
+                    information[5],             # status
+                    information[7]              # role (PEER/DELEGATE/ADMIN)
                  ]
             )
         print(table)
@@ -417,7 +489,7 @@ def view_pending_connection_requests(self: object, do_prompt: bool = True):
         if command == 0:
             return None
         if command == 1:
-            request = get_transaction(req_list, prompt=VIEW_PHOTO_PROMPT.format(len(req_list) - 1))
+            request = get_transaction(req_list, prompt=VIEW_PHOTO_PROMPT.format(len(req_list)))
             if request is not None:
                 request.show_image()
     # ===============================================================================
@@ -472,7 +544,7 @@ def get_transaction(req_list: list[Transaction],
 
     while True:
         try:
-            index = int(input(prompt))
+            index = int(input(prompt)) - 1  # => adjust for zero-based indexing
             if index in tuple(range(len(req_list))):
                 return req_list[index] if not req_list[index].is_expired() else None
             else:
@@ -723,7 +795,7 @@ def revoke_connection_request(self: object):
                 peer_socket.connect((request.ip_addr, APPLICATION_PORT))
 
             # Get pending peer info
-            _, _, secret_key, iv, mode, _, file_path = _get_pending_peer_info(self.peer_dict, ip=request.ip_addr)
+            _, _, secret_key, iv, mode, _, file_path, _ = get_pending_peer_info(self.peer_dict, ip=request.ip_addr)
 
             # Remove peer socket from pending list (prevent select-related errors)
             if peer_socket in self.fd_pending:
@@ -745,14 +817,14 @@ def revoke_connection_request(self: object):
 
     # Print current Transactions and get a specific Transaction from the List
     view_pending_connection_requests(self, do_prompt=False)
-    command = get_user_command_option(opt_range=tuple(range(2)),
-                                      prompt=REVOKE_REQUEST_INITIAL_PROMPT)
+    command = get_user_command_option(opt_range=tuple(range(2)), prompt=REVOKE_REQUEST_INITIAL_PROMPT)
+
+    # Perform the command
     if command == 0:
         return None
-
     if command == 1:
         request = get_transaction(req_list=self.pending_transactions,
-                                  prompt=REVOKE_REQUEST_PROMPT.format(len(self.pending_transactions) - 1))
+                                  prompt=REVOKE_REQUEST_PROMPT.format(len(self.pending_transactions)))
         if request is not None:
             peer_sock = _get_pending_peer_socket(self.fd_pending, ip=request.ip_addr)
             revoke_helper(peer_sock)
@@ -761,21 +833,119 @@ def revoke_connection_request(self: object):
 
 
 def approve_connection_request(self: object):
+    """
+    Approves a specific connection request.
+
+    @attention Status (Connected vs. Not Connected):
+        If the user is connected to network, they need to send the request
+        to an elevated peer (ADMIN or DELEGATE); otherwise, the user approves
+        the connection request on their own and initiates a Consensus by
+        sending over their own connection request to the pending peer for
+        verification (Zero-Trust Policy).
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @return: None
+    """
+    def is_connected_approve_helper():
+        """
+        A utility helper function that handles approving
+        peers when host peer is connected to the P2P network.
+
+        @return: None
+        """
+        print("[+] Do something")
+
+    def not_connected_approve_helper():
+        """
+        A utility helper function that handles approving peers
+        when host peer is not connected to the P2P network
+        (or anyone).
+
+        @return: None
+        """
+        # Get pending peer info
+        print(APPROVE_NOT_CONNECTED_MSG.format(request.ip_addr))
+        pending_peer_sock = _get_pending_peer_socket(self.fd_pending, ip=request.ip_addr)
+        _, _, secret_key, iv, mode, _, file_path, _ = get_pending_peer_info(self.peer_dict, ip=request.ip_addr)
+
+        # Remove peer socket from pending list (prevent select-related errors)
+        if pending_peer_sock in self.fd_pending:
+            self.fd_pending.remove(pending_peer_sock)
+            time.sleep(1)
+
+        # Send APPROVED signal to pending peer
+        pending_peer_sock.send(AES_encrypt(data=RESPONSE_APPROVED.encode(), key=secret_key, mode=mode, iv=iv))
+
+        # Wait for ACK (for synchronization)
+        pending_peer_sock.recv(1024)
+
+        # Send Status - [Not Connected]
+        pending_peer_sock.send(AES_encrypt(data=STATUS_NOT_CONNECTED.encode(), key=secret_key, mode=mode, iv=iv))
+
+        # Create and Sign Transaction (own connection request)
+        transaction = create_transaction(self)
+        sign_transaction(self, transaction)
+
+        # Process data for Consensus
+        temp_list = [pending_peer_sock]
+
+        # Initiate Consensus and Wait for Pending Peer's Vote
+        from models.Consensus import Consensus
+        consensus = Consensus(request=request, mode=MODE_INITIATOR, peer_list=temp_list,
+                              peer_dict=self.peer_dict, is_connected=False)
+        final_decision = consensus.start()
+
+        # Evaluate and handle the decision
+        if final_decision == CONSENSUS_SUCCESS:
+            print(APPROVED_PEER_MSG.format(request.ip_addr))
+
+            # Compare application timestamp and determine who gets delegate (if not admin)
+            if self.role == ROLE_PEER and request.role == ROLE_PEER:
+                is_delegate = determine_delegate_status(pending_peer_sock, self.app_timestamp,
+                                                        mode=MODE_INITIATOR, enc_mode=mode,
+                                                        secret=secret_key, iv=iv)
+                if is_delegate:
+                    print("[+] PROMOTION: You have been promoted to 'Delegate' node!")
+                    self.is_promoted = True
+                else:
+                    change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
+
+            # Perform finishing steps
+            self.fd_list.append(pending_peer_sock)
+            change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
+            delete_transaction(self.pending_transactions, request.ip_addr, file_path)
+            self.is_connected = True
+            print(ESTABLISHED_NETWORK_SUCCESS_MSG.format(pending_peer_sock.getpeername()[0]))
+
+        if final_decision == CONSENSUS_FAILURE:
+            print(REQUEST_REFUSED_MSG)
+            remove_pending_peer(self, pending_peer_sock, ip=request.ip_addr)
+    # ===============================================================================
     if len(self.pending_transactions) == 0:
         print("[+] APPROVE ERROR: There are currently no pending connection requests to approve!")
         return None
 
     # Print current Transactions and get a specific Transaction from the List
     view_pending_connection_requests(self, do_prompt=False)
-    command = get_user_command_option(opt_range=tuple(range(2)), prompt=REVOKE_REQUEST_INITIAL_PROMPT)
+    command = get_user_command_option(opt_range=tuple(range(2)), prompt=APPROVE_REQUEST_INITIAL_PROMPT)
 
     if command == 0:
         return None
+
     if command == 1:
-        if self.is_connected:
-            print("[+] Select an admin/delegate from fd_list -> get socket -> Send Transaction object for approval")
+        request = get_transaction(req_list=self.pending_transactions,
+                                  prompt=APPROVE_REQUEST_PROMPT.format(len(self.pending_transactions)))
+        if request:
+            print(f"[+] Now approving request from peer (IP: {request.ip_addr}); please wait...")
+            if self.is_connected:
+                is_connected_approve_helper()
+                print("[+] Select an admin/delegate from fd_list -> get socket -> Send Transaction object for approval")
+            else:
+                not_connected_approve_helper()
         else:
-            print("[+] INITIATE SELF CONSENSUS (Own Vote)")
+            print("[+] APPROVE ERROR: The selected request has expired; please try again!")
 
 
 def _obfuscate(data: bytes, shared_secret: bytes, mode: str, iv: bytes = None):
@@ -864,23 +1034,6 @@ def _obfuscate(data: bytes, shared_secret: bytes, mode: str, iv: bytes = None):
     # Append the replaced bytes to the end of Transaction data
     data_array.extend(original_bytes)
     return data_array
-
-
-def _get_pending_peer_info(peer_dict: dict, ip: str):
-    """
-    Returns information regarding a pending peer
-    based on input IP.
-
-    @param peer_dict:
-        A dictionary containing peer information
-
-    @param ip:
-        A string for the target IP
-
-    @return: f_name, l_name, shared_secret, iv, mode, status, file_path
-    """
-    f_name, l_name, shared_secret, iv, mode, status, file_path = peer_dict[ip]
-    return f_name, l_name, shared_secret, iv, mode, status, file_path
 
 
 def _get_pending_peer_socket(pending_list: list[socket.socket], ip: str):
