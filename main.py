@@ -10,8 +10,7 @@ from utility.node.delegate_utils import get_delegate_node
 if __name__ == '__main__':
     # Start regular Node
     node = Node()
-    node.is_promoted = True
-    # node.start()
+    node.start()
 
     # Promotion to Delegate Node [Polymorphism]
     if node.is_promoted:

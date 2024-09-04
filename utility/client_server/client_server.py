@@ -179,6 +179,7 @@ def accept_new_peer_handler(self: object, own_sock: socket.socket):
                 peer_socket.close()
                 raise InvalidProtocolError(ip=peer_socket.getpeername()[0])
         except (InvalidSignatureError, InvalidProtocolError, RequestAlreadyExistsError, RequestExpiredError) as msg:
+            peer_socket.close()
             print(msg)
     # ===============================================================================================================
     peer_socket, peer_address = own_sock.accept()
@@ -243,6 +244,9 @@ def send_request(peer_socket: socket.socket, ip: str,
     """
     print(SEND_REQUEST_MSG.format(ip))
     try:
+        # Set blocking (in case multiprocessing module sets to False)
+        peer_socket.setblocking(True)
+
         # Send a signal (according to the purpose)
         if purpose == PURPOSE_REQUEST:
             peer_socket.send(AES_encrypt(data=REQUEST_SIGNAL.encode(), key=shared_secret, mode=mode, iv=peer_iv))
@@ -268,7 +272,7 @@ def send_request(peer_socket: socket.socket, ip: str,
         print(SEND_REQUEST_SUCCESS.format(peer_socket.getpeername()[0]))
         return None
     except (BrokenPipeError, ConnectionResetError, OSError) as e:  # Used for consensus (parallel)
-        print(f"[+] ERROR: An error has occurred while sending a request to peer ({ip}) [REASON: {e}]")
+        print(f"[+] ERROR: An error has occurred while sending a request to peer ({ip})! [REASON: {e}]")
         return ip
 
 
@@ -315,8 +319,8 @@ def connect_to_P2P_network(self: object):
                 if target_sock is not None:  # TODO: refactor this code into a function (less code duplication)
                     shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATOR)
                     sign_transaction(self, transaction)
-                    send_request(target_sock, target_ip, shared_secret, PURPOSE_REQUEST, self.mode, transaction, session_iv)
-                    response = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
+                    send_request(target_sock, target_ip, shared_secret, self.mode, PURPOSE_REQUEST, transaction, session_iv)
+                    response, target_sock = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
 
                     if response:  # => if approved
                         approved_handler(self, target_sock, shared_secret, session_iv)
@@ -328,8 +332,8 @@ def connect_to_P2P_network(self: object):
             if target_sock is not None:
                 shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATOR)
                 sign_transaction(self, transaction)
-                send_request(target_sock, target_ip, shared_secret, PURPOSE_REQUEST, self.mode, transaction, session_iv)
-                response = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
+                send_request(target_sock, target_ip, shared_secret, self.mode, PURPOSE_REQUEST, transaction, session_iv)
+                response, target_sock = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
 
                 if response:  # => if approved
                     approved_handler(self, target_sock, shared_secret, session_iv)
@@ -339,6 +343,11 @@ def _await_response(self: object, peer_socket: socket.socket, shared_secret: byt
                     mode: str, transaction: Transaction, peer_iv: bytes = None):
     """
     Awaits a response from the target peer.
+
+    @attention Reconnect Handler:
+        This function has the ability to reconnect
+        to the target peer in the event they disconnect,
+        which returns a reference to the new socket object.
 
     @param self:
         A reference to the calling class object (Node)
@@ -358,8 +367,9 @@ def _await_response(self: object, peer_socket: socket.socket, shared_secret: byt
     @param peer_iv:
         Bytes of the initialization vector (IV)
 
-    @return: Boolean (T/F)
-        True if request accepted/approved; False otherwise
+    @return: Boolean (T/F), socket
+        True if request accepted/approved; False otherwise and
+        a reference to the peer socket object
     """
     def _response_handler(res: str, target_sock: socket.socket) -> bool:
         if res in ERROR_RESPONSE_MAP:
@@ -377,13 +387,12 @@ def _await_response(self: object, peer_socket: socket.socket, shared_secret: byt
         try:
             while True:
                 self.own_socket.settimeout(transaction.get_time_remaining())
-                target_sock, target_info = self.own_socket.accept()
-                if target_sock.getpeername()[0] == target_ip:  # => Re-established connection
+                new_sock, target_info = self.own_socket.accept()  # => a new reference to socket object
+                if new_sock.getpeername()[0] == target_ip:  # => Re-established connection
                     print(TARGET_RECONNECT_SUCCESS)
-                    return target_sock
+                    return new_sock
                 else:
-                    target_sock.close()
-
+                    new_sock.close()
         except socket.timeout:
             print(TARGET_UNSUCCESSFUL_RECONNECT)
             return None
@@ -401,7 +410,7 @@ def _await_response(self: object, peer_socket: socket.socket, shared_secret: byt
                     new_sock.close()
                     return False
                 response = AES_decrypt(data=data, key=shared_secret, mode=mode, iv=peer_iv).decode()
-                return _response_handler(res=response, target_sock=peer_socket)
+                return _response_handler(res=response, target_sock=new_sock)
             except socket.timeout:
                 print(TARGET_RECONNECT_TIMEOUT)
                 new_sock.close()
@@ -413,16 +422,16 @@ def _await_response(self: object, peer_socket: socket.socket, shared_secret: byt
         peer_socket.settimeout(transaction.get_time_remaining())
         data = peer_socket.recv(1024)
 
-        if not data:
+        if not data:  # attempt reconnection (if peer disconnects)
             new_socket = _reconnect_to_target(target_ip=peer_socket.getpeername()[0])
-            return _reconnect_response_handler(new_socket)
+            return _reconnect_response_handler(new_socket), new_socket
         else:
             response = AES_decrypt(data=data, key=shared_secret, mode=mode, iv=peer_iv).decode()
-            return _response_handler(res=response, target_sock=peer_socket)
+            return _response_handler(res=response, target_sock=peer_socket), peer_socket
     except socket.timeout:
         print(CONNECTION_AWAIT_TIMEOUT_MSG)
         peer_socket.close()
-        return False
+        return False, None
 
 
 def _perform_parallel_host_search(host_ip: str, peer_dict: dict):

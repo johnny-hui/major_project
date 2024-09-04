@@ -60,6 +60,7 @@ class Node:
         self.is_promoted = False
         self.terminate = False
         load_transactions(self)
+        print(f"[+] Application Timestamp: {self.app_timestamp}")
         print(NODE_INIT_SUCCESS_MSG.format(self.role))
 
     def start(self):

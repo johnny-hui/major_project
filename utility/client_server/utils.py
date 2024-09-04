@@ -336,7 +336,7 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
                 remove_pending_peer(self, target_sock, ip=target_sock.getpeername()[0])
 
         except exceptions as msg:
-            print(f"[+] ERROR: An error has occurred while performing approved_handler() (REASON: {msg})")
+            print(f"[+] ERROR: An error has occurred while performing approved_handler() [REASON: {msg}]")
             remove_pending_peer(self, target_sock, ip=target_sock.getpeername()[0])
     # ================================================================================
     print(APPROVED_TO_NETWORK_MSG_INITIAL)

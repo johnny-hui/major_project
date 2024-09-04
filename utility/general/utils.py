@@ -96,6 +96,7 @@ def determine_delegate_status(target_sock: socket.socket, own_timestamp: str,
     print("[+] Now comparing the application timestamp with the target peer to determine the 'Delegate' role"
           "for establishment of new P2P network...")
     peer_timestamp = None
+    target_sock.setblocking(True)  # setBlocking everytime sockets are used for multiprocessing
 
     # Exchange timestamps (based on mode)
     if mode == MODE_INITIATOR:
@@ -410,3 +411,22 @@ def start_parallel_operation(task, task_args: list,
         pool.close()
         pool.join()
     return results
+
+
+def set_blocking_all_sockets(sock_list: list[socket.socket]):
+    """
+    Set all sockets in a list to blocking mode.
+
+    @attention Use Case:
+        This function is used primarily after sockets have
+        been operated by functions under multiprocessing
+        module since they will be set to blocking mode
+        automatically for some strange reason.
+
+    @param sock_list:
+        A list of sockets
+
+    @return: None
+    """
+    for sock in sock_list:
+        sock.setblocking(True)

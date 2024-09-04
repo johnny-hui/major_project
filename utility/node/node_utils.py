@@ -80,14 +80,15 @@ def remove_pending_peer(self: object, peer_sock: socket.socket, ip: str):
 
     @return: None
     """
-    file_path = self.peer_dict[ip][6]  # get the file path to remove from 'data/transactions/'
+    file_path = None
     try:
+        file_path = self.peer_dict[ip][6]  # get the file path to remove from 'data/transactions/'
         del self.peer_dict[ip]
         self.fd_pending.remove(peer_sock)
     except (KeyError, ValueError):
         pass
     finally:
-        delete_transaction(self.pending_transactions, ip_to_remove=ip, request_path=file_path)
+        delete_transaction(self.pending_transactions, ip=ip, request_path=file_path)
         peer_sock.close()
         print(f"[+] REMOVE PENDING PEER: Pending peer (IP: {ip}) has been successfully removed!")
 
@@ -253,7 +254,7 @@ def change_peer_status(peer_dict: dict, ip: str, status: str):
 
 
 def delete_transaction(pending_transactions: list[Transaction],
-                       ip_to_remove: str, request_path: str):
+                       ip: str, request_path: str):
     """
     Removes a Transaction (connection request) object
     from the list (and in file) based on an input IP address.
@@ -261,7 +262,7 @@ def delete_transaction(pending_transactions: list[Transaction],
     @param pending_transactions:
         A list of Transaction objects
 
-    @param ip_to_remove:
+    @param ip:
         The IP address of the request object
         to be removed (String)
 
@@ -271,13 +272,13 @@ def delete_transaction(pending_transactions: list[Transaction],
 
     @return: None
     """
-    if len(pending_transactions) == 0:
+    if len(pending_transactions) == 0 or request_path is None:
         return None
 
     # Iterate and delete transaction from memory
     i = 0
     while i < len(pending_transactions):
-        if pending_transactions[i].ip_addr == ip_to_remove:
+        if pending_transactions[i].ip_addr == ip:
             del pending_transactions[i]
             break
         else:
@@ -328,7 +329,7 @@ def create_transaction(self: object):
         transaction.set_role(self.role)
         return transaction
     except (ValueError, FileNotFoundError, IOError) as e:
-        print(f"[+] ERROR: An error has occurred while creating Transaction object: {e}")
+        print(f"[+] ERROR: An error has occurred while creating Transaction object; please try again... [REASON: {e}]")
         return None
 
 
@@ -732,8 +733,8 @@ def load_transactions(self: object):
             counter += 1
             request.received_by = self.ip
             self.pending_transactions.append(request)
-            self.peer_dict[request.ip_addr] = [request.first_name, request.last_name,
-                                               shared_key, iv, mode, STATUS_PENDING, file_path]
+            self.peer_dict[request.ip_addr] = [request.first_name, request.last_name, shared_key,
+                                               iv, mode, STATUS_PENDING, file_path, request.role]
         else:
             os.remove(file_path)
             print(TRANSACTION_INVALID_SIG_MSG.format(request.ip_addr))
@@ -857,70 +858,88 @@ def approve_connection_request(self: object):
         """
         print("[+] Do something")
 
-    def not_connected_approve_helper():
+    def not_connected_approve_helper(pending_peer_sock: socket.socket | None):
         """
         A utility helper function that handles approving peers
         when host peer is not connected to the P2P network
         (or anyone).
 
+        @param pending_peer_sock:
+            A pending peer socket object
+
         @return: None
         """
-        # Get pending peer info
         print(APPROVE_NOT_CONNECTED_MSG.format(request.ip_addr))
-        pending_peer_sock = _get_pending_peer_socket(self.fd_pending, ip=request.ip_addr)
-        _, _, secret_key, iv, mode, _, file_path, _ = get_pending_peer_info(self.peer_dict, ip=request.ip_addr)
+        try:
+            if pending_peer_sock is None:  # Attempt reconnection
+                pending_peer_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                pending_peer_sock.settimeout(5)  # 5-second timeout
+                pending_peer_sock.connect((request.ip_addr, APPLICATION_PORT))
+                print(f"[+] Successfully reconnected to requesting peer (IP: {request.ip_addr})!")
 
-        # Remove peer socket from pending list (prevent select-related errors)
-        if pending_peer_sock in self.fd_pending:
-            self.fd_pending.remove(pending_peer_sock)
-            time.sleep(1)
+            # Get pending peer info
+            _, _, secret_key, iv, mode, _, file_path, _ = get_pending_peer_info(self.peer_dict, ip=request.ip_addr)
 
-        # Send APPROVED signal to pending peer
-        pending_peer_sock.send(AES_encrypt(data=RESPONSE_APPROVED.encode(), key=secret_key, mode=mode, iv=iv))
+            # Remove peer socket from pending list (prevent select-related errors)
+            if pending_peer_sock in self.fd_pending:
+                self.fd_pending.remove(pending_peer_sock)
+                time.sleep(1)
 
-        # Wait for ACK (for synchronization)
-        pending_peer_sock.recv(1024)
+            # Send APPROVED signal to pending peer
+            pending_peer_sock.send(AES_encrypt(data=RESPONSE_APPROVED.encode(), key=secret_key, mode=mode, iv=iv))
 
-        # Send Status - [Not Connected]
-        pending_peer_sock.send(AES_encrypt(data=STATUS_NOT_CONNECTED.encode(), key=secret_key, mode=mode, iv=iv))
+            # Wait for ACK (for synchronization)
+            pending_peer_sock.recv(1024)
 
-        # Create and Sign Transaction (own connection request)
-        transaction = create_transaction(self)
-        sign_transaction(self, transaction)
+            # Send Status - [Not Connected]
+            pending_peer_sock.send(AES_encrypt(data=STATUS_NOT_CONNECTED.encode(), key=secret_key, mode=mode, iv=iv))
 
-        # Process data for Consensus
-        temp_list = [pending_peer_sock]
+            # Create own connection request and submit for consensus
+            own_request = None
+            while own_request is None:
+                own_request = create_transaction(self)
 
-        # Initiate Consensus and Wait for Pending Peer's Vote
-        from models.Consensus import Consensus
-        consensus = Consensus(request=request, mode=MODE_INITIATOR, peer_list=temp_list,
-                              peer_dict=self.peer_dict, is_connected=False)
-        final_decision = consensus.start()
+            # Sign the transaction
+            sign_transaction(self, own_request)
 
-        # Evaluate and handle the decision
-        if final_decision == CONSENSUS_SUCCESS:
-            print(APPROVED_PEER_MSG.format(request.ip_addr))
+            # Process data for Consensus (add pending peer socket)
+            temp_list = [pending_peer_sock]
 
-            # Compare application timestamp and determine who gets delegate (if not admin)
-            if self.role == ROLE_PEER and request.role == ROLE_PEER:
-                is_delegate = determine_delegate_status(pending_peer_sock, self.app_timestamp,
-                                                        mode=MODE_INITIATOR, enc_mode=mode,
-                                                        secret=secret_key, iv=iv)
-                if is_delegate:
-                    print("[+] PROMOTION: You have been promoted to 'Delegate' node!")
-                    self.is_promoted = True
-                else:
-                    change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
+            # Initiate Consensus and Wait for Pending Peer's Vote
+            from models.Consensus import Consensus
+            consensus = Consensus(request=own_request, mode=MODE_INITIATOR, peer_list=temp_list,
+                                  peer_dict=self.peer_dict, is_connected=False)
+            final_decision = consensus.start()
 
-            # Perform finishing steps
-            self.fd_list.append(pending_peer_sock)
-            change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
-            delete_transaction(self.pending_transactions, request.ip_addr, file_path)
-            self.is_connected = True
-            print(ESTABLISHED_NETWORK_SUCCESS_MSG.format(pending_peer_sock.getpeername()[0]))
+            # Evaluate and handle the decision
+            if final_decision == CONSENSUS_SUCCESS:
+                print(APPROVED_PEER_MSG.format(request.ip_addr))
 
-        if final_decision == CONSENSUS_FAILURE:
-            print(REQUEST_REFUSED_MSG)
+                # Compare application timestamp and determine who gets delegate (if not admin)
+                if self.role == ROLE_PEER and request.role == ROLE_PEER:
+                    is_delegate = determine_delegate_status(pending_peer_sock, self.app_timestamp,
+                                                            mode=MODE_INITIATOR, enc_mode=mode,
+                                                            secret=secret_key, iv=iv)
+                    if is_delegate:
+                        print("[+] PROMOTION: You have been promoted to 'Delegate' node!")
+                        self.is_promoted = True
+                    else:
+                        change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
+
+                # Perform finishing steps
+                self.fd_list.append(pending_peer_sock)
+                change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
+                delete_transaction(self.pending_transactions, request.ip_addr, file_path)
+                self.is_connected = True
+                print(ESTABLISHED_NETWORK_SUCCESS_MSG.format(pending_peer_sock.getpeername()[0]))
+
+            if final_decision == CONSENSUS_FAILURE:
+                print(REQUEST_REFUSED_MSG)
+                delete_transaction(self.pending_transactions, request.ip_addr, request_path=file_path)
+                remove_pending_peer(self, pending_peer_sock, ip=request.ip_addr)
+
+        except (socket.error, socket.timeout, OSError):
+            print("[+] APPROVE ERROR: Cannot re-establish connection with the requesting peer!")
             remove_pending_peer(self, pending_peer_sock, ip=request.ip_addr)
     # ===============================================================================
     if len(self.pending_transactions) == 0:
@@ -943,7 +962,8 @@ def approve_connection_request(self: object):
                 is_connected_approve_helper()
                 print("[+] Select an admin/delegate from fd_list -> get socket -> Send Transaction object for approval")
             else:
-                not_connected_approve_helper()
+                peer_sock = _get_pending_peer_socket(self.fd_pending, ip=request.ip_addr)
+                not_connected_approve_helper(peer_sock)
         else:
             print("[+] APPROVE ERROR: The selected request has expired; please try again!")
 

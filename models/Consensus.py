@@ -1,6 +1,9 @@
 import select
 import socket
 import sys
+
+from urllib3 import request
+
 from models.Transaction import Transaction
 from utility.client_server.client_server import send_request
 from utility.consensus.utils import (arg_check, check_peer_list_empty,
@@ -60,6 +63,7 @@ class Consensus:
             A Consensus object
         """
         arg_check(mode, peer_list, peer_socket)
+        print("=" * 160)
         print(CONSENSUS_INIT_MSG)
         self.votes = {VOTE_YES: 0, VOTE_NO: 0}
         self.request = request
@@ -78,25 +82,29 @@ class Consensus:
         @return: final_decision
             A string that determines the consensus results (SUCCESS | FAILURE)
         """
-        if self.peer_socket and self.mode == MODE_VOTER: # => VOTER
-            vote = self.__perform_vote()
-            if self.is_connected:
-                return self.__get_vote_results()
-            return vote
+        try:
+            if self.peer_socket and self.mode == MODE_VOTER: # => VOTER
+                vote = self.__perform_vote()
+                if self.is_connected:
+                    return self.__get_vote_results()
+                return vote
 
-        if self.peer_list and self.mode == MODE_INITIATOR:  # => INITIATOR
-            self.__send_request_to_peers()
-            self.__get_vote_results()
+            if self.peer_list and self.mode == MODE_INITIATOR:  # => INITIATOR
+                self.__send_request_to_peers()
+                self.__get_vote_results()
 
-            # ONLY IF CONNECTED: Host must include their vote on the request
-            self.__perform_vote() if self.is_connected else None
+                # ONLY IF CONNECTED: Host must include their vote on the request
+                self.__perform_vote() if self.is_connected else None
 
-            # Tally and determine the results
-            self.__determine_results()
+                # Tally and determine the results
+                self.__determine_results()
 
-            # ONLY IF CONNECTED: Send results back to all connected peers
-            self.__send_final_decision() if self.is_connected else None
-            return self.final_decision
+                # ONLY IF CONNECTED: Send results back to all connected peers
+                self.__send_final_decision() if self.is_connected else None
+                return self.final_decision
+        finally:
+            print(f"[+] CONSENSUS ENDED: Consensus for requesting peer (IP: {self.request.ip_addr}) has been completed!")
+            print("=" * 160)
 
     def __add_vote(self, vote: str):
         if vote in self.votes:
@@ -201,6 +209,20 @@ class Consensus:
 
         @return: None
         """
+        def remove_peer(index: int, ip_to_remove: str):
+            """
+            Helper method to close and remove a peer socket and its associated information.
+            @param index:
+                The current index of the peer socket list
+            @param ip_to_remove:
+                The IP address of the peer socket to be removed
+            @return: None
+            """
+            self.peer_list[index].close()  # close socket
+            del self.peer_list[index]  # remove socket from list
+            del self.peer_dict[ip_to_remove]  # remove peer info
+            print(f"[+] PEER REMOVED: The following peer has been removed (IP: {ip_to_remove}) [REASON: Disconnected]")
+
         def perform_cleanup(result: list):
             """
             Performs cleanup if any peer disconnection occurs
@@ -214,19 +236,20 @@ class Consensus:
 
             @return: None
             """
-            for item in result:
-                if item is not None:  # item == ip_to_remove
+            for ip_to_remove in result:
+                if ip_to_remove is not None:
                     i = 0
                     while i < len(self.peer_list):
-                        ip = self.peer_list[i].getpeername()[0]
-                        if ip == item:
-                            self.peer_list[i].close()  # close socket
-                            del self.peer_list[i]      # remove socket from list
-                            del self.peer_dict[ip]     # remove peer info
-                            print(f"[+] PEER REMOVED: The following peer has been removed {ip} [REASON: Disconnected]")
+                        try:
+                            peer_ip = self.peer_list[i].getpeername()[0]
+                            if ip_to_remove == peer_ip:
+                                remove_peer(i, ip_to_remove)
+                                break
+                            else:
+                                i += 1
+                        except (BrokenPipeError, ConnectionResetError, OSError):
+                            remove_peer(i, ip_to_remove)
                             break
-                        else:
-                            i += 1
         # ===============================================================================
         if not check_peer_list_empty(self, msg=INITIATOR_NO_PEER_SEND_REQ_ERROR):
             peer_info_list = process_peer_info(self, purpose=PURPOSE_SEND_REQ)
