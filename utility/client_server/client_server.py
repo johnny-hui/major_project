@@ -9,12 +9,14 @@ import pickle
 import secrets
 import socket
 import time
+
 from tinyec.ec import Point
+
 from exceptions.exceptions import (RequestAlreadyExistsError, RequestExpiredError,
                                    InvalidSignatureError, InvalidProtocolError)
 from models.Transaction import Transaction
 from utility.client_server.utils import (_perform_iterative_host_search, _connect_to_target_peer,
-                                         _receive_request_handler, approved_handler)
+                                         receive_request_handler, approved_handler)
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import compress_pub_key, derive_shared_secret, compress_shared_secret
 from utility.general.constants import CBC, MODE_RECEIVER, MODE_INITIATOR, PHOTO_SIGNAL, REQUEST_SIGNAL, \
@@ -23,10 +25,11 @@ from utility.general.constants import CBC, MODE_RECEIVER, MODE_INITIATOR, PHOTO_
     RESPONSE_INVALID_SIG, SEND_REQUEST_MSG, SEND_REQUEST_SUCCESS, TARGET_RECONNECT_MSG, REQUEST_APPROVED_MSG, \
     RESPONSE_APPROVED, RESPONSE_REJECTED, REQUEST_REFUSED_MSG, REQUEST_ALREADY_EXISTS_MSG, REQUEST_INVALID_SIG_MSG, \
     REQUEST_EXPIRED_MSG, TARGET_RECONNECT_SUCCESS, TARGET_UNSUCCESSFUL_RECONNECT, TARGET_RECONNECT_TIMEOUT, \
-    TARGET_DISCONNECT_MSG, CONNECT_PEER_EXISTS_ERROR, PURPOSE_REQUEST, PURPOSE_CONSENSUS, CONSENSUS_SIGNAL
+    TARGET_DISCONNECT_MSG, CONNECT_PEER_EXISTS_ERROR, PURPOSE_REQUEST, PURPOSE_CONSENSUS, CONSENSUS_SIGNAL, ROLE_ADMIN, \
+    ROLE_DELEGATE, PURPOSE_REQUEST_APPROVAL, REQUEST_APPROVAL_SIGNAL, REMOVE_SIGNAL, PROMOTION_SIGNAL
 from utility.general.utils import get_user_command_option, get_target_ip, divide_subnet_search
-from utility.node.node_utils import create_transaction, sign_transaction, peer_exists
-
+from utility.node.node_utils import create_transaction, sign_transaction, peer_exists, get_peer, \
+    launch_consensus
 
 # CONSTANTS
 ERROR_RESPONSE_MAP = {
@@ -172,9 +175,10 @@ def accept_new_peer_handler(self: object, own_sock: socket.socket):
             if signal == PHOTO_SIGNAL:
                 print("[+] Receive photo from app")  # TODO: Implement this part using AES instead
             elif signal == REQUEST_SIGNAL:
-                _receive_request_handler(self, peer_socket, peer_address[0], shared_secret, mode, session_iv)
+                receive_request_handler(self, peer_socket, peer_address[0], shared_secret, mode, session_iv)
             elif signal == APPROVED_SIGNAL:
-                print("[+] Accept peer")
+                print("[+] Accept peer; peer is given a unique token upon approval, as they must present this upon "
+                      "joining network!")
             else:
                 peer_socket.close()
                 raise InvalidProtocolError(ip=peer_socket.getpeername()[0])
@@ -206,7 +210,7 @@ def send_request(peer_socket: socket.socket, ip: str,
                  shared_secret: bytes, mode: str, purpose: str,
                  transaction: Transaction, peer_iv: bytes = None):
     """
-    Sends the Transaction (connection request) to a target peer.
+    Securely sends the Transaction (connection request) to a target peer.
 
     @attention Consensus (Use Case):
         The Consensus class uses this to send requests in parallel
@@ -252,6 +256,8 @@ def send_request(peer_socket: socket.socket, ip: str,
             peer_socket.send(AES_encrypt(data=REQUEST_SIGNAL.encode(), key=shared_secret, mode=mode, iv=peer_iv))
         if purpose == PURPOSE_CONSENSUS:
             peer_socket.send(AES_encrypt(data=CONSENSUS_SIGNAL.encode(), key=shared_secret, mode=mode, iv=peer_iv))
+        if purpose == PURPOSE_REQUEST_APPROVAL:
+            peer_socket.send(AES_encrypt(data=REQUEST_APPROVAL_SIGNAL.encode(), key=shared_secret, mode=mode, iv=peer_iv))
 
         # Wait for ACK
         peer_socket.recv(1024)
@@ -289,7 +295,76 @@ def approved_peer_activity_handler(self: object, peer_sock: socket.socket):
 
     @return: None
     """
-    print("[+] TO BE IMPLEMENTED LATER...")
+
+    def default_action():
+        """
+        Prints out the signal or message sent by a peer.
+
+        @attention Use Case:
+            Used as a default if signal is undefined
+
+        @return: None
+        """
+        print(f"[+] You have received a message from peer ({peer_ip}): {decrypted_signal}")
+
+    def disconnect_handler(sock: socket.socket, peer_dict: dict):
+        sock.close()
+        del peer_dict[peer_ip]
+        if len(peer_dict) == 0:
+            self.is_connected = False
+        print(f"[+] Connection closed by peer (IP: {peer_ip})!")
+
+    def signal_handler(signal: str):
+        """
+        Handles approved peer activity signals.
+
+        @param signal:
+            A string representing the signal
+
+        @return: None
+        """
+        # Define signals for all roles
+        signals_if_admin_delegate = {
+            REQUEST_APPROVAL_SIGNAL: lambda: receive_request_handler(self, peer_sock, peer_ip, peer.secret, peer.mode,
+                                                                     peer.iv, save_info=False, set_stamp=False)
+        }
+        signals_if_regular_peer = {
+            CONSENSUS_SIGNAL: lambda: launch_consensus(self, peer_sock, peer_ip, peer),
+            REMOVE_SIGNAL: lambda: print("[+] Check if signal is coming from admin or delegate -> admin/delegate"
+                                         "kicks a peer and informs regular peer to remove them locally"),
+            PROMOTION_SIGNAL: lambda: print("[+] Check if signal is coming from admin or delegate; promote to"
+                                            "delegate")
+        }
+
+        # Grab the signal
+        if self.role in (ROLE_ADMIN, ROLE_DELEGATE):
+            signal = signals_if_admin_delegate.get(signal, default_action)
+        else:
+            signal = signals_if_regular_peer.get(signal, default_action)
+
+        # Handle the signal
+        if signal:
+            signal()
+    # ===============================================================================================
+    # Remove socket (to prevent select interference)
+    self.fd_list.remove(peer_sock)
+
+    # Get IP and notify host of incoming data
+    peer_ip = peer_sock.getpeername()[0]
+
+    # Get incoming data
+    data = peer_sock.recv(1024)
+
+    # Get security parameters and decrypt signal from incoming peer
+    if data:
+        peer = get_peer(self.peer_dict, ip=peer_sock.getpeername()[0])
+        decrypted_signal = AES_decrypt(data=data, key=peer.secret, mode=peer.mode, iv=peer.iv).decode()
+
+        # Handle the signal
+        signal_handler(signal=decrypted_signal)
+        self.fd_list.append(peer_sock)
+    else:
+        disconnect_handler(peer_sock, self.peer_dict)
 
 
 def connect_to_P2P_network(self: object):
@@ -302,6 +377,27 @@ def connect_to_P2P_network(self: object):
 
     @return: None
     """
+    def process_transaction_with_peer(target_sock: socket.socket):
+        """
+        A utility function that involves securely sending a
+        connection request (Transaction) to a target peer for
+        approval into their P2P network.
+
+        @param target_sock:
+            The target peer's socket object
+
+        @return: None
+        """
+        if target_sock is not None:
+            shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATOR)
+            sign_transaction(self, transaction)
+            send_request(target_sock, target_ip, shared_secret, self.mode, PURPOSE_REQUEST, transaction, session_iv)
+            response, target_sock = _await_response(self, target_sock, shared_secret,
+                                                    self.mode, transaction, session_iv)
+
+            if response:  # => if approved
+                approved_handler(self, target_sock, shared_secret, session_iv)
+    # ===============================================================================================================
     transaction = create_transaction(self)
 
     if transaction is not None:
@@ -312,31 +408,13 @@ def connect_to_P2P_network(self: object):
 
         if option == 1:
             target_ip = get_target_ip(self)
+            if not peer_exists(self.peer_dict, target_ip, msg=CONNECT_PEER_EXISTS_ERROR):
+                target_socket = _connect_to_target_peer(ip=target_ip)
+                process_transaction_with_peer(target_socket)
 
-            if not peer_exists(self.peer_dict, target_ip, prompt=CONNECT_PEER_EXISTS_ERROR):
-                target_sock = _connect_to_target_peer(ip=target_ip)
-
-                if target_sock is not None:  # TODO: refactor this code into a function (less code duplication)
-                    shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATOR)
-                    sign_transaction(self, transaction)
-                    send_request(target_sock, target_ip, shared_secret, self.mode, PURPOSE_REQUEST, transaction, session_iv)
-                    response, target_sock = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
-
-                    if response:  # => if approved
-                        approved_handler(self, target_sock, shared_secret, session_iv)
-
-        if option == 2:  # TODO: refactor this code into a function (less code duplication)
-            target_sock = _perform_parallel_host_search(self.ip, self.peer_dict)
-            target_ip = target_sock.getpeername()[0]
-
-            if target_sock is not None:
-                shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATOR)
-                sign_transaction(self, transaction)
-                send_request(target_sock, target_ip, shared_secret, self.mode, PURPOSE_REQUEST, transaction, session_iv)
-                response, target_sock = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
-
-                if response:  # => if approved
-                    approved_handler(self, target_sock, shared_secret, session_iv)
+        if option == 2:
+            target_socket, target_ip = _perform_parallel_host_search(self.ip, self.peer_dict)
+            process_transaction_with_peer(target_socket)
 
 
 def _await_response(self: object, peer_socket: socket.socket, shared_secret: bytes,
@@ -443,13 +521,13 @@ def _perform_parallel_host_search(host_ip: str, peer_dict: dict):
         A string representing the host machine's IP address
         (NOTE: This is used to get the subnet mask)
 
-    @return: peer_sock or None
-        The connected peer socket if found; otherwise None
+    @return: (peer_sock & peer_ip) or None
+        The connected peer socket and their IP if found; otherwise None
     """
     def get_peer_socket_from_results(result: list):
         for item in result:
             if isinstance(item, socket.socket):
-                return item
+                return item, item.getpeername()[0]
         print("[+] CONNECTION FAILED: There are currently no available hosts within your local network...")
         return None
     # =================================================================

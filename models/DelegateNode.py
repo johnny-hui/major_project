@@ -79,8 +79,8 @@ class DelegateNode(Node):
         }
         actions_when_connected = {
             1: lambda: send_message_to_specific_peer(),
-            2: lambda: None,
-            3: lambda: None,
+            2: lambda: print("[+] Broadcast a message"),
+            3: lambda: print("[+] Initiate consensus"),
             4: lambda: revoke_connection_request(self),
             5: lambda: None,
             6: lambda: view_pending_connection_requests(self),

@@ -1,5 +1,8 @@
 from models.Node import Node
-from utility.general.constants import ROLE_ADMIN
+from utility.client_server.client_server import connect_to_P2P_network
+from utility.general.constants import ROLE_ADMIN, SELECT_CLIENT_SEND_MSG_PROMPT, INPUT_PROMPT
+from utility.node.node_utils import get_specific_peer_info, send_message, display_menu, approve_connection_request, \
+    revoke_connection_request, view_pending_connection_requests, view_current_peers, close_application
 
 
 class AdminNode(Node):
@@ -22,3 +25,61 @@ class AdminNode(Node):
     def __init__(self):
         super().__init__()
         self.role = ROLE_ADMIN
+
+    def _handle_command(self, command: int, max_menu_value: int):
+        """
+        An override function that handles and performs user
+        menu command options (as a Delegate).
+
+        @param command:
+            An integer representing the menu option
+            to be performed
+
+        @return: None
+        """
+        def send_message_to_specific_peer():
+            client_sock, _, secret, iv, mode = get_specific_peer_info(self, prompt=SELECT_CLIENT_SEND_MSG_PROMPT)
+            send_message(client_sock, mode, secret, iv)
+
+        def perform_post_action_steps():
+            actions_list = actions_when_connected if self.is_connected else actions_when_not_connected
+            if command == len(actions_list):
+                return None
+            display_menu(role=self.role, is_connected=self.is_connected)
+            print(INPUT_PROMPT)
+        # ===============================================================================================
+
+        # Define Actions
+        actions_when_not_connected = {
+            1: lambda: connect_to_P2P_network(self),
+            2: lambda: approve_connection_request(self),
+            3: lambda: revoke_connection_request(self),
+            4: lambda: None,
+            5: lambda: view_pending_connection_requests(self),
+            6: lambda: view_current_peers(self),
+            7: lambda: close_application(self)
+
+        }
+        actions_when_connected = {
+            1: lambda: send_message_to_specific_peer(),
+            2: lambda: print("[+] Broadcast a message"),
+            3: lambda: print("[+] Initiate a Consensus"),
+            4: lambda: revoke_connection_request(self),
+            5: lambda: None,
+            6: lambda: view_pending_connection_requests(self),
+            7: lambda: view_current_peers(self),
+            8: lambda: print("[+] Promote a Peer"),
+            9: lambda: print("[+] Kick a Peer"),
+            10:lambda: close_application(self)
+        }
+
+        # Grab action
+        if self.is_connected and len(self.fd_list) > 1:
+            action = actions_when_connected.get(command)
+        else:
+            action = actions_when_not_connected.get(command)
+
+        # Perform action
+        if action:
+            action()
+            perform_post_action_steps()

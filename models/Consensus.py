@@ -1,9 +1,6 @@
 import select
 import socket
 import sys
-
-from urllib3 import request
-
 from models.Transaction import Transaction
 from utility.client_server.client_server import send_request
 from utility.consensus.utils import (arg_check, check_peer_list_empty,
@@ -21,16 +18,22 @@ from utility.general.constants import (VOTE_YES, VOTE_NO, CONSENSUS_SUCCESS, CON
 from utility.general.utils import create_transaction_table, start_parallel_operation
 
 
-# NOTE: MUST TAKE OUT ALL PEER SOCKETS (to prevent interference with select() function)
-# =======================================================================================================
-
 class Consensus:
     """
     A class for launching a Consensus.
 
     @attention:
-        The arguments passed in constructor are
-        through reference
+        The arguments passed in constructor are through reference
+
+    Attributes:
+        votes - A dictionary that holds two values (VOTE_YES, VOTE_NO) and their tallies'
+        request - The Transaction object to be voted on
+        is_connected - A boolean flag indicating whether the Node is connected
+        mode - A string indicating the role of the calling class (MODE_VOTER, MODE_INITIATOR)
+        peer_dict - A dictionary containing peers (APPROVED and PENDING)
+        peer_socket - A socket object (Used by only the 'VOTER' to send their votes to)
+        peer_list - A list of peer sockets (Used by the 'INITIATOR' to send the request to all connected peers
+        final_decision - A string indicating consensus status; holds two values (CONSENSUS_FAILURE, CONSENSUS_SUCCESS)
     """
     def __init__(self,
                  request: Transaction,
@@ -59,7 +62,7 @@ class Consensus:
         @param peer_list:
             A list of peer sockets (required by the INITIATOR)
 
-        @return Consensus:
+        @return Consensus():
             A Consensus object
         """
         arg_check(mode, peer_list, peer_socket)
@@ -220,7 +223,7 @@ class Consensus:
             """
             self.peer_list[index].close()  # close socket
             del self.peer_list[index]  # remove socket from list
-            del self.peer_dict[ip_to_remove]  # remove peer info
+            del self.peer_dict[ip_to_remove]  # remove peer
             print(f"[+] PEER REMOVED: The following peer has been removed (IP: {ip_to_remove}) [REASON: Disconnected]")
 
         def perform_cleanup(result: list):

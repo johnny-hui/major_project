@@ -69,6 +69,7 @@ FORMAT_AVALANCHE = "AVALANCHE"
 FORMAT_STRING = "STRING"
 FORMAT_BYTES = "BYTES"
 
+
 # NODE INIT CONSTANTS
 NODE_INIT_MSG = "[+] Now initializing your node..."
 NODE_INIT_SUCCESS_MSG = "[+] Initialization Successful! (Current Role: {})"
@@ -268,6 +269,9 @@ PHOTO_SIGNAL = "PHOTO"
 REQUEST_SIGNAL = "REQUEST"
 APPROVED_SIGNAL = "APPROVED"
 CONSENSUS_SIGNAL = "CONSENSUS"
+REMOVE_SIGNAL = "REMOVE_PEER"
+PROMOTION_SIGNAL = "PROMOTION"
+REQUEST_APPROVAL_SIGNAL = "REQUIRE_APPROVAL"
 RECEIVED_TRANSACTION_SUCCESS = ("[+] CONNECTION REQUEST RECEIVED: Successfully received and verified peer's "
                                 "Transaction (connection request) from ({})")
 CONNECTION_TIMEOUT_ERROR = ("[+] CONNECTION TIMEOUT: A timeout has occurred while attempting to establish a connection "
@@ -371,6 +375,8 @@ APPROVE_NOT_CONNECTED_MSG = ("[+] You are not connected to a P2P network; now es
                              "requesting peer (IP: {})...")
 ESTABLISHED_NETWORK_SUCCESS_MSG = ("[+] P2P NETWORK ESTABLISHED: You have successfully established a P2P network "
                                    "with new peer (IP: {})!")
+ADMIN_DELEGATE_TABLE_TITLE = "Current Admins & Delegates"
+SELECT_ADMIN_DELEGATE_PROMPT = "[+] Please select an admin or delegate above (Enter a value of 1 to {}): "
 
 
 # CONSENSUS CONSTANTS
@@ -415,4 +421,5 @@ TAMPER_DETECTED_MSG = ("[+] An error has occurred while loading a transaction fr
 TIMER_INTERVAL = 30
 PURPOSE_REQUEST = "REQUEST"
 PURPOSE_CONSENSUS = "CONSENSUS"
+PURPOSE_REQUEST_APPROVAL = "REQUIRE_APPROVAL"
 MEMORY_CLEANUP_SUCCESS = '[+] MEMORY CLEANUP SUCCESSFUL: The old Node object has been terminated!'

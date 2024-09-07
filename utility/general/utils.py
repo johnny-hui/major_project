@@ -93,7 +93,7 @@ def determine_delegate_status(target_sock: socket.socket, own_timestamp: str,
         True if Delegate, False otherwise
     """
     # ===============================================================================
-    print("[+] Now comparing the application timestamp with the target peer to determine the 'Delegate' role"
+    print("[+] Now comparing the application timestamp with the target peer to determine the 'Delegate' role "
           "for establishment of new P2P network...")
     peer_timestamp = None
     target_sock.setblocking(True)  # setBlocking everytime sockets are used for multiprocessing

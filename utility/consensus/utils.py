@@ -81,6 +81,7 @@ def send_decision_to_peer(peer_sock: socket.socket, decision: str, ip: str,
 
     @return: None
     """
+    peer_sock.setblocking(True)
     peer_sock.send(AES_encrypt(data=decision.encode(), key=secret, mode=mode, iv=iv))
     print(f"[+] The final consensus decision has been successfully sent to peer (IP: {ip})!")
 
@@ -152,25 +153,25 @@ def process_peer_info(self: object, purpose: str):
     if purpose == PURPOSE_SEND_REQ:
         for peer_sock in self.peer_list:
             ip = peer_sock.getpeername()[0]
-            secret, iv, mode = self.peer_dict[ip][2:5]  # => get security params
-            info_list.append((peer_sock, ip, secret, mode, PURPOSE_CONSENSUS, self.request, iv))
+            peer = self.peer_dict[ip]  # => get peer
+            info_list.append((peer_sock, ip, peer.secret, peer.mode, PURPOSE_CONSENSUS, self.request, peer.iv))
         return info_list
 
     if purpose == PURPOSE_GET_PEER_VOTES:
         for peer_sock in self.peer_list:
             ip = peer_sock.getpeername()[0]
-            secret, iv, mode = self.peer_dict[ip][2:5]
-            info_list.append((peer_sock, self.request, ip, secret, mode, iv))
+            peer = self.peer_dict[ip]
+            info_list.append((peer_sock, self.request, ip, peer.secret, peer.mode, peer.iv))
         return info_list
 
     if purpose == PURPOSE_SEND_FINAL_DECISION:
         for peer_sock in self.peer_list:
             ip = peer_sock.getpeername()[0]
-            secret, iv, mode = self.peer_dict[ip][2:5]
-            info_list.append((peer_sock, self.final_decision, ip, secret, mode, iv))
+            peer = self.peer_dict[ip]
+            info_list.append((peer_sock, self.final_decision, ip, peer.secret, peer.mode, peer.iv))
         return info_list
 
     if purpose == PURPOSE_VOTER_GET_PEER_INFO:
         ip = self.peer_socket.getpeername()[0]
-        secret, iv, mode = self.peer_dict[ip][2:5]
-        return secret, iv, mode
+        peer = self.peer_dict[ip]
+        return peer.secret, peer.iv, peer.mode

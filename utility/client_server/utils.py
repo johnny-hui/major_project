@@ -9,7 +9,6 @@ import pickle
 import socket
 import threading
 import time
-
 from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError,
                                    InvalidSignatureError, TransactionNotFoundError,
                                    ConsensusInitError)
@@ -25,8 +24,8 @@ from utility.general.constants import (APPLICATION_PORT, FIND_HOST_TIMEOUT,
                                        ROLE_PEER, ROLE_DELEGATE, TARGET_NOT_CONNECTED_MSG)
 from utility.general.utils import timer, determine_delegate_status
 from utility.node.node_utils import (peer_exists, add_new_transaction, save_transaction_to_file,
-                                     save_pending_peer_info, get_transaction, remove_pending_peer,
-                                     delete_transaction, get_pending_peer_info, change_peer_status, change_peer_role)
+                                     save_pending_peer_info, remove_pending_peer, delete_transaction,
+                                     change_peer_status, change_peer_role)
 
 
 def _connect_to_target_peer(ip: str,
@@ -142,16 +141,23 @@ def _perform_iterative_host_search(peer_dict: dict, host_ip: str,
                 return peer_sock
 
 
-def _receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: str,
-                             shared_secret: bytes, mode: str, peer_iv: bytes = None):
+def receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: str,
+                            shared_secret: bytes, mode: str, peer_iv: bytes = None,
+                            save_info: bool = True, set_stamp: bool = True):
     """
     A helper function that handles the receiving, decrypting, and
     validation of a requesting peer's Transaction (connection request).
 
-    @attention Use Case:
+    @attention Use Case 1:
         Invoked when requesting peer wants to connect
         to the target Node and sends an encrypted Transaction
         object over the network
+
+    @attention Use Case 2:
+        Invoked when an admin or delegate receives a signal
+        from a regular peer requesting approval for a connection
+        request they've received by a peer wanting to join the
+        network
 
     @param self:
         A reference to the calling class object (Node)
@@ -169,9 +175,17 @@ def _receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: 
         A string containing the cipher mode (CBC or ECB)
 
     @param peer_iv:
-        Bytes of the initialization vector (IV)
+        Bytes of the initialization vector (IV) - Optional (default = None)
 
-    @return: None
+    @param save_info:
+        A boolean flag to determine whether to save pending peer information (default = True)
+
+    @param set_stamp:
+        A boolean flag to set the 'received_by' attribute of the received request to the receiving
+        host's IP (default = True)
+
+    @return: request
+        A Transaction object
     """
     def receive_request():
         """
@@ -219,7 +233,7 @@ def _receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: 
             raise RequestExpiredError(ip=peer_ip)
         elif request.is_verified():
             try:
-                add_new_transaction(self, request)
+                add_new_transaction(self, request, set_stamp)
                 transaction_path = save_transaction_to_file(data=data, shared_secret=shared_secret, iv=peer_iv, mode=mode)
                 print(RECEIVED_TRANSACTION_SUCCESS.format(peer_ip))
                 return request, transaction_path
@@ -235,11 +249,14 @@ def _receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: 
     try:
         encrypted_data = receive_request()
         request, file_path = process_request(data=encrypted_data)
-        save_pending_peer_info(self, peer_socket, peer_ip, request.first_name,
-                               request.last_name, shared_secret, mode, file_path,
-                               request.role, peer_iv)
+
+        if save_info:
+            save_pending_peer_info(self, peer_socket, peer_ip, request.first_name, request.last_name,
+                                   shared_secret, mode, file_path, request.role, peer_iv)
+
         peer_socket.send(AES_encrypt(data=ACK.encode(), key=shared_secret, mode=self.mode, iv=peer_iv))
         peer_socket.settimeout(None)
+        return request, file_path
     except InvalidSignatureError:
         raise InvalidSignatureError(ip=peer_ip)
     except RequestAlreadyExistsError:
@@ -276,6 +293,9 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
                                                       event))
         thread.start()
 
+    def connected_handler():
+        print("[+] Implement!")
+
     def not_connected_handler():
         try:
             # Set a 5-minute timeout while waiting for target peer's Transaction object
@@ -290,8 +310,9 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
             target_sock.recv(1024)
 
             # Receive target request
-            _receive_request_handler(self, target_sock, target_sock.getpeername()[0], secret, self.mode, iv)
-            request = get_transaction(self.pending_transactions, ip=target_sock.getpeername()[0])
+            request, file_path = receive_request_handler(self, target_sock,
+                                                         target_sock.getpeername()[0],
+                                                         secret, self.mode, iv)
             stop_event.set()
 
             # Remove target socket from pending list (prevent select-related errors)
@@ -324,8 +345,7 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
                         change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
 
                 # Perform finishing steps
-                self.fd_list.append(target_sock)
-                _, _, _, _, _, _, file_path, _ = get_pending_peer_info(self.peer_dict, ip=request.ip_addr)
+                self.fd_list.append(target_sock)  # fd_list == approved list
                 change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
                 delete_transaction(self.pending_transactions, request.ip_addr, file_path)
                 self.is_connected = True
@@ -356,6 +376,4 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
         not_connected_handler()
 
     if status == STATUS_CONNECTED:
-        print("[+] IMPLEMENT")
-
-
+        connected_handler()
