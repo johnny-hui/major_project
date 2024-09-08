@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from socket import socket
+from models.Token import Token
 
 
 @dataclass
@@ -12,8 +13,9 @@ class Peer:
     last_name: str
     role: str
     status: str
-    transaction_path: str
+    transaction_path: str = None
+    mode: str = None
     socket: socket = None
     secret: bytes = None
     iv: bytes = None
-    mode: str = None
+    token: Token = None

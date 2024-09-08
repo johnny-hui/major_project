@@ -412,6 +412,12 @@ GET_PEER_VOTE_TIMEOUT_MSG = ("[+] VOTE TIMEOUT: No response received from peer (
 GET_PEER_VOTE_START_MSG = "[+] Now gathering vote results from connected peers, please wait..."
 
 
+# TOKEN CONSTANTS
+TOKEN_EXPIRY_TIME = 5  # => minutes
+SEND_TOKEN_SUCCESS = ("[+] The approval token issued for requesting peer (IP: {}) has been successfully sent and "
+                      "received by ({})!")
+
+
 # OTHER CONSTANTS
 OP_ENCRYPT = "ENCRYPTION"
 OP_DECRYPT = "DECRYPTION"
@@ -423,3 +429,4 @@ PURPOSE_REQUEST = "REQUEST"
 PURPOSE_CONSENSUS = "CONSENSUS"
 PURPOSE_REQUEST_APPROVAL = "REQUIRE_APPROVAL"
 MEMORY_CLEANUP_SUCCESS = '[+] MEMORY CLEANUP SUCCESSFUL: The old Node object has been terminated!'
+FORMAT_DATETIME = "DATETIME"

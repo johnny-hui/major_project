@@ -9,9 +9,7 @@ import pickle
 import secrets
 import socket
 import time
-
 from tinyec.ec import Point
-
 from exceptions.exceptions import (RequestAlreadyExistsError, RequestExpiredError,
                                    InvalidSignatureError, InvalidProtocolError)
 from models.Transaction import Transaction
@@ -25,11 +23,10 @@ from utility.general.constants import CBC, MODE_RECEIVER, MODE_INITIATOR, PHOTO_
     RESPONSE_INVALID_SIG, SEND_REQUEST_MSG, SEND_REQUEST_SUCCESS, TARGET_RECONNECT_MSG, REQUEST_APPROVED_MSG, \
     RESPONSE_APPROVED, RESPONSE_REJECTED, REQUEST_REFUSED_MSG, REQUEST_ALREADY_EXISTS_MSG, REQUEST_INVALID_SIG_MSG, \
     REQUEST_EXPIRED_MSG, TARGET_RECONNECT_SUCCESS, TARGET_UNSUCCESSFUL_RECONNECT, TARGET_RECONNECT_TIMEOUT, \
-    TARGET_DISCONNECT_MSG, CONNECT_PEER_EXISTS_ERROR, PURPOSE_REQUEST, PURPOSE_CONSENSUS, CONSENSUS_SIGNAL, ROLE_ADMIN, \
-    ROLE_DELEGATE, PURPOSE_REQUEST_APPROVAL, REQUEST_APPROVAL_SIGNAL, REMOVE_SIGNAL, PROMOTION_SIGNAL
+    TARGET_DISCONNECT_MSG, CONNECT_PEER_EXISTS_ERROR, PURPOSE_REQUEST, PURPOSE_CONSENSUS, CONSENSUS_SIGNAL, \
+    PURPOSE_REQUEST_APPROVAL, REQUEST_APPROVAL_SIGNAL
 from utility.general.utils import get_user_command_option, get_target_ip, divide_subnet_search
-from utility.node.node_utils import create_transaction, sign_transaction, peer_exists, get_peer, \
-    launch_consensus
+from utility.node.node_utils import create_transaction, sign_transaction, peer_exists
 
 # CONSTANTS
 ERROR_RESPONSE_MAP = {
@@ -282,91 +279,6 @@ def send_request(peer_socket: socket.socket, ip: str,
         return ip
 
 
-def approved_peer_activity_handler(self: object, peer_sock: socket.socket):
-    """
-    Handles incoming data from approved peers and their
-    associated activity (based on a specific signal protool).
-
-    @param self:
-        A reference to the calling class object (Node)
-
-    @param peer_sock:
-        The peer socket object
-
-    @return: None
-    """
-
-    def default_action():
-        """
-        Prints out the signal or message sent by a peer.
-
-        @attention Use Case:
-            Used as a default if signal is undefined
-
-        @return: None
-        """
-        print(f"[+] You have received a message from peer ({peer_ip}): {decrypted_signal}")
-
-    def disconnect_handler(sock: socket.socket, peer_dict: dict):
-        sock.close()
-        del peer_dict[peer_ip]
-        if len(peer_dict) == 0:
-            self.is_connected = False
-        print(f"[+] Connection closed by peer (IP: {peer_ip})!")
-
-    def signal_handler(signal: str):
-        """
-        Handles approved peer activity signals.
-
-        @param signal:
-            A string representing the signal
-
-        @return: None
-        """
-        # Define signals for all roles
-        signals_if_admin_delegate = {
-            REQUEST_APPROVAL_SIGNAL: lambda: receive_request_handler(self, peer_sock, peer_ip, peer.secret, peer.mode,
-                                                                     peer.iv, save_info=False, set_stamp=False)
-        }
-        signals_if_regular_peer = {
-            CONSENSUS_SIGNAL: lambda: launch_consensus(self, peer_sock, peer_ip, peer),
-            REMOVE_SIGNAL: lambda: print("[+] Check if signal is coming from admin or delegate -> admin/delegate"
-                                         "kicks a peer and informs regular peer to remove them locally"),
-            PROMOTION_SIGNAL: lambda: print("[+] Check if signal is coming from admin or delegate; promote to"
-                                            "delegate")
-        }
-
-        # Grab the signal
-        if self.role in (ROLE_ADMIN, ROLE_DELEGATE):
-            signal = signals_if_admin_delegate.get(signal, default_action)
-        else:
-            signal = signals_if_regular_peer.get(signal, default_action)
-
-        # Handle the signal
-        if signal:
-            signal()
-    # ===============================================================================================
-    # Remove socket (to prevent select interference)
-    self.fd_list.remove(peer_sock)
-
-    # Get IP and notify host of incoming data
-    peer_ip = peer_sock.getpeername()[0]
-
-    # Get incoming data
-    data = peer_sock.recv(1024)
-
-    # Get security parameters and decrypt signal from incoming peer
-    if data:
-        peer = get_peer(self.peer_dict, ip=peer_sock.getpeername()[0])
-        decrypted_signal = AES_decrypt(data=data, key=peer.secret, mode=peer.mode, iv=peer.iv).decode()
-
-        # Handle the signal
-        signal_handler(signal=decrypted_signal)
-        self.fd_list.append(peer_sock)
-    else:
-        disconnect_handler(peer_sock, self.peer_dict)
-
-
 def connect_to_P2P_network(self: object):
     """
     Finds, connects, and sends the connection request to a
@@ -394,7 +306,6 @@ def connect_to_P2P_network(self: object):
             send_request(target_sock, target_ip, shared_secret, self.mode, PURPOSE_REQUEST, transaction, session_iv)
             response, target_sock = _await_response(self, target_sock, shared_secret,
                                                     self.mode, transaction, session_iv)
-
             if response:  # => if approved
                 approved_handler(self, target_sock, shared_secret, session_iv)
     # ===============================================================================================================

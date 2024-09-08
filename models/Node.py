@@ -7,16 +7,15 @@ from utility.general.constants import NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER
     INPUT_PROMPT, MIN_MENU_ITEM_VALUE, MAX_MENU_ITEM_VALUE, SELECT_CLIENT_SEND_MSG_PROMPT, \
     ROLE_PEER, MONITOR_PENDING_PEERS_THREAD_NAME, MONITOR_PENDING_PEERS_START_MSG, APPLICATION_PORT, \
     ACCEPT_PEER_HANDLER_THREAD_NAME, PEER_ACTIVITY_HANDLER_THREAD_NAME, ROLE_DELEGATE, DELEGATE_MIN_MENU_ITEM_VALUE, \
-    DELEGATE_MAX_MENU_ITEM_VALUE, ROLE_ADMIN, ADMIN_MAX_MENU_ITEM_VALUE, ADMIN_MIN_MENU_ITEM_VALUE
+    DELEGATE_MAX_MENU_ITEM_VALUE, ROLE_ADMIN, ADMIN_MAX_MENU_ITEM_VALUE, ADMIN_MIN_MENU_ITEM_VALUE, FORMAT_STRING
 from utility.crypto.ec_keys_utils import generate_keys
 from utility.client_server.client_server import (accept_new_peer_handler,
-                                                 connect_to_P2P_network,
-                                                 approved_peer_activity_handler)
+                                                 connect_to_P2P_network)
 from utility.node.node_init import parse_arguments, initialize_socket, get_current_timestamp
 from utility.node.node_utils import (display_menu, view_current_peers, close_application, send_message,
                                      get_specific_peer_info, get_user_menu_option, monitor_pending_peers,
                                      load_transactions, view_pending_connection_requests, approve_connection_request,
-                                     revoke_connection_request)
+                                     revoke_connection_request, approved_peer_activity_handler)
 
 
 class Node:
@@ -51,11 +50,11 @@ class Node:
         self.role = ROLE_PEER
         self.own_socket = initialize_socket(self.ip, self.port)
         self.pvt_key, self.pub_key = generate_keys()
-        self.fd_list = [self.own_socket]  # => Monitored by select()
+        self.fd_list = [self.own_socket]  # => Stores approved peer sockets
         self.fd_pending = []  # => Stores pending peer sockets awaiting consensus (waiting room)
         self.peer_dict = {}  # => Format {IP: [Peer Objects]}
         self.pending_transactions = []
-        self.app_timestamp = get_current_timestamp()
+        self.app_timestamp = get_current_timestamp(FORMAT_STRING)
         self.is_connected = False
         self.is_promoted = False
         self.terminate = False

@@ -14,7 +14,8 @@ from _socket import SO_REUSEADDR
 from datetime import datetime
 from ssl import SOL_SOCKET
 from time import ctime
-from utility.general.constants import (INVALID_SRC_IP_ARG_ERROR, INVALID_FIRST_NAME_ERROR, INVALID_LAST_NAME_ERROR, ECB, CBC)
+from utility.general.constants import (INVALID_SRC_IP_ARG_ERROR, INVALID_FIRST_NAME_ERROR, INVALID_LAST_NAME_ERROR, ECB,
+                                       CBC, TIMESTAMP_FORMAT, FORMAT_STRING, FORMAT_DATETIME)
 
 
 def parse_arguments():
@@ -97,7 +98,7 @@ def initialize_socket(ip: str, port: int):
         sys.exit("[+] INIT ERROR: An error has occurred while creating socket object ({})".format(e))
 
 
-def get_current_timestamp():
+def get_current_timestamp(return_format: str = None):
     """
     Gets the current timestamp of when P2P Node application
     was started (from validated NTP server); if no internet
@@ -109,6 +110,9 @@ def get_current_timestamp():
         a connection to a P2P server and want to connect to one
         another.
 
+    @param return_format:
+        A string representing the return format (String or Datetime)
+
     @return: timestamp
         A string containing the current timestamp of the time
         when the application was started
@@ -117,15 +121,17 @@ def get_current_timestamp():
         response = ntplib.NTPClient().request('pool.ntp.org', timeout=5)
         ntp_time = ctime(response.tx_time)  # Convert response into ctime
         ntp_datetime = datetime.strptime(ntp_time, '%a %b %d %H:%M:%S %Y')  # Convert ctime to DateTime
-        timestamp = ntp_datetime.strftime('%Y-%m-%d %I:%M:%S %p')  # Format the timestamp
+
+        if return_format == FORMAT_DATETIME:
+            return datetime.strptime(ntp_time, '%a %b %d %H:%M:%S %Y')
+        if return_format == FORMAT_STRING:
+            return ntp_datetime.strftime(TIMESTAMP_FORMAT)
 
     except (ntplib.NTPException, socket.timeout, socket.gaierror):
         print("[+] ERROR: Failed to receive response from NTP server; using system time instead.")
         system_time = datetime.now()
-        timestamp = system_time.strftime('%Y-%m-%d %I:%M:%S %p')
+        return system_time.strftime(TIMESTAMP_FORMAT)
 
     except Exception as e:
         print(f"[+] ERROR: An error occurred while receiving an official timestamp from NTP server: {e}")
         return None
-
-    return timestamp

@@ -151,9 +151,9 @@ def process_peer_info(self: object, purpose: str):
     info_list = []
 
     if purpose == PURPOSE_SEND_REQ:
-        for peer_sock in self.peer_list:
+        for peer_sock in self.peer_list:    # => peer_list == list of peer sockets
             ip = peer_sock.getpeername()[0]
-            peer = self.peer_dict[ip]  # => get peer
+            peer = self.peer_dict[ip]       # => get peer
             info_list.append((peer_sock, ip, peer.secret, peer.mode, PURPOSE_CONSENSUS, self.request, peer.iv))
         return info_list
 

@@ -122,8 +122,7 @@ def get_img_path():
     @return: img_path
         A string containing the image path
     """
-    img_path = input("[+] Enter the path of the face photo to be "
-                     "submitted as part of your connection request: ")
+    img_path = input("[+] Enter the path of the face photo to be submitted as part of your connection request: ")
     return img_path
 
 

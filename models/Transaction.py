@@ -128,7 +128,7 @@ class Transaction:
         @return: time_remaining or None
             time_remaining (in seconds) if positive; None otherwise
         """
-        timestamp = datetime.strptime(self.timestamp, TIMESTAMP_FORMAT) + timedelta(minutes=3)
+        timestamp = datetime.strptime(self.timestamp, TIMESTAMP_FORMAT) + timedelta(minutes=TRANSACTION_EXPIRY_TIME_MINUTES)
         current_time = datetime.now()
 
         time_remaining = int((timestamp - current_time).total_seconds())

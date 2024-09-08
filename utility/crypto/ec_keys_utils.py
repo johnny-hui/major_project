@@ -11,6 +11,7 @@ from tinyec import registry
 from tinyec.ec import Point
 from utility.general.constants import BLOCK_SIZE
 
+
 # CONSTANTS
 BRAINPOOLP256r1 = "brainpoolP256r1"
 
@@ -220,7 +221,7 @@ def verify_signature(signature: tuple, data: bytes, pub_key: Point):
 
     # Determine the curve point (R) and validate with signature point r
     R = u1 * curve.g + u2 * pub_key
-    return R.x % curve.field.n == r
+    return (R.x % curve.field.n) == r
 
 
 def generate_shared_secret():

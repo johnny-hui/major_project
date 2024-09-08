@@ -9,6 +9,7 @@ import pickle
 import socket
 import threading
 import time
+
 from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError,
                                    InvalidSignatureError, TransactionNotFoundError,
                                    ConsensusInitError)
@@ -25,7 +26,7 @@ from utility.general.constants import (APPLICATION_PORT, FIND_HOST_TIMEOUT,
 from utility.general.utils import timer, determine_delegate_status
 from utility.node.node_utils import (peer_exists, add_new_transaction, save_transaction_to_file,
                                      save_pending_peer_info, remove_pending_peer, delete_transaction,
-                                     change_peer_status, change_peer_role)
+                                     change_peer_status, change_peer_role, receive_approval_token)
 
 
 def _connect_to_target_peer(ip: str,
@@ -294,7 +295,10 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
         thread.start()
 
     def connected_handler():
-        print("[+] Implement!")
+        print("[+] Peer is connected to a P2P network; now initializing into the network...")
+        token = receive_approval_token(target_sock, secret, iv, self.mode)
+
+        print("[+] Receive token and peer_dict from target who approved you!")
 
     def not_connected_handler():
         try:
@@ -377,3 +381,5 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
 
     if status == STATUS_CONNECTED:
         connected_handler()
+
+
