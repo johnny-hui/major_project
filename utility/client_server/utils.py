@@ -9,10 +9,13 @@ import pickle
 import socket
 import threading
 import time
+from tinyec.ec import Point
 
 from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError,
                                    InvalidSignatureError, TransactionNotFoundError,
-                                   ConsensusInitError)
+                                   ConsensusInitError, InvalidTokenError)
+from models.Peer import Peer
+from models.Token import Token
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.general.constants import (APPLICATION_PORT, FIND_HOST_TIMEOUT,
                                        CONNECTION_TIMEOUT_ERROR, CONNECTION_ERROR, ACK, STATUS_NOT_CONNECTED,
@@ -22,11 +25,15 @@ from utility.general.constants import (APPLICATION_PORT, FIND_HOST_TIMEOUT,
                                        TARGET_WAIT_REQUEST_MSG, VOTE_YES, VOTE_NO, MODE_VOTER,
                                        APPROVED_TO_NETWORK_MSG_INITIAL, ZERO_TRUST_POLICY_MSG, STATUS_APPROVED,
                                        TARGET_PEER_APPROVED_MSG, MODE_RECEIVER, JOIN_NETWORK_SUCCESS_MSG,
-                                       ROLE_PEER, ROLE_DELEGATE, TARGET_NOT_CONNECTED_MSG)
-from utility.general.utils import timer, determine_delegate_status
+                                       ROLE_PEER, ROLE_DELEGATE, TARGET_NOT_CONNECTED_MSG,
+                                       CONNECT_PEERS_AFTER_APPROVAL_MSG, MODE_INITIATOR, APPROVED_SIGNAL,
+                                       CONN_REJECTED_INVALID_TOKEN_MSG, CONNECTION_SUCCESSFUL_MSG)
+from utility.general.utils import timer, determine_delegate_status, start_parallel_operation
 from utility.node.node_utils import (peer_exists, add_new_transaction, save_transaction_to_file,
                                      save_pending_peer_info, remove_pending_peer, delete_transaction,
-                                     change_peer_status, change_peer_role, receive_approval_token)
+                                     change_peer_status, change_peer_role, receive_approval_token,
+                                     receive_peer_dictionary, update_peer_dict, get_peer, send_approval_token,
+                                     remove_all_approved_peers)
 
 
 def _connect_to_target_peer(ip: str,
@@ -268,10 +275,10 @@ def receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: s
         raise socket.timeout(e)
 
 
-def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv: bytes):
+def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv: bytes = None):
     """
-    A handler for the peer connecting to the P2P network
-    after being approved.
+    A handler for the peer connecting to the P2P network directly after
+    being approved by their target.
 
     @param self:
         A reference to the calling class object (Node)
@@ -283,11 +290,20 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
         Bytes of the shared secret
 
     @param iv:
-        Bytes of the initialization vector (IV)
+        Bytes of the initialization vector (IV) - Optional
 
     @return: None
     """
     def start_timer_thread(event: threading.Event):
+        """
+        A function that prints the time remaining while waiting for
+        target peer to send their request (only when not connected).
+
+        @param event:
+            An Event object
+
+        @return: None
+        """
         thread = threading.Thread(target=timer, args=(TARGET_TRANSACTION_WAIT_TIME,
                                                       TIMER_INTERVAL,
                                                       TARGET_WAIT_REQUEST_MSG,
@@ -295,12 +311,97 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
         thread.start()
 
     def connected_handler():
-        print("[+] Peer is connected to a P2P network; now initializing into the network...")
-        token = receive_approval_token(target_sock, secret, iv, self.mode)
+        """
+        Handles the request to join a P2P network if the target peer
+        is connected to a P2P network.
+        @return: None
+        """
+        def process_results(results_list: list):
+            """
+            Processes the results returned from _connect_to_peer_after
+            _approved() function.
 
-        print("[+] Receive token and peer_dict from target who approved you!")
+            @attention Type String:
+                If a type string is found within the results list,
+                then an invalid Token was detected by one or more peers;
+                hence - the host is removed from the network, as per
+                'zero-trust policy'
+
+            @param results_list:
+                A list of values returned from each process executing
+                the _connect_to_peer_after_approved() function
+
+            @return: None
+            """
+            try:
+                # Check if any invalid token errors occurred in any process (String occurrence)
+                for item in results_list:
+                    if isinstance(item, str):
+                        print(f"[+] ERROR: Your approval token is invalid as determined by one or more peers! (IP: {item})")
+                        raise InvalidTokenError(ip="host")
+
+                # If no InvalidTokenErrors found, update peer information (Peer object occurrence)
+                for item in results_list:
+                    if isinstance(item, Peer):
+                        self.peer_dict[item.ip] = item
+                        self.peer_dict[item.ip].socket.setblocking(True)
+                        self.fd_list.append(self.peer_dict[item.ip].socket)
+
+            except InvalidTokenError:  # => remove all established connections and reset state
+                remove_all_approved_peers(self.peer_dict)
+                self.is_connected = False
+                for item in results_list:
+                    if isinstance(item, Peer):
+                        item.socket.close()
+                target_sock.close()
+                print(CONN_REJECTED_INVALID_TOKEN_MSG)
+        # ====================================================================================
+
+        try:
+            print("[+] Target peer is connected to a P2P network; now initializing into the network...")
+            target_sock.settimeout(TARGET_TRANSACTION_WAIT_TIME)
+
+            # Receive approval token and peer dictionary from target peer
+            token = receive_approval_token(target_sock, secret, self.mode, iv)
+            new_peer_dict = receive_peer_dictionary(target_sock, secret, iv, self.mode)
+
+            # Update info from new_peer_dict into own peer dictionary
+            update_peer_dict(self.peer_dict, new_peer_dict)
+            del new_peer_dict
+
+            # Update target peer's information to own dictionary
+            target_peer = get_peer(self.peer_dict, ip=target_sock.getpeername()[0])
+            target_peer.socket, target_peer.secret, target_peer.iv, target_peer.mode = (target_sock, secret, iv, self.mode)
+
+            # Generate an argument list for parallel connecting to peers (ignore target peer)
+            peer_info = _process_peer_info_into_list(self, token, exclude=[target_peer.ip])
+
+            # Use multiprocessing to connect to new peers and get security parameters + socket
+            results = start_parallel_operation(task=_connect_to_peer_after_approved,
+                                               task_args=peer_info,
+                                               num_processes=len(self.peer_dict),
+                                               prompt=CONNECT_PEERS_AFTER_APPROVAL_MSG)
+
+            # Process the results
+            process_results(results)
+
+            # Perform finishing touches
+            self.fd_list.append(target_sock)
+            self.is_connected = True
+            print(CONNECTION_SUCCESSFUL_MSG)
+
+        except (socket.error, ConnectionResetError, BrokenPipeError, socket.timeout, InvalidTokenError) as e:
+            print(f"[+] ERROR: An error has occurred while initializing into the network! [REASON: {e}]")
+            target_sock.close()
+            self.peer_dict.clear()
+            self.is_connected = False
 
     def not_connected_handler():
+        """
+        Handles the request to join a P2P network if the target peer
+        is not connected to a P2P network.
+        @return: None
+        """
         try:
             # Set a 5-minute timeout while waiting for target peer's Transaction object
             print(TARGET_NOT_CONNECTED_MSG)
@@ -376,10 +477,139 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
     # Receive status from target (connected or not connected to a P2P network)
     status = AES_decrypt(data=target_sock.recv(1024), key=secret, mode=self.mode, iv=iv).decode()
 
-    if status == STATUS_NOT_CONNECTED:
-        not_connected_handler()
-
+    # Handle status
     if status == STATUS_CONNECTED:
         connected_handler()
 
+    if status == STATUS_NOT_CONNECTED:
+        not_connected_handler()
 
+
+def _connect_to_peer_after_approved(pvt_key: int, pub_key: Point, target_peer: Peer, token: Token, mode: str):
+    """
+    Connects to and returns a target peer after being approved into the P2P network.
+
+    @attention Use Case:
+        Used by a newly approved peer when connecting to
+        other peers within the P2P network
+
+    @param pvt_key:
+        The host's private key
+
+    @param pub_key:
+        The host's public key
+
+    @param target_peer:
+        A target Peer object
+
+    @param token:
+        An approval Token object
+
+    @param mode:
+        A string for the mode of encryption (ECB or CBC)
+
+    @return: target_peer or target_ip
+        Return an updated target peer object if success; otherwise, target_ip (if any errors)
+    """
+    try:
+        print(f"[+] Now connecting to peer (IP: {target_peer.ip})...")
+        target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        target_sock.settimeout(FIND_HOST_TIMEOUT)         # => 3-second timeout
+
+        # Connect to peer
+        target_sock.connect((target_peer.ip, APPLICATION_PORT))
+
+        # Establish security parameters (secret, iv, etc.)
+        from utility.client_server.client_server import establish_secure_parameters
+        secret, iv = establish_secure_parameters(pvt_key, pub_key, target_sock, mode=MODE_INITIATOR, encryption=mode)
+
+        # Send approval signal to target peer
+        target_sock.send(AES_encrypt(data=APPROVED_SIGNAL.encode(), key=secret, iv=iv, mode=mode))
+
+        # Wait for ACK
+        target_sock.recv(1024)
+
+        # Verify with target peer by sending your approval token
+        send_approval_token(target_sock, token, secret, mode, iv)
+
+        # Update target_peer with information
+        target_peer.socket = target_sock
+        target_peer.secret = secret
+        target_peer.iv = iv
+        target_peer.mode = mode
+        return target_peer
+
+    except (socket.error, socket.timeout, BrokenPipeError, ConnectionResetError, InvalidTokenError) as e:
+        print(f"[+] ERROR: An error has occurred while connecting to peer (IP: {target_peer.ip})! [REASON: {e}]")
+        return target_peer.ip
+
+
+def approved_signal_handler(self: object, peer_socket: socket.socket, secret: bytes, mode: str, iv: bytes = None):
+    """
+    Handles a newly approved peer's 'APPROVED' peer signal, which
+    includes the verification of an approval token (presented upon
+    connection).
+
+    @attention Use of Approval Tokens:
+        This function validates the newly approved peer
+        by verifying the signature of the token.
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @param peer_socket:
+        A socket object of the initiating peer
+
+    @param secret:
+        Bytes of the shared secret
+
+    @param mode:
+        A string for the encryption mode (ECB or CBC)
+
+    @param iv:
+        Bytes of the initialization vector (IV) - Optional
+
+    @return: None
+    """
+    def update_peer_info(peer: Peer):
+        peer.status = STATUS_APPROVED
+        peer.socket = peer_socket
+        peer.secret, peer.iv = secret, iv
+        peer.mode = mode
+        peer.token = token
+        print(f"[+] Information for peer (IP: {peer.ip}) has been updated!")
+    # ================================================================================
+
+    try:
+        ip = peer_socket.getpeername()[0]
+        token = receive_approval_token(peer_socket, secret=secret, mode=mode, iv=iv)
+        update_peer_info(get_peer(self.peer_dict, ip))
+        self.fd_list.append(peer_socket)
+        print(f"[+] NEW PEER CONNECTION: A new peer has been successfully verified and approved (IP: {ip}))!")
+    except InvalidTokenError as msg:
+        print(msg)
+        peer_socket.close()
+
+
+def _process_peer_info_into_list(self: object, token: Token, exclude: list):
+    """
+    Processes information from peer dictionary into an argument list
+    suitable for _connect_to_peer_after_approved() function.
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @param token:
+        An approval Token object
+
+    @param exclude:
+        A list of IP addresses to exclude from the list
+
+    @return: peer_info
+        A list of tuples containing parameters for _connect_to_peer_after_approved()
+    """
+    peer_info = []
+    for peer in self.peer_dict.values():
+        if peer.ip not in exclude:
+            peer_info.append((self.pvt_key, self.pub_key, peer, token, self.mode))
+    return peer_info

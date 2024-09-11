@@ -15,6 +15,7 @@ INVALID_SIGNATURE_MSG = ("[+] INVALID SIGNATURE: A transaction (connection reque
 INVALID_PROTOCOL_MSG = "[+] ERROR: Invalid protocol; connection with peer has been terminated (IP: {})!"
 TRANSACTION_NOT_FOUND_MSG = "[+] ERROR: Cannot find the Transaction object for the following IP ({})!"
 CONSENSUS_INIT_ERROR_MSG = "[+] ERROR: Consensus cannot be started due to insufficient arguments provided! [REASON: {}]"
+INVALID_TOKEN_ERROR_MSG = "Cannot verify the signature in the provided approval token [sent from IP: ({})]"
 
 
 class RequestAlreadyExistsError(Exception):
@@ -104,4 +105,20 @@ class ConsensusInitError(Exception):
     """
     def __init__(self, reason: str):
         self.message = CONSENSUS_INIT_ERROR_MSG.format(reason)
+        super().__init__(self.message)
+
+
+class InvalidTokenError(Exception):
+    """
+    An exception that raises a TransactionNotFoundError.
+
+    @attention Use Case:
+        Thrown when a Transaction object is not found
+        in the 'pending_transactions' list of the Node
+        class
+
+    @return: None
+    """
+    def __init__(self, ip: str):
+        self.message = INVALID_TOKEN_ERROR_MSG.format(ip)
         super().__init__(self.message)

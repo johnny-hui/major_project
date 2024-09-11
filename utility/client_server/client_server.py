@@ -14,7 +14,7 @@ from exceptions.exceptions import (RequestAlreadyExistsError, RequestExpiredErro
                                    InvalidSignatureError, InvalidProtocolError)
 from models.Transaction import Transaction
 from utility.client_server.utils import (_perform_iterative_host_search, _connect_to_target_peer,
-                                         receive_request_handler, approved_handler)
+                                         receive_request_handler, approved_handler, approved_signal_handler)
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import compress_pub_key, derive_shared_secret, compress_shared_secret
 from utility.general.constants import CBC, MODE_RECEIVER, MODE_INITIATOR, PHOTO_SIGNAL, REQUEST_SIGNAL, \
@@ -79,14 +79,19 @@ def exchange_public_keys(pub_key: Point, sock: socket.socket, mode: str):
         return peer_pub_key
 
 
-def establish_secure_parameters(self: object, peer_socket: socket.socket, mode: str):
+def establish_secure_parameters(pvt_key: int, pub_key: Point, peer_socket: socket.socket,
+                                mode: str, encryption: str = None):
     """
     Establishes a secure connection by exchanging & deriving
     protocol parameters (cipher mode, ECDH public key exchange,
     shared secret).
 
-    @param self:
-        A reference to the calling class object (Node)
+    @param encryption:
+    @param pvt_key:
+        The host's private key derived from brainpoolP256r1 curve
+
+    @param pub_key:
+        The host's public key derived from brainpoolP256r1 curve
 
     @param peer_socket:
         A peer's socket object
@@ -94,6 +99,9 @@ def establish_secure_parameters(self: object, peer_socket: socket.socket, mode: 
     @param mode:
         A string to determine if calling class is the
         'RECEIVER' or 'INITIATOR'
+
+    @param encryption:
+        A string for the encryption mode (ECB or CBC) -> Optional
 
     @return: shared_secret, session_iv, mode
     """
@@ -108,22 +116,22 @@ def establish_secure_parameters(self: object, peer_socket: socket.socket, mode: 
             print(f"[+] IV RECEIVED: The initialization vector (IV) has been received "
                   f"from the peer ({session_iv.hex()})")
 
-        peer_pub_key = exchange_public_keys(self.pub_key, peer_socket, mode=MODE_RECEIVER)
+        peer_pub_key = exchange_public_keys(pub_key, peer_socket, mode=MODE_RECEIVER)
         print(f"[+] PUBLIC KEY RECEIVED: Successfully received the peer's public key "
               f"({compress_pub_key(peer_pub_key)})")
 
-        shared_secret = derive_shared_secret(self.pvt_key, peer_pub_key)
+        shared_secret = derive_shared_secret(pvt_key, peer_pub_key)
         print(SHARED_SECRET_SUCCESS_MSG.format(compress_shared_secret(shared_secret), len(shared_secret)))
         return shared_secret, session_iv, encrypt_mode
 
     if mode == MODE_INITIATOR:  # => Sender
         session_iv = None
         time.sleep(0.5)
-        peer_socket.send(self.mode.encode())
-        print(f"[+] MODE SELECTED: The encryption mode chosen for this session is {self.mode.upper()}")
+        peer_socket.send(encryption.encode())
+        print(f"[+] MODE SELECTED: The encryption mode chosen for this session is {encryption.upper()}")
 
         # Generate new session IV and send to server (if CBC)
-        if self.mode == CBC:
+        if encryption == CBC:
             session_iv = secrets.token_bytes(BLOCK_SIZE)
             time.sleep(0.5)
             peer_socket.send(session_iv)
@@ -131,13 +139,12 @@ def establish_secure_parameters(self: object, peer_socket: socket.socket, mode: 
                   f"this session ({session_iv.hex()})")
 
         # Exchange Public Keys with Server
-        server_pub_key = exchange_public_keys(self.pub_key, peer_socket, mode=MODE_INITIATOR)
+        server_pub_key = exchange_public_keys(pub_key, peer_socket, mode=MODE_INITIATOR)
         print(f"[+] PUBLIC KEY RECEIVED: Successfully received the server's public key "
               f"({compress_pub_key(server_pub_key)})")
 
         # Derive the shared secret
-        shared_secret = derive_shared_secret(self.pvt_key, server_pub_key)  # In bytes
-        self.shared_secret = shared_secret.hex()
+        shared_secret = derive_shared_secret(pvt_key, server_pub_key)  # In bytes
         print(SHARED_SECRET_SUCCESS_MSG.format(compress_shared_secret(shared_secret), len(shared_secret)))
         return shared_secret, session_iv
 
@@ -174,8 +181,7 @@ def accept_new_peer_handler(self: object, own_sock: socket.socket):
             elif signal == REQUEST_SIGNAL:
                 receive_request_handler(self, peer_socket, peer_address[0], shared_secret, mode, session_iv)
             elif signal == APPROVED_SIGNAL:
-                print("[+] Accept peer; peer is given a unique token upon approval, as they must present this upon "
-                      "joining network!")
+                approved_signal_handler(self, peer_socket, shared_secret, mode, session_iv)
             else:
                 peer_socket.close()
                 raise InvalidProtocolError(ip=peer_socket.getpeername()[0])
@@ -186,15 +192,12 @@ def accept_new_peer_handler(self: object, own_sock: socket.socket):
     peer_socket, peer_address = own_sock.accept()
     print(f"[+] NEW CONNECTION REQUEST: Accepted a peer connection from ({peer_address[0]}, {peer_address[1]})!")
 
-    shared_secret, session_iv, mode = establish_secure_parameters(self, peer_socket, mode=MODE_RECEIVER)
+    shared_secret, session_iv, mode = establish_secure_parameters(self.pvt_key, self.pub_key, peer_socket, mode=MODE_RECEIVER)
     peer_socket.settimeout(ACCEPT_NEW_PEER_TIMEOUT)  # 10-second Timeout
 
     # Await, Receive and Decrypt Peer Signal
     try:
-        decrypted_signal = AES_decrypt(data=peer_socket.recv(1024),
-                                       key=shared_secret,
-                                       mode=mode,
-                                       iv=session_iv).decode()
+        decrypted_signal = AES_decrypt(data=peer_socket.recv(1024), key=shared_secret, mode=mode, iv=session_iv).decode()
         signal_handler(signal=decrypted_signal)
     except socket.timeout:
         print("[+] NEW PEER TIMEOUT: A new peer connection has timed out; connection has been terminated!")
@@ -301,7 +304,9 @@ def connect_to_P2P_network(self: object):
         @return: None
         """
         if target_sock is not None:
-            shared_secret, session_iv = establish_secure_parameters(self, target_sock, mode=MODE_INITIATOR)
+            shared_secret, session_iv = establish_secure_parameters(self.pvt_key, self.pub_key,
+                                                                    target_sock, mode=MODE_INITIATOR,
+                                                                    encryption=self.mode)
             sign_transaction(self, transaction)
             send_request(target_sock, target_ip, shared_secret, self.mode, PURPOSE_REQUEST, transaction, session_iv)
             response, target_sock = _await_response(self, target_sock, shared_secret,

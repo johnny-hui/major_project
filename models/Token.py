@@ -15,6 +15,9 @@ class Token:
         It is generated, signed, and issued by an admin
         or delegate peer when an approved peer has been
         approved by a majority in the P2P network.
+
+    @attention Expiry Time:
+        Always 5 minutes ahead of issued time
     """
     token: str
     peer_ip: str

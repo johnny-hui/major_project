@@ -384,8 +384,7 @@ def timer(time_limit: int, interval: int, prompt: str, stop_event: threading.Eve
     print(f"[+] TIME EXPIRED: Time limit of {time_limit} seconds has been reached!")
 
 
-def start_parallel_operation(task, task_args: list,
-                             num_processes: int, prompt: str):
+def start_parallel_operation(task, task_args: list, num_processes: int, prompt: str):
     """
     Executes a function in parallel using the multiprocessing module.
 

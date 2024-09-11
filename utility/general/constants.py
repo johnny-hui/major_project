@@ -269,8 +269,10 @@ PHOTO_SIGNAL = "PHOTO"
 REQUEST_SIGNAL = "REQUEST"
 APPROVED_SIGNAL = "APPROVED"
 CONSENSUS_SIGNAL = "CONSENSUS"
+SYNCHRONIZE_SIGNAL = "SYNC"
 REMOVE_SIGNAL = "REMOVE_PEER"
 PROMOTION_SIGNAL = "PROMOTION"
+REQUEST_REJECTED_SIGNAL = "REQUEST_REJECTED"
 REQUEST_APPROVAL_SIGNAL = "REQUIRE_APPROVAL"
 RECEIVED_TRANSACTION_SUCCESS = ("[+] CONNECTION REQUEST RECEIVED: Successfully received and verified peer's "
                                 "Transaction (connection request) from ({})")
@@ -287,6 +289,7 @@ TARGET_RECONNECT_SUCCESS = ("[+] CONNECTION RE-ESTABLISHED: The connection to ta
 TARGET_RECONNECT_TIMEOUT = ("[+] RE-CONNECTION TIMEOUT: The target has failed to respond with a consensus decision "
                             "within allocated time; connection has been terminated!")
 TARGET_UNSUCCESSFUL_RECONNECT = "[+] RE-CONNECTION FAILED: Failed to reconnect to the target peer!"
+SEND_PEER_DICT_SUCCESS = "[+] The peer dictionary has been successfully sent and received by ({})!"
 
 
 # CONNECT TO P2P NETWORK CONSTANTS
@@ -314,6 +317,10 @@ TARGET_NOT_CONNECTED_MSG = ("[+] Target peer is not connected to a P2P network; 
                             "network with them...")
 JOIN_NETWORK_SUCCESS_MSG = ("[+] CONNECTION SUCCESS: You have successfully joined the P2P network with "
                             "the target peer (IP: {})!")
+CONNECT_PEERS_AFTER_APPROVAL_MSG = "[+] Now connecting to other peers in the P2P network..."
+CONN_REJECTED_INVALID_TOKEN_MSG = ("[+] You have been removed from the P2P network as per zero-trust policy due to an "
+                                   "invalid signature in your approval token; please try again...")
+CONNECTION_SUCCESSFUL_MSG = "[+] CONNECTION SUCCESSFUL: You have successfully connected to a P2P network!"
 
 
 # RESPONSE CONSTANTS
@@ -410,12 +417,16 @@ SEND_FINAL_DECISION_START_MSG = "[+] Now sending the final consensus decision to
 GET_PEER_VOTE_TIMEOUT_MSG = ("[+] VOTE TIMEOUT: No response received from peer (IP: {}); an automatic 'No' vote will "
                              "added towards consensus result.")
 GET_PEER_VOTE_START_MSG = "[+] Now gathering vote results from connected peers, please wait..."
+CONSENSUS_PEER_WIN_MSG = ("[+] CONSENSUS SUCCESS: A majority win in favor has been reached; now accepting peer (IP: {}) "
+                          "into the network!")
+CONSENSUS_PEER_LOSE_MSG = ("[+] CONSENSUS FAILURE: The request did not receive enough votes to accept peer (IP: {}) "
+                           "into the network...")
 
 
 # TOKEN CONSTANTS
 TOKEN_EXPIRY_TIME = 5  # => minutes
-SEND_TOKEN_SUCCESS = ("[+] The approval token issued for requesting peer (IP: {}) has been successfully sent and "
-                      "received by ({})!")
+SEND_TOKEN_SUCCESS = ("[+] The approval token issued for requesting peer (IP: {}) has been successfully sent, verified, "
+                      "and received by ({})!")
 
 
 # OTHER CONSTANTS

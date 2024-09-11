@@ -2,6 +2,8 @@ import select
 import socket
 import sys
 import threading
+
+from models.Peer import Peer
 from utility.general.constants import NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_THREAD_NAME, \
     USER_INPUT_START_MSG, \
     INPUT_PROMPT, MIN_MENU_ITEM_VALUE, MAX_MENU_ITEM_VALUE, SELECT_CLIENT_SEND_MSG_PROMPT, \
@@ -52,7 +54,7 @@ class Node:
         self.pvt_key, self.pub_key = generate_keys()
         self.fd_list = [self.own_socket]  # => Stores approved peer sockets
         self.fd_pending = []  # => Stores pending peer sockets awaiting consensus (waiting room)
-        self.peer_dict = {}  # => Format {IP: [Peer Objects]}
+        self.peer_dict: dict[str, Peer] = {}  # => Format {IP: [Peer Objects]}
         self.pending_transactions = []
         self.app_timestamp = get_current_timestamp(FORMAT_STRING)
         self.is_connected = False

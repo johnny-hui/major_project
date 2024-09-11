@@ -11,12 +11,13 @@ import socket
 import time
 from typing import TextIO
 from prettytable import PrettyTable
-from exceptions.exceptions import RequestAlreadyExistsError, TransactionNotFoundError
+from exceptions.exceptions import RequestAlreadyExistsError, TransactionNotFoundError, InvalidTokenError
 from models.Peer import Peer
 from models.Token import Token
 from models.Transaction import Transaction
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import hash_data
+from utility.crypto.token_utils import verify_token
 from utility.general.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, MENU_OPTIONS_CONNECTED,
                                        MENU_OPTIONS,
                                        PEER_TABLE_TITLE, PEER_TABLE_FIELD_PERSON,
@@ -39,7 +40,9 @@ from utility.general.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD
                                        APPROVE_NOT_CONNECTED_MSG, SELECT_ADMIN_DELEGATE_PROMPT,
                                        PURPOSE_REQUEST_APPROVAL, MODE_VOTER, REQUEST_APPROVAL_SIGNAL, CONSENSUS_SIGNAL,
                                        REMOVE_SIGNAL, PROMOTION_SIGNAL, FORMAT_STRING, STATUS_CONNECTED,
-                                       SEND_TOKEN_SUCCESS, BLOCK_SIZE, ACK)
+                                       SEND_TOKEN_SUCCESS, BLOCK_SIZE, ACK, REQUEST_REJECTED_SIGNAL,
+                                       SEND_PEER_DICT_SUCCESS, SYNCHRONIZE_SIGNAL, CONSENSUS_PEER_WIN_MSG,
+                                       CONSENSUS_PEER_LOSE_MSG)
 from utility.general.utils import create_directory, is_directory_empty, write_to_file, get_img_path, load_image, \
     get_user_command_option, delete_file, create_transaction_table, determine_delegate_status
 from utility.node.node_init import get_current_timestamp
@@ -61,7 +64,7 @@ def process_name(first_name: str, last_name: str) -> str:
     return first_name + " " + last_name
 
 
-def verify_admin_or_delegate(peer_dict: dict, ip: str):
+def verify_admin_or_delegate(peer_dict: dict[str, Peer], ip: str):
     """
     Verifies an admin or delegate in the peer dictionary
     given an IP address.
@@ -236,7 +239,7 @@ def select_admin_or_delegate_menu(admin_delegate_list: list[Peer]):
     return peer
 
 
-def peer_exists(peer_dict: dict, ip: str, msg: str = None):
+def peer_exists(peer_dict: dict[str, Peer], ip: str, msg: str = None):
     """
     Determines if a peer already exists within the network
     (based on an input IP address).
@@ -260,7 +263,7 @@ def peer_exists(peer_dict: dict, ip: str, msg: str = None):
         return False
 
 
-def get_peer(peer_dict: dict, ip: str) -> Peer | None:
+def get_peer(peer_dict: dict[str, Peer], ip: str) -> Peer | None:
     """
     Returns a Peer object based on an input IP address.
 
@@ -280,7 +283,7 @@ def get_peer(peer_dict: dict, ip: str) -> Peer | None:
         print(f"[+] GET PEER ERROR: The peer with IP ({ip}) does not exist! [REASON: {e}]")
 
 
-def add_peer_to_dict(peer_dict: dict, peer: Peer):
+def add_peer_to_dict(peer_dict: dict[str, Peer], peer: Peer):
     """
     Adds a Peer entry in the peer dictionary.
 
@@ -295,7 +298,7 @@ def add_peer_to_dict(peer_dict: dict, peer: Peer):
     peer_dict[peer.ip] = peer
 
 
-def remove_peer_from_dict(peer_dict: dict, ip: str):
+def remove_peer_from_dict(peer_dict: dict[str, Peer], ip: str):
     """
     Removes a Peer entry from the peer dictionary.
     @param peer_dict:
@@ -312,7 +315,7 @@ def remove_peer_from_dict(peer_dict: dict, ip: str):
         print(f"[+] ERROR: An error has occurred while removing a Peer from the dictionary! [REASON: {e}]")
 
 
-def clear_security_params_from_peer_dict(peer_dict: dict):
+def clear_security_params_from_peer_dict(peer_dict: dict[str, Peer]):
     """
     Clears security parameters for each peer in the peer dictionary.
     (secret, iv, mode, token, socket)
@@ -323,11 +326,63 @@ def clear_security_params_from_peer_dict(peer_dict: dict):
     @return: None
     """
     for peer in peer_dict.values():
-        peer.mode, peer.socket, peer.secret, peer.iv, peer.token = None, None, None, None, None
+        peer.socket, peer.secret, peer.iv, peer.mode, peer.token = None, None, None, None, None
+
+
+def update_peer_dict(own_peer_dict: dict[str, Peer], new_peer_dict: dict[str, Peer]):
+    """
+    Updates the entries of own peer dictionary with another
+    peer dictionary received from another peer.
+
+    @param own_peer_dict:
+        A dictionary containing Peer objects
+
+    @param new_peer_dict:
+        A dictionary containing Peer objects
+
+    @return: None
+    """
+    for ip, peer in new_peer_dict.items():
+        own_peer_dict[ip] = peer
+
+
+def remove_all_pending_peers(peer_dict: dict[str, Peer]):
+    """
+    Filters peer dictionary by removing all pending peers
+    and returning approved ones only.
+
+    @param peer_dict:
+        A dictionary containing Peer objects
+
+    @return: None
+    """
+    for ip, peer in peer_dict.items():
+        if peer.status == STATUS_PENDING:
+            del peer_dict[ip]
+
+
+def remove_all_approved_peers(peer_dict: dict[str, Peer]):
+    """
+    Filters peer dictionary by removing all approved peers
+    and returning pending ones only.
+
+    @attention Use Case:
+        Used when an InvalidTokenError occurs in a newly
+        approved peer (reset state)
+
+    @param peer_dict:
+        A dictionary containing Peer objects
+
+    @return: None
+    """
+    for ip, peer in peer_dict.items():
+        if peer.status == STATUS_APPROVED:
+            del peer_dict[ip]
+
 
 def save_pending_peer_info(self: object, peer_socket: socket.socket, peer_ip: str,
-                           first_name: str, last_name: str, shared_secret: bytes,
-                           mode: str, file_path: str, role: str, peer_iv: bytes = None):
+                           first_name: str, last_name: str, shared_secret: bytes, mode: str,
+                           file_path: str, role: str, peer_iv: bytes = None):
     """
     Saves information for a pending peer.
 
@@ -359,7 +414,7 @@ def save_pending_peer_info(self: object, peer_socket: socket.socket, peer_ip: st
                                    transaction_path=file_path, socket=peer_socket)
 
 
-def change_peer_role(peer_dict: dict, ip: str, role: str):
+def change_peer_role(peer_dict: dict[str, Peer], ip: str, role: str):
     """
     Changes a role for a specific peer.
 
@@ -380,7 +435,7 @@ def change_peer_role(peer_dict: dict, ip: str, role: str):
         print("[+] CHANGE PEER ROLE ERROR: Invalid role provided!")
 
 
-def change_peer_status(peer_dict: dict, ip: str, status: str):
+def change_peer_status(peer_dict: dict[str, Peer], ip: str, status: str):
     """
     Changes the status for a specific peer.
 
@@ -1024,6 +1079,7 @@ def approve_connection_request(self: object):
         # Delete the transaction (request) - prevent duplicates when consensus
         delete_transaction(self.pending_transactions, request.ip_addr, peer.transaction_path)
         peer.transaction_path = None
+        print("[+] The selected admin/delegate will commence a consensus voting for the requesting peer shortly...")
 
     def not_connected_approve_helper(pending_peer_sock: socket.socket | None):
         """
@@ -1188,7 +1244,9 @@ def approved_peer_activity_handler(self: object, peer_sock: socket.socket):
             CONSENSUS_SIGNAL: lambda: _do_consensus_signal(self, peer),
             REMOVE_SIGNAL: lambda: print("[+] Check if signal is coming from admin or delegate -> admin/delegate"
                                          "kicks a peer and informs regular peer to remove them locally"),
-            PROMOTION_SIGNAL: lambda: print("[+] Check if signal is coming from admin or delegate; promote to delegate")
+            REQUEST_REJECTED_SIGNAL: lambda: print("[+] Informs peer that admin/delegate has rejected the request they sent"),
+            PROMOTION_SIGNAL: lambda: print("[+] Check if signal is coming from admin or delegate; promote to delegate"),
+            SYNCHRONIZE_SIGNAL: lambda: print("[+] Synchronize peer dictionary and blockchain with initiating peer")
         }
 
         # Grab the signal
@@ -1220,7 +1278,8 @@ def approved_peer_activity_handler(self: object, peer_sock: socket.socket):
 def _do_consensus_signal(self: object, peer: Peer):
     """
     Performs a consensus to vote for a specific connection request
-    when invoked by a signal from an Admin/Delegate peer.
+    when invoked by a signal from an Admin/Delegate peer and performs
+    follow-up tasks dependent on the result.
 
     @attention Responsible Peer:
         A responsible peer is one who initially received the
@@ -1235,14 +1294,21 @@ def _do_consensus_signal(self: object, peer: Peer):
 
     @return: None
     """
+    def create_copy_peer_dict(own_peer_dict: dict[str, Peer], ip_to_remove: str):
+        copy_dict = copy.deepcopy(own_peer_dict)
+        remove_peer_from_dict(copy_dict, ip_to_remove)              # => remove the pending peer from copy dict
+        remove_all_pending_peers(copy_dict)                         # => only return APPROVED peers (exclude pending)
+        clear_security_params_from_peer_dict(copy_dict)
+        own_self = Peer(ip=self.ip, first_name=self.first_name,     # => add yourself in the copy dict
+                        last_name=self.last_name, role=self.role,
+                        status=STATUS_APPROVED)
+        add_peer_to_dict(copy_dict, peer=own_self)
+        return copy_dict
+
     def perform_responsible_peer_tasks(consensus_result: str):
         if consensus_result == CONSENSUS_SUCCESS:
             # Responsible peers already have pending peer in dictionary (from initial request)
             pending_peer = get_peer(self.peer_dict, request.ip_addr)
-
-            # Update pending peer info
-            pending_peer.status = STATUS_APPROVED
-            pending_peer.token = token
 
             # Remove peer socket from pending list (prevent select-related errors)
             if pending_peer.socket in self.fd_pending:
@@ -1256,15 +1322,23 @@ def _do_consensus_signal(self: object, peer: Peer):
             pending_peer.socket.send(AES_encrypt(data=STATUS_CONNECTED.encode(), key=pending_peer.secret,
                                                  mode=pending_peer.mode, iv=pending_peer.iv))
 
+            # Wait for ACK
+            pending_peer.socket.recv(1024)
+
             # Send token to the pending peer
-            send_approval_token(pending_peer, token)
+            send_approval_token(peer_socket=pending_peer.socket, token=pending_peer.token,
+                                secret=pending_peer.secret, mode=pending_peer.mode, iv=pending_peer.iv)
 
-            # Create and process a copy of the peer dictionary
-            copy_dict = copy.deepcopy(self.peer_dict)
-            remove_peer_from_dict(copy_dict, pending_peer.ip)
-            clear_security_params_from_peer_dict(copy_dict)  # TODO: THIS HERE!
+            # Create a copy of own peer dictionary (exclude security info)
+            copy_dict = create_copy_peer_dict(own_peer_dict=self.peer_dict, ip_to_remove=pending_peer.ip)
 
-            # Lastly, move peer socket to fd_list (approved list)
+            # Send the copy of the peer dictionary over
+            send_peer_dictionary(target_peer=pending_peer, peer_dict=copy_dict)
+            del copy_dict
+
+            # Perform finishing tasks
+            pending_peer.status = STATUS_APPROVED
+            pending_peer.token = token
             self.fd_list.append(pending_peer.socket)
             delete_transaction(self.pending_transactions, request.ip_addr, file_path)
 
@@ -1294,17 +1368,19 @@ def _do_consensus_signal(self: object, peer: Peer):
 
         # Perform follow-up
         if result == CONSENSUS_SUCCESS:
-            token = receive_approval_token(peer.socket, peer.secret, peer.iv, peer.mode)
+            print(CONSENSUS_PEER_WIN_MSG.format(request.ip_addr))
+            token = receive_approval_token(peer.socket, peer.secret, peer.mode, peer.iv)
 
             if request.received_by == self.ip:  # => if responsible peer
                 perform_responsible_peer_tasks(consensus_result=result)
             else:
                 new_peer = Peer(ip=request.ip_addr, first_name=request.first_name, last_name=request.last_name,
-                                role=request.role, status=STATUS_PENDING, token=token)  # TODO: change status upon peer connecting
+                                role=request.role, status=STATUS_PENDING, token=token)
                 add_peer_to_dict(self.peer_dict, new_peer)
                 delete_transaction(self.pending_transactions, request.ip_addr, request_path=file_path)
 
         if result == CONSENSUS_FAILURE:
+            print(CONSENSUS_PEER_LOSE_MSG.format(request.ip_addr))
             if request.received_by == self.ip:  # => if responsible peer
                 perform_responsible_peer_tasks(consensus_result=result)
             else:
@@ -1313,46 +1389,64 @@ def _do_consensus_signal(self: object, peer: Peer):
         print(f"[+] INVALID PROTOCOL ERROR [Consensus]: Insufficient privileges to start action (from peer {peer.ip})!")
 
 
-def send_approval_token(peer: Peer, token: Token):
+def send_approval_token(peer_socket: socket.socket, token: Token, secret: bytes, mode: str, iv: bytes = None):
     """
     Sends an approval token to a selected peer.
 
-    @attention Use Case:
-        This function is used only by admins/delegates
+    @raise InvalidTokenError:
+        Exception is thrown if the receiving target peer sends a
+        rejection after sending the token
 
-    @param peer:
-        A Peer object
+    @param peer_socket:
+        A socket object of the initiating peer
 
     @param token:
-        A Token object
+        The approval Token to be sent over
+
+    @param secret:
+        Bytes of the shared secret
+
+    @param iv:
+        Bytes of the initialization factor (IV)
+
+    @param mode:
+        A string representing the encryption mode (ECB or CBC)
 
     @return: None
     """
-    print(f"[+] Sending approval token to {peer.ip}...")
+    print(f"[+] Sending approval token to {peer_socket.getpeername()[0]}...")
 
     # Set blocking (in case multiprocessing module sets to False)
-    peer.socket.setblocking(True)
-    time.sleep(0.5)
+    peer_socket.setblocking(True)
 
     # Serialize and encrypt the token
     serialized_token = pickle.dumps(token)
-    encrypted_token = AES_encrypt(data=serialized_token, key=peer.secret, mode=peer.mode, iv=peer.iv)
+    encrypted_token = AES_encrypt(data=serialized_token, key=secret, mode=mode, iv=iv)
 
     # Send the size of the token
     size = len(encrypted_token).to_bytes(4, byteorder='big')
-    peer.socket.sendall(AES_encrypt(data=size, key=peer.secret, mode=peer.mode, iv=peer.iv))
+    peer_socket.sendall(AES_encrypt(data=size, key=secret, mode=mode, iv=iv))
 
-    # Send the encrypted request
-    peer.socket.sendall(encrypted_token)
+    # Send the encrypted token
+    peer_socket.sendall(encrypted_token)
 
-    # Wait for ACK
-    peer.socket.recv(1024)
-    print(SEND_TOKEN_SUCCESS.format(token.peer_ip, peer.ip))
+    # Wait for results
+    response = AES_encrypt(data=peer_socket.recv(1024), key=secret, mode=mode, iv=iv).decode()
+    if response == ACK:
+        print(SEND_TOKEN_SUCCESS.format(token.peer_ip, peer_socket.getpeername()[0]))
+        return None
+    else:
+        raise InvalidTokenError(ip="host")
 
 
-def receive_approval_token(peer_socket: socket.socket, secret: bytes, iv: bytes, mode: str):
+def receive_approval_token(peer_socket: socket.socket, secret: bytes, mode: str, iv: bytes = None):
     """
-    Receives a token from an admin or delegate peer.
+    Performs the retrieval of an approval token issued by an
+    admin/delegate peer.
+
+    @raise InvalidTokenError:
+        Exception is thrown if the received Token contains
+        an invalid signature after verifying
 
     @param peer_socket:
         A socket object of the initiating peer
@@ -1370,6 +1464,7 @@ def receive_approval_token(peer_socket: socket.socket, secret: bytes, iv: bytes,
         A Token object
     """
     print(f"[+] Now receiving an approval token from admin/delegate (IP: {peer_socket.getpeername()[0]})...")
+    peer_socket.send(AES_encrypt(data=ACK.encode(), key=secret, iv=iv, mode=mode))
 
     # Receive the length of the serialized data
     data = AES_decrypt(data=peer_socket.recv(BLOCK_SIZE), key=secret, mode=mode, iv=iv)
@@ -1382,10 +1477,88 @@ def receive_approval_token(peer_socket: socket.socket, secret: bytes, iv: bytes,
     decrypted_data = AES_decrypt(data=serialized_data, key=secret, mode=mode, iv=iv)
     token = pickle.loads(decrypted_data)
 
+    # Verify the token
+    try:
+        if verify_token(token):
+            peer_socket.send(AES_encrypt(data=ACK.encode(), key=secret, mode=mode, iv=iv))
+            print("[+] OPERATION SUCCESS: Successfully received the approval token!")
+            print("[+] APPROVAL GRANTED: The provided access token is valid.")
+            return token
+    except InvalidTokenError:
+        print(f"[+] APPROVAL REJECTED: Peer socket connection has been terminated ({peer_socket.getpeername()})")
+        peer_socket.send(AES_encrypt(data=RESPONSE_REJECTED.encode(), key=secret, iv=iv, mode=mode))
+        raise InvalidTokenError(ip=peer_socket.getpeername()[0])
+
+
+def send_peer_dictionary(target_peer: Peer, peer_dict: dict[str, Peer]):
+    """
+    Sends the peer dictionary to the target peer.
+
+    @param peer_dict:
+        A peer dictionary containing Peer objects
+
+    @param target_peer:
+        The peer to send the dictionary to
+
+    @return: None
+    """
+    print(f"[+] Sending peer dictionary to {target_peer.ip}...")
+
+    # Set blocking (in case multiprocessing module sets to False)
+    target_peer.socket.setblocking(True)
+
+    # Serialize and encrypt the peer dictionary
+    serialized_dict = pickle.dumps(peer_dict)
+    encrypted_dict = AES_encrypt(data=serialized_dict, key=target_peer.secret, mode=target_peer.mode, iv=target_peer.iv)
+
+    # Send size of dictionary
+    size = len(encrypted_dict).to_bytes(4, byteorder='big')
+    target_peer.socket.sendall(AES_encrypt(data=size, key=target_peer.secret, mode=target_peer.mode, iv=target_peer.iv))
+
+    # Send the encrypted dictionary
+    target_peer.socket.sendall(encrypted_dict)
+
+    # Wait for ACK
+    target_peer.socket.recv(1024)
+    print(SEND_PEER_DICT_SUCCESS.format(target_peer.ip))
+
+
+def receive_peer_dictionary(peer_socket: socket.socket, secret: bytes, iv: bytes, mode: str):
+    """
+    Performs the retrieval of the peer dictionary from a target peer.
+
+    @param peer_socket:
+        A socket object of the initiating peer
+
+    @param secret:
+        Bytes of the shared secret
+
+    @param iv:
+        Bytes of the initialization factor (IV)
+
+    @param mode:
+        A string representing the encryption mode (ECB or CBC)
+
+    @return: peer_dict
+        A skeleton peer dictionary containing peers within P2P network (still require info)
+    """
+    print(f"[+] Now receiving peer dictionary (info) from target peer (IP: {peer_socket.getpeername()[0]})...")
+
+    # Receive the length of the serialized data
+    data = AES_decrypt(data=peer_socket.recv(BLOCK_SIZE), key=secret, mode=mode, iv=iv)
+    size = int.from_bytes(data, byteorder='big')
+
+    # Receive the dictionary data
+    serialized_data = peer_socket.recv(size)
+
+    # Decrypt the dictionary data
+    decrypted_data = AES_decrypt(data=serialized_data, key=secret, mode=mode, iv=iv)
+    peer_dict = pickle.loads(decrypted_data)
+
     # Send ACK
-    print("[+] OPERATION SUCCESS: Successfully received the approval token!")
+    print("[+] OPERATION SUCCESS: Successfully received the peer dictionary!")
     peer_socket.send(AES_encrypt(data=ACK.encode(), key=secret, mode=mode, iv=iv))
-    return token
+    return peer_dict
 
 
 def _obfuscate(data: bytes, shared_secret: bytes, mode: str, iv: bytes = None):

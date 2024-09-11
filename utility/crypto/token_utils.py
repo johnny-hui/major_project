@@ -9,6 +9,8 @@ import pickle
 import secrets
 from datetime import timedelta
 from tinyec.ec import Point
+
+from exceptions.exceptions import InvalidTokenError
 from models.Token import Token
 from utility.crypto.ec_keys_utils import create_signature, verify_signature
 from utility.general.constants import FORMAT_DATETIME, TOKEN_EXPIRY_TIME
@@ -83,6 +85,10 @@ def verify_token(token: Token):
     """
     Verifies the Token.
 
+    @raise InvalidTokenError:
+        Exception is thrown if the Token's signature
+        cannot be verified
+
     @param token:
         A Token object
 
@@ -103,8 +109,6 @@ def verify_token(token: Token):
 
     # Verify the signature
     if verify_signature(pub_key=token.issuers_pub_key, signature=token.signature, data=serialized_data):
-        print("[+] APPROVAL GRANTED: The provided access token is valid.")
         return True
     else:
-        print("[+] APPROVAL REJECTED: The provided access token is invalid.")
-        return False
+        raise InvalidTokenError(ip=token.peer_ip)
