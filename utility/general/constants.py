@@ -77,6 +77,10 @@ MONITOR_PENDING_PEERS_THREAD_NAME = "monitor_pending_peers_thread"
 MONITOR_PENDING_PEERS_START_MSG = "[+] Monitor pending peers thread has started!"
 MONITOR_PENDING_PEERS_THREAD_TERMINATE = ("[+] THREAD TERMINATION: Monitor pending peers thread has been "
                                           "successfully terminated!")
+MONITOR_APPROVAL_TOKENS_START_MSG = "[+] Monitor pending peers with approval tokens thread has started!"
+MONITOR_APPROVAL_TOKENS_THREAD_NAME = "monitor_peers_with_approval_tokens_thread"
+MONITOR_APPROVAL_TOKENS_INTERVAL = 180
+
 
 # NODE CONSTANTS
 ROLE_PEER = "PEER"
@@ -374,7 +378,7 @@ REVOKE_REQUEST_PROMPT = "[+] REVOKE REQUEST: Select a specific request to revoke
 # APPROVE CONNECTION REQUEST CONSTANTS
 TARGET_TRANSACTION_WAIT_TIME = 300
 TARGET_WAIT_REQUEST_MSG = "[+] Now waiting for the target peer to send their request (max wait-time = {} seconds)"
-APPROVE_REQUEST_INITIAL_PROMPT = "[+] APPROVE REQUEST: Enter 1 to select approve a request or (Enter '0' to quit): "
+APPROVE_REQUEST_INITIAL_PROMPT = "[+] APPROVE REQUEST: Enter 1 to select a request to approve or (Enter '0' to quit): "
 APPROVE_REQUEST_PROMPT = "[+] APPROVE REQUEST: Select a specific request to approve [enter a value from 1 to {}]: "
 APPROVED_PEER_MSG = ("[+] PEER APPROVED: The following peer has been approved (IP: {})!, now setting up "
                      "network parameters...")
@@ -389,7 +393,7 @@ SELECT_ADMIN_DELEGATE_PROMPT = "[+] Please select an admin or delegate above (En
 # CONSENSUS CONSTANTS
 CONSENSUS_INIT_MSG = "[+] CONSENSUS: A consensus has been launched, now initializing..."
 CONSENSUS_INIT_SUCCESS_MSG = "[+] CONSENSUS: Initialization Successful!"
-REQ_BUFFER_TIME_INITIAL = 65 # => used to determine if sufficient time left to initiate a consensus
+REQ_BUFFER_TIME_INITIAL = 75 # => used to determine if sufficient time left to initiate a consensus
 REQ_BUFFER_TIME_VOTER = 60  # => subtracted with request.get_time_remaining()
 REQ_BUFFER_TIME_INITIATOR = 30  # => subtracted with request.get_time_remaining()
 MODE_VOTER = "VOTER"
@@ -421,12 +425,26 @@ CONSENSUS_PEER_WIN_MSG = ("[+] CONSENSUS SUCCESS: A majority win in favor has be
                           "into the network!")
 CONSENSUS_PEER_LOSE_MSG = ("[+] CONSENSUS FAILURE: The request did not receive enough votes to accept peer (IP: {}) "
                            "into the network...")
+INITIATE_CONSENSUS_PROMPT = ("[+] INITIATE CONSENSUS (APPROVE PEER): Enter 1 to select a request to initiate a consensus "
+                             "for or (Enter '0' to quit): ")
+CONSENSUS_SELECT_REQUEST_PROMPT = ("[+] Select a specific request to initiate a consensus for "
+                                            "[enter a value from 1 to {}]: ")
+CONSENSUS_SUCCESS_TOKEN_MSG = "[+] CONSENSUS SUCCESS: Now initializing the approved peer into the P2P network..."
+CONSENSUS_FAILURE_MSG = "[+] CONSENSUS FAILURE: The pending peer (IP: {}) has been revoked access to the P2P network!"
+CONSENSUS_REQ_NEAR_EXPIRY_MSG = ("[+] CONSENSUS ERROR: The selected request is near expiry and cannot be approved; "
+                                 "request has been removed!")
 
 
 # TOKEN CONSTANTS
 TOKEN_EXPIRY_TIME = 5  # => minutes
 SEND_TOKEN_SUCCESS = ("[+] The approval token issued for requesting peer (IP: {}) has been successfully sent, verified, "
                       "and received by ({})!")
+SEND_TOKEN_MULTIPROCESS_MSG = ("[+] Now issuing an approval token for the approved peer and sending it to all "
+                               "connected peers...")
+
+
+# BROADCAST MESSAGE CONSTANTS
+BROADCAST_MESSAGE_PROMPT = "[+] Now broadcasting your message to all connected peers..."
 
 
 # OTHER CONSTANTS

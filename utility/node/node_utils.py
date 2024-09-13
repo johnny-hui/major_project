@@ -8,6 +8,7 @@ import os
 import pickle
 import select
 import socket
+import threading
 import time
 from typing import TextIO
 from prettytable import PrettyTable
@@ -42,7 +43,8 @@ from utility.general.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD
                                        REMOVE_SIGNAL, PROMOTION_SIGNAL, FORMAT_STRING, STATUS_CONNECTED,
                                        SEND_TOKEN_SUCCESS, BLOCK_SIZE, ACK, REQUEST_REJECTED_SIGNAL,
                                        SEND_PEER_DICT_SUCCESS, SYNCHRONIZE_SIGNAL, CONSENSUS_PEER_WIN_MSG,
-                                       CONSENSUS_PEER_LOSE_MSG)
+                                       CONSENSUS_PEER_LOSE_MSG, REQ_BUFFER_TIME_INITIAL,
+                                       MONITOR_APPROVAL_TOKENS_INTERVAL, SELECT_CLIENT_SEND_MSG_PROMPT)
 from utility.general.utils import create_directory, is_directory_empty, write_to_file, get_img_path, load_image, \
     get_user_command_option, delete_file, create_transaction_table, determine_delegate_status
 from utility.node.node_init import get_current_timestamp
@@ -111,6 +113,46 @@ def monitor_pending_peers(self: object):
             except (socket.error, socket.timeout, OSError) as e:
                 print(f"[+] An error has occurred with socket ({fd.getpeername()}); connection closed! (REASON: {e})")
                 remove_pending_peer(self, peer_sock=fd, ip=fd.getpeername()[0])
+
+
+def monitor_peer_approval_token_expiry(self: object, event: threading.Event):
+    """
+    Checks the peer dictionary for any pending peers with approval tokens
+    in the peer dictionary, and if expired, removes them.
+
+    @attention Use Case:
+        This can happen when peers that have passed consensus voting
+        and are issued an approval token suddenly disconnect, therefore
+        causing them to expire.
+
+        The token must be presented upon joining other peers in
+        the network.
+
+    @param self:
+        A reference to the calling class object (Node, DelegateNode, AdminNode)
+
+    @param event:
+        A Threading Event object
+
+    @return: None
+    """
+    while not self.is_promoted:
+        if self.terminate is True:
+            break
+
+        if not len(self.peer_dict) == 0 and self.is_connected:
+            print("[+] APPROVAL TOKEN CHECK: Checking for any pending peers with expired approval tokens...")
+            peers_to_remove = []
+
+            for ip, peer in self.peer_dict.items():
+                if peer.token is not None and peer.token.has_expired():
+                    peers_to_remove.append(ip)
+
+            for ip in peers_to_remove:
+                del self.peer_dict[ip]
+                print(f"[+] A pending peer been removed due to an expired approval token! [IP: {ip}]")
+
+        event.wait(MONITOR_APPROVAL_TOKENS_INTERVAL)  # => 3 minutes (180 seconds)
 
 
 def remove_pending_peer(self: object, peer_sock: socket.socket, ip: str):
@@ -456,7 +498,7 @@ def change_peer_status(peer_dict: dict[str, Peer], ip: str, status: str):
         print("[+] CHANGE PEER STATUS ERROR: Invalid status provided!")
 
 
-def delete_transaction(pending_transactions: list[Transaction], ip: str, request_path: str):
+def delete_transaction(pending_transactions: list[Transaction], ip: str, request_path: str = None):
     """
     Removes a Transaction (connection request) object
     from the list (and in file) based on an input IP address.
@@ -470,11 +512,11 @@ def delete_transaction(pending_transactions: list[Transaction], ip: str, request
 
     @param request_path:
         The file path of the saved connection request belonging
-        to the pending peer to be removed (String)
+        to the pending peer to be removed (String - Optional)
 
     @return: None
     """
-    if len(pending_transactions) == 0 or request_path is None:
+    if len(pending_transactions) == 0:
         return None
 
     # Iterate and delete transaction from memory
@@ -487,7 +529,8 @@ def delete_transaction(pending_transactions: list[Transaction], ip: str, request
             i += 1
 
     # Delete transaction file from system storage ('data/transactions/')
-    delete_file(file_path=request_path)
+    if request_path:
+        delete_file(file_path=request_path)
 
 
 def add_new_transaction(self: object, peer_request: Transaction, set_stamp: bool):
@@ -713,9 +756,8 @@ def view_pending_connection_requests(self: object, do_prompt: bool = True):
         view_photo_prompt(self.pending_transactions)
 
 
-def get_transaction(req_list: list[Transaction],
-                    prompt: str = None,
-                    ip: str = None):
+def get_transaction(req_list: list[Transaction], prompt: str = None,
+                    ip: str = None, for_consensus: bool = False):
     """
     Prompts the user to select a specific Transaction
     (connection request) from the pending connections
@@ -724,6 +766,10 @@ def get_transaction(req_list: list[Transaction],
     @attention Alternative Use Case:
         Can be used to get a Transaction object without prompt
         based on IP
+
+    @raise TransactionNotFoundError:
+        If an IP is provided and a corresponding Transaction
+        object is not found within the list.
 
     @param req_list:
         A list of Transaction (requests) objects
@@ -735,24 +781,28 @@ def get_transaction(req_list: list[Transaction],
         An optional parameter to get a Transaction from the
         list (based on an IP address)
 
-    @raise TransactionNotFoundError:
-        If an IP is provided and a corresponding Transaction
-        object is not found within the list.
+    @param for_consensus:
+        An optional parameter to get a Transaction for consensus
+        (which requires the checking for an initial buffer time
+        before expiry for the chosen Transaction object)
 
     @return: req_list[index] or None
         The Transaction object if not expired; otherwise, None
     """
-    if ip is not None:
+    if ip is not None:  # => get transaction from ip
         for transaction in req_list:
             if transaction.ip_addr == ip:
                 return transaction
         raise TransactionNotFoundError(ip)
 
-    while True:
+    while True:         # => get transaction from prompt
         try:
             index = int(input(prompt)) - 1  # => adjust for zero-based indexing
             if index in tuple(range(len(req_list))):
-                return req_list[index] if not req_list[index].is_expired() else None
+                if for_consensus:
+                    return req_list[index] if not req_list[index].is_near_expiry(REQ_BUFFER_TIME_INITIAL) else None
+                else:
+                    return req_list[index] if not req_list[index].is_expired() else None
             else:
                 print("[+] ERROR: Invalid option provided; please try again.")
         except (ValueError, TypeError) as e:
@@ -774,11 +824,17 @@ def close_application(self: object):
     print("[+] Application has been successfully terminated!")
 
 
-def send_message(sock: socket.socket, mode: str,
-                 secret: bytes, iv: bytes | None):
+def send_message_to_specific_peer(self: object):
+    client_sock, _, secret, iv, mode = get_specific_peer_info(self, prompt=SELECT_CLIENT_SEND_MSG_PROMPT)
+    ip = client_sock.getpeername()[0]
+    message = input(f"[+] Enter a message to send to ({ip}): ")
+    send_message(client_sock, secret, iv, mode, message)
+
+
+def send_message(sock: socket.socket, secret: bytes, iv: bytes | None, mode: str, msg: str):
     """
-    Prompts user for a plaintext message, encrypts it
-    and sends it to a target socket.
+    Prompts user for a plaintext message, encrypts it and
+    sends it to a target socket.
 
     @param sock:
         The target socket
@@ -786,20 +842,21 @@ def send_message(sock: socket.socket, mode: str,
     @param mode:
         A string for the encryption mode
 
+    @param secret:
+        Bytes of the shared secret
+
     @param iv:
         Bytes of the initialization factor (IV) or None (if mode=ECB)
 
-    @param secret:
-        Bytes of the shared secret
+    @param msg:
+        A string for the message to be sent
 
     @return: None
     """
     if sock is not None:
-        ip = sock.getpeername()[0]
-        message = input(f"[+] Enter a message to send to ({ip}): ")
-        cipher_text = AES_encrypt(data=message.encode(), mode=mode, key=secret, iv=iv)
+        cipher_text = AES_encrypt(data=msg.encode(), mode=mode, key=secret, iv=iv)
         sock.send(cipher_text)
-        print("[+] Your message has been successfully sent!")
+        print(f"[+] Your message has been successfully sent to (IP: {sock.getpeername()[0]})!")
 
 
 def save_transaction_to_file(data: bytes, shared_secret: bytes, mode: str, iv: bytes = None):
@@ -1132,7 +1189,7 @@ def approve_connection_request(self: object):
             from models.Consensus import Consensus
             consensus = Consensus(request=own_request,
                                   mode=MODE_INITIATOR,
-                                  peer_list=temp_list,
+                                  sock_list=temp_list,
                                   peer_dict=self.peer_dict,
                                   is_connected=False)
             final_decision = consensus.start()
@@ -1237,11 +1294,12 @@ def approved_peer_activity_handler(self: object, peer_sock: socket.socket):
 
         # Define signals for all roles
         signals_if_admin_delegate = {
-            REQUEST_APPROVAL_SIGNAL: lambda: receive_request_handler(self, peer_sock, peer_ip, peer.secret, peer.mode,
-                                                                     peer.iv, save_info=False, set_stamp=False)
+            REQUEST_APPROVAL_SIGNAL: lambda: receive_request_handler(self, peer_sock, peer_ip, peer.secret,
+                                                                     peer.mode, peer.iv, save_info=False,
+                                                                     save_file=False, set_stamp=False)
         }
         signals_if_regular_peer = {
-            CONSENSUS_SIGNAL: lambda: _do_consensus_signal(self, peer),
+            CONSENSUS_SIGNAL: lambda: perform_consensus_signal(self, peer),
             REMOVE_SIGNAL: lambda: print("[+] Check if signal is coming from admin or delegate -> admin/delegate"
                                          "kicks a peer and informs regular peer to remove them locally"),
             REQUEST_REJECTED_SIGNAL: lambda: print("[+] Informs peer that admin/delegate has rejected the request they sent"),
@@ -1275,7 +1333,7 @@ def approved_peer_activity_handler(self: object, peer_sock: socket.socket):
         disconnect_handler(peer_sock, self.peer_dict)
 
 
-def _do_consensus_signal(self: object, peer: Peer):
+def perform_consensus_signal(self: object, peer: Peer):
     """
     Performs a consensus to vote for a specific connection request
     when invoked by a signal from an Admin/Delegate peer and performs
@@ -1294,68 +1352,13 @@ def _do_consensus_signal(self: object, peer: Peer):
 
     @return: None
     """
-    def create_copy_peer_dict(own_peer_dict: dict[str, Peer], ip_to_remove: str):
-        copy_dict = copy.deepcopy(own_peer_dict)
-        remove_peer_from_dict(copy_dict, ip_to_remove)              # => remove the pending peer from copy dict
-        remove_all_pending_peers(copy_dict)                         # => only return APPROVED peers (exclude pending)
-        clear_security_params_from_peer_dict(copy_dict)
-        own_self = Peer(ip=self.ip, first_name=self.first_name,     # => add yourself in the copy dict
-                        last_name=self.last_name, role=self.role,
-                        status=STATUS_APPROVED)
-        add_peer_to_dict(copy_dict, peer=own_self)
-        return copy_dict
-
-    def perform_responsible_peer_tasks(consensus_result: str):
-        if consensus_result == CONSENSUS_SUCCESS:
-            # Responsible peers already have pending peer in dictionary (from initial request)
-            pending_peer = get_peer(self.peer_dict, request.ip_addr)
-
-            # Remove peer socket from pending list (prevent select-related errors)
-            if pending_peer.socket in self.fd_pending:
-                self.fd_pending.remove(pending_peer.socket)
-                time.sleep(1)
-
-            # Send approved signal and is_connected status
-            pending_peer.socket.send(AES_encrypt(data=RESPONSE_APPROVED.encode(), key=pending_peer.secret,
-                                                 mode=pending_peer.mode, iv=pending_peer.iv))
-            pending_peer.socket.recv(1024)
-            pending_peer.socket.send(AES_encrypt(data=STATUS_CONNECTED.encode(), key=pending_peer.secret,
-                                                 mode=pending_peer.mode, iv=pending_peer.iv))
-
-            # Wait for ACK
-            pending_peer.socket.recv(1024)
-
-            # Send token to the pending peer
-            send_approval_token(peer_socket=pending_peer.socket, token=pending_peer.token,
-                                secret=pending_peer.secret, mode=pending_peer.mode, iv=pending_peer.iv)
-
-            # Create a copy of own peer dictionary (exclude security info)
-            copy_dict = create_copy_peer_dict(own_peer_dict=self.peer_dict, ip_to_remove=pending_peer.ip)
-
-            # Send the copy of the peer dictionary over
-            send_peer_dictionary(target_peer=pending_peer, peer_dict=copy_dict)
-            del copy_dict
-
-            # Perform finishing tasks
-            pending_peer.status = STATUS_APPROVED
-            pending_peer.token = token
-            self.fd_list.append(pending_peer.socket)
-            delete_transaction(self.pending_transactions, request.ip_addr, file_path)
-
-        if consensus_result == CONSENSUS_FAILURE:
-            pending_peer = get_peer(self.peer_dict, request.ip_addr)
-            pending_peer.socket.send(AES_encrypt(data=RESPONSE_REJECTED.encode(), key=pending_peer.secret,
-                                                 mode=pending_peer.mode, iv=pending_peer.iv))
-            remove_pending_peer(self, pending_peer.socket, pending_peer.ip)
-    # ===============================================================================================
-
     # Verify if peer is admin/delegate
     if verify_admin_or_delegate(self.peer_dict, peer.ip):
         from utility.client_server.utils import receive_request_handler
 
         # Receive a connection request from admin/delegate for consensus
-        request, file_path = receive_request_handler(self, peer.socket, peer.ip, peer.secret, peer.mode,
-                                                     peer.iv, save_info=False, set_stamp=False)
+        request, _ = receive_request_handler(self, peer.socket, peer.ip, peer.secret, peer.mode,
+                                             peer.iv, save_info=False, save_file=False, set_stamp=False)
 
         # Vote for the request
         from models.Consensus import Consensus
@@ -1364,27 +1367,28 @@ def _do_consensus_signal(self: object, peer: Peer):
                               peer_socket=peer.socket,
                               peer_dict=self.peer_dict,
                               is_connected=self.is_connected)
-        result = consensus.start()
+        final_decision = consensus.start()
 
-        # Perform follow-up
-        if result == CONSENSUS_SUCCESS:
+        # Perform follow-up (receive token from admin/delegate + other tasks)
+        if final_decision == CONSENSUS_SUCCESS:
             print(CONSENSUS_PEER_WIN_MSG.format(request.ip_addr))
             token = receive_approval_token(peer.socket, peer.secret, peer.mode, peer.iv)
 
-            if request.received_by == self.ip:  # => if responsible peer
-                perform_responsible_peer_tasks(consensus_result=result)
+            if request.received_by == self.ip:                                          # => if responsible peer
+                perform_responsible_peer_tasks(self, request, final_decision, token)
             else:
-                new_peer = Peer(ip=request.ip_addr, first_name=request.first_name, last_name=request.last_name,
-                                role=request.role, status=STATUS_PENDING, token=token)
+                new_peer = Peer(ip=request.ip_addr, first_name=request.first_name,
+                                last_name=request.last_name, role=request.role,
+                                status=STATUS_PENDING, token=token)
                 add_peer_to_dict(self.peer_dict, new_peer)
-                delete_transaction(self.pending_transactions, request.ip_addr, request_path=file_path)
+                delete_transaction(self.pending_transactions, request.ip_addr)
 
-        if result == CONSENSUS_FAILURE:
+        if final_decision == CONSENSUS_FAILURE:
             print(CONSENSUS_PEER_LOSE_MSG.format(request.ip_addr))
-            if request.received_by == self.ip:  # => if responsible peer
-                perform_responsible_peer_tasks(consensus_result=result)
+            if request.received_by == self.ip:                                          # => if responsible peer
+                perform_responsible_peer_tasks(self, request, final_decision)
             else:
-                delete_transaction(self.pending_transactions, request.ip_addr, request_path=file_path)
+                delete_transaction(self.pending_transactions, request.ip_addr)
     else:
         print(f"[+] INVALID PROTOCOL ERROR [Consensus]: Insufficient privileges to start action (from peer {peer.ip})!")
 
@@ -1436,13 +1440,13 @@ def send_approval_token(peer_socket: socket.socket, token: Token, secret: bytes,
         print(SEND_TOKEN_SUCCESS.format(token.peer_ip, peer_socket.getpeername()[0]))
         return None
     else:
-        raise InvalidTokenError(ip="host")
+        raise InvalidTokenError(ip="host")  # => thrown if token that is sent is invalid
 
 
 def receive_approval_token(peer_socket: socket.socket, secret: bytes, mode: str, iv: bytes = None):
     """
-    Performs the retrieval of an approval token issued by an
-    admin/delegate peer.
+    Performs the retrieval and verification of an approval token
+    issued by an admin/delegate peer.
 
     @raise InvalidTokenError:
         Exception is thrown if the received Token contains
@@ -1559,6 +1563,110 @@ def receive_peer_dictionary(peer_socket: socket.socket, secret: bytes, iv: bytes
     print("[+] OPERATION SUCCESS: Successfully received the peer dictionary!")
     peer_socket.send(AES_encrypt(data=ACK.encode(), key=secret, mode=mode, iv=iv))
     return peer_dict
+
+
+def create_copy_peer_dict(self: object, own_peer_dict: dict[str, Peer], ip_to_remove: str):
+    """
+    Creates a copy of a peer dictionary with only approved peers,
+    and security parameters cleared.
+
+    @attention Use Case:
+        This is used by a responsible peer when sending over a
+        filtered copy of their own peer dictionary
+
+    @attention Security Params:
+        They encompass the shared secret, initialization factor (IV),
+        socket, approval token, and encryption mode
+
+    @param self:
+        A reference to the calling class object (Node, AdminNode, DelegateNode)
+
+    @param own_peer_dict:
+        Host's own peer dictionary containing Peer objects
+
+    @param ip_to_remove:
+        A string for the IP to remove from dictionary
+
+    @return: copy_dict
+    """
+    copy_dict = copy.deepcopy(own_peer_dict)
+    remove_peer_from_dict(copy_dict, ip_to_remove)              # => remove the pending peer from copy dict
+    remove_all_pending_peers(copy_dict)                         # => only return APPROVED peers (exclude pending)
+    clear_security_params_from_peer_dict(copy_dict)
+    own_self = Peer(ip=self.ip, first_name=self.first_name,     # => add yourself in the copy dict
+                    last_name=self.last_name, role=self.role,
+                    status=STATUS_APPROVED)
+    add_peer_to_dict(copy_dict, peer=own_self)
+    return copy_dict
+
+
+def perform_responsible_peer_tasks(self: object, request: Transaction,
+                                   consensus_result: str, token: Token = None):
+    """
+    Performs tasks of a responsible peer.
+
+    @attention What is a Responsible Peer?
+        A responsible peer is one who initially received the
+        Transaction object and only has the socket connection
+        with the requesting peer; thus, they're in-charge of
+        helping them set up after being approved.
+
+    @param self:
+        A reference to the calling class object (Node, AdminNode, DelegateNode)
+
+    @param request:
+        A Transaction object
+
+    @param consensus_result:
+        A string representing the consensus result (CONSENSUS_SUCCESS, CONSENSUS_FAILURE)
+
+    @param token:
+        An approval Token object
+
+    @return: None
+    """
+    if consensus_result == CONSENSUS_SUCCESS:
+        # Responsible peers already have pending peer in dictionary (from initial request)
+        pending_peer = get_peer(self.peer_dict, request.ip_addr)
+
+        # Remove peer socket from pending list (prevent select-related errors)
+        if pending_peer.socket in self.fd_pending:
+            self.fd_pending.remove(pending_peer.socket)
+            time.sleep(1)
+
+        # Send approved signal and is_connected status
+        pending_peer.socket.send(AES_encrypt(data=RESPONSE_APPROVED.encode(), key=pending_peer.secret,
+                                             mode=pending_peer.mode, iv=pending_peer.iv))
+        pending_peer.socket.recv(1024)
+        pending_peer.socket.send(AES_encrypt(data=STATUS_CONNECTED.encode(), key=pending_peer.secret,
+                                             mode=pending_peer.mode, iv=pending_peer.iv))
+
+        # Wait for ACK
+        pending_peer.socket.recv(1024)
+
+        # Send token to the pending peer
+        send_approval_token(peer_socket=pending_peer.socket, token=token,
+                            secret=pending_peer.secret, mode=pending_peer.mode, iv=pending_peer.iv)
+
+        # Create a copy of own peer dictionary (exclude security info)
+        copy_dict = create_copy_peer_dict(self, own_peer_dict=self.peer_dict, ip_to_remove=pending_peer.ip)
+
+        # Send the copy of the peer dictionary over
+        send_peer_dictionary(target_peer=pending_peer, peer_dict=copy_dict)
+        del copy_dict
+
+        # Perform finishing tasks
+        pending_peer.status = STATUS_APPROVED
+        pending_peer.token = None
+        self.fd_list.append(pending_peer.socket)
+        delete_transaction(self.pending_transactions, request.ip_addr, pending_peer.transaction_path)
+
+    if consensus_result == CONSENSUS_FAILURE:
+        pending_peer = get_peer(self.peer_dict, request.ip_addr)
+        pending_peer.socket.send(AES_encrypt(data=RESPONSE_REJECTED.encode(), key=pending_peer.secret,
+                                             mode=pending_peer.mode, iv=pending_peer.iv))
+        remove_pending_peer(self, pending_peer.socket, pending_peer.ip)
+        delete_transaction(self.pending_transactions, request.ip_addr, pending_peer.transaction_path)
 
 
 def _obfuscate(data: bytes, shared_secret: bytes, mode: str, iv: bytes = None):

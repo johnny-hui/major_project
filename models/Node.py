@@ -4,20 +4,22 @@ import sys
 import threading
 
 from models.Peer import Peer
-from utility.general.constants import NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_THREAD_NAME, \
-    USER_INPUT_START_MSG, \
-    INPUT_PROMPT, MIN_MENU_ITEM_VALUE, MAX_MENU_ITEM_VALUE, SELECT_CLIENT_SEND_MSG_PROMPT, \
-    ROLE_PEER, MONITOR_PENDING_PEERS_THREAD_NAME, MONITOR_PENDING_PEERS_START_MSG, APPLICATION_PORT, \
-    ACCEPT_PEER_HANDLER_THREAD_NAME, PEER_ACTIVITY_HANDLER_THREAD_NAME, ROLE_DELEGATE, DELEGATE_MIN_MENU_ITEM_VALUE, \
-    DELEGATE_MAX_MENU_ITEM_VALUE, ROLE_ADMIN, ADMIN_MAX_MENU_ITEM_VALUE, ADMIN_MIN_MENU_ITEM_VALUE, FORMAT_STRING
-from utility.crypto.ec_keys_utils import generate_keys
 from utility.client_server.client_server import (accept_new_peer_handler,
                                                  connect_to_P2P_network)
+from utility.crypto.ec_keys_utils import generate_keys
+from utility.general.constants import NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_THREAD_NAME, \
+    USER_INPUT_START_MSG, \
+    INPUT_PROMPT, MIN_MENU_ITEM_VALUE, MAX_MENU_ITEM_VALUE, ROLE_PEER, MONITOR_PENDING_PEERS_THREAD_NAME, \
+    MONITOR_PENDING_PEERS_START_MSG, APPLICATION_PORT, \
+    ACCEPT_PEER_HANDLER_THREAD_NAME, PEER_ACTIVITY_HANDLER_THREAD_NAME, ROLE_DELEGATE, DELEGATE_MIN_MENU_ITEM_VALUE, \
+    DELEGATE_MAX_MENU_ITEM_VALUE, ROLE_ADMIN, ADMIN_MAX_MENU_ITEM_VALUE, ADMIN_MIN_MENU_ITEM_VALUE, FORMAT_STRING, \
+    MONITOR_APPROVAL_TOKENS_START_MSG, MONITOR_APPROVAL_TOKENS_THREAD_NAME
 from utility.node.node_init import parse_arguments, initialize_socket, get_current_timestamp
-from utility.node.node_utils import (display_menu, view_current_peers, close_application, send_message,
-                                     get_specific_peer_info, get_user_menu_option, monitor_pending_peers,
+from utility.node.node_utils import (display_menu, view_current_peers, close_application, get_user_menu_option,
+                                     monitor_pending_peers,
                                      load_transactions, view_pending_connection_requests, approve_connection_request,
-                                     revoke_connection_request, approved_peer_activity_handler)
+                                     revoke_connection_request, approved_peer_activity_handler,
+                                     monitor_peer_approval_token_expiry, send_message_to_specific_peer)
 
 
 class Node:
@@ -78,10 +80,12 @@ class Node:
             @return: None
             """
             thread = threading.Thread(target=handler, args=(self, target_sock), name=thread_name)
+            thread.daemon = True
             thread.start()
         # =========================================================================================
         self.__start_user_menu_thread()
         self.__start_monitor_pending_peers_thread()
+        self.__start_monitor_peers_with_approved_tokens()
 
         while not self.is_promoted:
             if self.terminate is True:
@@ -113,6 +117,7 @@ class Node:
         thread = threading.Thread(target=self._menu,
                                   args=(role_menu_values.get(self.role)),
                                   name=USER_INPUT_THREAD_NAME)
+        thread.daemon = True
         thread.start()
         print(USER_INPUT_START_MSG)
 
@@ -126,8 +131,25 @@ class Node:
         """
         thread = threading.Thread(target=monitor_pending_peers, args=(self,),
                                   name=MONITOR_PENDING_PEERS_THREAD_NAME)
+        thread.daemon = True
         thread.start()
         print(MONITOR_PENDING_PEERS_START_MSG)
+
+    def __start_monitor_peers_with_approved_tokens(self):
+        """
+        Monitors all pending peers that have been issued approval tokens
+        to the network and checks if they have been expired.
+
+        @attention Check Interval:
+            Every 3 minutes
+
+        @return: None
+        """
+        thread = threading.Thread(target=monitor_peer_approval_token_expiry, args=(self, threading.Event()),
+                                  name=MONITOR_APPROVAL_TOKENS_THREAD_NAME)
+        thread.daemon = True
+        thread.start()
+        print(MONITOR_APPROVAL_TOKENS_START_MSG)
 
     def _menu(self, min_menu_value: int, max_menu_value: int):
         """
@@ -173,12 +195,8 @@ class Node:
 
         @return: None
         """
-        def send_message_to_specific_peer():
-            client_sock, _, secret, iv, mode = get_specific_peer_info(self, prompt=SELECT_CLIENT_SEND_MSG_PROMPT)
-            send_message(client_sock, mode, secret, iv)
-
         def perform_post_action_steps():
-            if command == max_menu_value:  # If terminate application, don't print the menu again
+            if command == max_menu_value:  # => If terminate application, don't print the menu again
                 return None
             display_menu(role=self.role, is_connected=self.is_connected)
             print(INPUT_PROMPT)
@@ -195,7 +213,7 @@ class Node:
             7: lambda: close_application(self)
         }
         actions_when_connected = {
-            1: lambda: send_message_to_specific_peer(),
+            1: lambda: send_message_to_specific_peer(self),
             2: lambda: approve_connection_request(self),
             3: lambda: None,
             4: lambda: None,

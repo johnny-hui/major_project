@@ -126,7 +126,7 @@ class Transaction:
         before expiry.
 
         @return: time_remaining or None
-            time_remaining (in seconds) if positive; None otherwise
+            The time remaining (in seconds); None otherwise
         """
         timestamp = datetime.strptime(self.timestamp, TIMESTAMP_FORMAT) + timedelta(minutes=TRANSACTION_EXPIRY_TIME_MINUTES)
         current_time = datetime.now()
@@ -137,6 +137,24 @@ class Transaction:
             return None
         else:
             return time_remaining
+
+    def is_near_expiry(self, buffer_time: int):
+        """
+        Checks if the Transaction object is near expiry based on a
+        buffer time (in seconds).
+
+        @param buffer_time:
+            An integer representing the buffer time
+
+        @return: Boolean (T/F)
+            True, False otherwise
+        """
+        time_remaining = self.get_time_remaining()
+        if time_remaining:
+            return time_remaining < buffer_time
+        else:  # => if expired
+            return True
+
 
     def show_image(self):
         """Shows the image attached to the transaction."""

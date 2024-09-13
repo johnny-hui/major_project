@@ -10,7 +10,6 @@ import socket
 import threading
 import time
 from tinyec.ec import Point
-
 from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError,
                                    InvalidSignatureError, TransactionNotFoundError,
                                    ConsensusInitError, InvalidTokenError)
@@ -151,7 +150,7 @@ def _perform_iterative_host_search(peer_dict: dict, host_ip: str,
 
 def receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: str,
                             shared_secret: bytes, mode: str, peer_iv: bytes = None,
-                            save_info: bool = True, set_stamp: bool = True):
+                            save_info: bool = True, save_file: bool = True, set_stamp: bool = True):
     """
     A helper function that handles the receiving, decrypting, and
     validation of a requesting peer's Transaction (connection request).
@@ -188,6 +187,9 @@ def receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: s
     @param save_info:
         A boolean flag to determine whether to save pending peer information (default = True)
 
+    @param save_file:
+        A boolean flag to determine whether to save the request to file (system storage)
+
     @param set_stamp:
         A boolean flag to set the 'received_by' attribute of the received request to the receiving
         host's IP (default = True)
@@ -222,7 +224,7 @@ def receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: s
         """
         Decrypts, verifies and processes the requesting peer's
         connection request and if valid, saves peer's request,
-        information and socket.
+        information (in file and memory) and the socket.
 
         @param data:
             Encrypted data in bytearray
@@ -242,7 +244,10 @@ def receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: s
         elif request.is_verified():
             try:
                 add_new_transaction(self, request, set_stamp)
-                transaction_path = save_transaction_to_file(data=data, shared_secret=shared_secret, iv=peer_iv, mode=mode)
+                transaction_path = save_transaction_to_file(data=data,
+                                                            shared_secret=shared_secret,
+                                                            iv=peer_iv,
+                                                            mode=mode)  if save_file else None
                 print(RECEIVED_TRANSACTION_SUCCESS.format(peer_ip))
                 return request, transaction_path
             except RequestAlreadyExistsError:
@@ -576,18 +581,19 @@ def approved_signal_handler(self: object, peer_socket: socket.socket, secret: by
         peer.socket = peer_socket
         peer.secret, peer.iv = secret, iv
         peer.mode = mode
-        peer.token = token
+        peer.token = None
         print(f"[+] Information for peer (IP: {peer.ip}) has been updated!")
     # ================================================================================
 
     try:
         ip = peer_socket.getpeername()[0]
-        token = receive_approval_token(peer_socket, secret=secret, mode=mode, iv=iv)
+        receive_approval_token(peer_socket, secret=secret, mode=mode, iv=iv)
         update_peer_info(get_peer(self.peer_dict, ip))
         self.fd_list.append(peer_socket)
         print(f"[+] NEW PEER CONNECTION: A new peer has been successfully verified and approved (IP: {ip}))!")
     except InvalidTokenError as msg:
         print(msg)
+        del self.peer_dict[peer_socket.getpeername()[0]]
         peer_socket.close()
 
 
@@ -613,3 +619,55 @@ def _process_peer_info_into_list(self: object, token: Token, exclude: list):
         if peer.ip not in exclude:
             peer_info.append((self.pvt_key, self.pub_key, peer, token, self.mode))
     return peer_info
+
+# def _connect_to_peer_after_approved(pvt_key: int, pub_key: Point, target_ip: str, token: Token, mode: str):
+#     """
+#     Connects to a target peer after being approved into the P2P network.
+#
+#     @attention Use Case:
+#         Used by a newly approved peer when connecting to
+#         other peers within the P2P network
+#
+#     @param pvt_key:
+#         The host's private key
+#
+#     @param pub_key:
+#         The host's public key
+#
+#     @param target_ip:
+#         A string for the target peer's IP to connect to
+#
+#     @param token:
+#         An approval Token object
+#
+#     @param mode:
+#         A string for the mode of encryption (ECB or CBC)
+#
+#     @return: (target_socket, secret, iv, mode) or target_ip
+#         Return the above if success; otherwise, target_ip (if anty errors)
+#     """
+#     try:
+#         print(f"[+] Now connecting to peer (IP: {target_ip})...")
+#         target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#         target_sock.settimeout(FIND_HOST_TIMEOUT)         # => 3-second timeout
+#
+#         # Connect to peer
+#         target_sock.connect((target_ip, APPLICATION_PORT))
+#
+#         # Establish security parameters (secret, iv, etc.)
+#         from utility.client_server.client_server import establish_secure_parameters
+#         secret, iv = establish_secure_parameters(pvt_key, pub_key, target_sock, mode=MODE_INITIATOR, encryption=mode)
+#
+#         # Send approval signal to target peer
+#         target_sock.send(AES_encrypt(data=APPROVED_SIGNAL.encode(), key=secret, iv=iv, mode=mode))
+#
+#         # Wait for ACK
+#         target_sock.recv(1024)
+#
+#         # Verify with target peer by sending your approval token
+#         send_approval_token(target_sock, token, secret, mode, iv)
+#         return target_sock, secret, iv, mode
+#
+#     except (socket.error, socket.timeout, BrokenPipeError, ConnectionResetError, InvalidTokenError) as e:
+#         print(f"[+] ERROR: An error has occurred while connecting to peer (IP: {target_ip})! [REASON: {e}]")
+#         return target_ip

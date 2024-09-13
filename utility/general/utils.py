@@ -428,3 +428,38 @@ def set_blocking_all_sockets(sock_list: list[socket.socket]):
     """
     for sock in sock_list:
         sock.setblocking(True)
+
+
+def transfer_items_to_list(_to: list, _from: list, idx_start: int = None, idx_end: int = None):
+    """
+    Transfers items from one list to another based on start and/or end indexes.
+
+    @param _to:
+        A list to have items transferred to
+
+    @param _from:
+        A list to have items transferred from
+
+    @param idx_start:
+        An integer representing the index to start transfer
+
+    @param idx_end:
+        An integer representing the index to end transfer
+
+    @return: None
+    """
+    if idx_start is None and idx_end is None:
+        _to.extend(_from)
+        _from.clear()
+
+    if idx_start and idx_end is None:
+        _to.extend(_from[idx_start:])
+        del _from[idx_start:]
+
+    if idx_start is None and idx_end:
+        _to.extend(_from[:idx_end])
+        del _from[:idx_end]
+
+    if idx_start and idx_end:
+        _to.extend(_from[idx_start:idx_end])
+        del _from[idx_start:idx_end]

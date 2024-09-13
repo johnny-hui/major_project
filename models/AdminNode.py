@@ -1,8 +1,11 @@
 from models.Node import Node
 from utility.client_server.client_server import connect_to_P2P_network
-from utility.general.constants import ROLE_ADMIN, SELECT_CLIENT_SEND_MSG_PROMPT, INPUT_PROMPT
-from utility.node.node_utils import get_specific_peer_info, send_message, display_menu, approve_connection_request, \
-    revoke_connection_request, view_pending_connection_requests, view_current_peers, close_application
+from utility.general.constants import ROLE_ADMIN, INPUT_PROMPT, STATUS_APPROVED, BROADCAST_MESSAGE_PROMPT
+from utility.general.utils import start_parallel_operation
+from utility.node.delegate_utils import initiate_consensus
+from utility.node.node_utils import display_menu, approve_connection_request, \
+    revoke_connection_request, view_pending_connection_requests, view_current_peers, close_application, \
+    send_message_to_specific_peer, send_message
 
 
 class AdminNode(Node):
@@ -37,9 +40,23 @@ class AdminNode(Node):
 
         @return: None
         """
-        def send_message_to_specific_peer():
-            client_sock, _, secret, iv, mode = get_specific_peer_info(self, prompt=SELECT_CLIENT_SEND_MSG_PROMPT)
-            send_message(client_sock, mode, secret, iv)
+
+        def broadcast_message():
+            """
+            Broadcasts a message to all connected peers.
+            @return: None
+            """
+            peer_params_list = []
+            message = input(f"[+] Enter a message to send to broadcast: ")
+
+            for ip, peer in self.peer_dict.items():
+                if peer.status == STATUS_APPROVED:
+                    peer_params_list.append((peer.socket, peer.secret, peer.iv, peer.mode, message))
+
+            start_parallel_operation(task=send_message,
+                                     task_args=peer_params_list,
+                                     num_processes=len(peer_params_list),
+                                     prompt=BROADCAST_MESSAGE_PROMPT)
 
         def perform_post_action_steps():
             actions_list = actions_when_connected if self.is_connected else actions_when_not_connected
@@ -47,6 +64,7 @@ class AdminNode(Node):
                 return None
             display_menu(role=self.role, is_connected=self.is_connected)
             print(INPUT_PROMPT)
+
         # ===============================================================================================
 
         # Define Actions
@@ -61,9 +79,9 @@ class AdminNode(Node):
 
         }
         actions_when_connected = {
-            1: lambda: send_message_to_specific_peer(),
-            2: lambda: print("[+] Broadcast a message"),
-            3: lambda: print("[+] Initiate a Consensus"),
+            1: lambda: send_message_to_specific_peer(self),
+            2: lambda: broadcast_message(),
+            3: lambda: initiate_consensus(self),
             4: lambda: revoke_connection_request(self),
             5: lambda: None,
             6: lambda: view_pending_connection_requests(self),

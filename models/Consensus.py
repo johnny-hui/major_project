@@ -40,7 +40,7 @@ class Consensus:
                  is_connected: bool,
                  mode: str, peer_dict: dict,
                  peer_socket: socket.socket = None,
-                 peer_list: list[socket.socket] = None):
+                 sock_list: list[socket.socket] = None):
         """
         A constructor for a Consensus class object.
 
@@ -54,18 +54,18 @@ class Consensus:
             A string to determine the host's mode of operation (VOTER or INITIATOR)
 
         @param peer_dict:
-            A dictionary containing IP (key), information such as security params (value)
+            A dictionary containing IP (key), information such as security params (required by BOTH)
 
         @param peer_socket:
             The initiating peer socket (required by the VOTER)
 
-        @param peer_list:
+        @param sock_list:
             A list of peer sockets (required by the INITIATOR)
 
         @return Consensus():
             A Consensus object
         """
-        arg_check(mode, peer_list, peer_socket)
+        arg_check(mode, sock_list, peer_socket)
         print("=" * 160)
         print(CONSENSUS_INIT_MSG)
         self.votes = {VOTE_YES: 0, VOTE_NO: 0}
@@ -74,7 +74,7 @@ class Consensus:
         self.mode = mode
         self.peer_dict = peer_dict
         self.peer_socket = peer_socket
-        self.peer_list = peer_list
+        self.sock_list = sock_list               # => socket list
         self.final_decision = CONSENSUS_FAILURE  # => default value
         print(CONSENSUS_INIT_SUCCESS_MSG)
 
@@ -92,7 +92,7 @@ class Consensus:
                     return self.__get_vote_results()
                 return vote
 
-            if self.peer_list and self.mode == MODE_INITIATOR:  # => INITIATOR
+            if self.sock_list and self.mode == MODE_INITIATOR:  # => INITIATOR
                 self.__send_request_to_peers()
                 self.__get_vote_results()
 
@@ -221,8 +221,8 @@ class Consensus:
                 The IP address of the peer socket to be removed
             @return: None
             """
-            self.peer_list[index].close()  # close socket
-            del self.peer_list[index]  # remove socket from list
+            self.sock_list[index].close()  # close socket
+            del self.sock_list[index]  # remove socket from list
             del self.peer_dict[ip_to_remove]  # remove peer
             print(f"[+] PEER REMOVED: The following peer has been removed (IP: {ip_to_remove}) [REASON: Disconnected]")
 
@@ -242,9 +242,9 @@ class Consensus:
             for ip_to_remove in result:
                 if ip_to_remove is not None:
                     i = 0
-                    while i < len(self.peer_list):
+                    while i < len(self.sock_list):
                         try:
-                            peer_ip = self.peer_list[i].getpeername()[0]
+                            peer_ip = self.sock_list[i].getpeername()[0]
                             if ip_to_remove == peer_ip:
                                 remove_peer(i, ip_to_remove)
                                 break
@@ -260,7 +260,7 @@ class Consensus:
             # Use multiprocessing to send to request to multiple peers (in parallel)
             results = start_parallel_operation(task=send_request,
                                                task_args=peer_info_list,
-                                               num_processes=len(self.peer_list),
+                                               num_processes=len(self.sock_list),
                                                prompt=SEND_REQ_PEER_START_MSG)
 
             # Perform any cleanup (for any disconnections that may occur)
@@ -285,7 +285,7 @@ class Consensus:
                 # Use multiprocessing to get votes from peers (in parallel)
                 results = start_parallel_operation(task=get_vote_from_peer,
                                                    task_args=peer_info_list,
-                                                   num_processes=len(self.peer_list),
+                                                   num_processes=len(self.sock_list),
                                                    prompt=GET_PEER_VOTE_START_MSG)
                 # Gather and tally the votes
                 process_votes(results)
@@ -313,5 +313,5 @@ class Consensus:
             # Use multiprocessing to get votes from peers (in parallel)
             start_parallel_operation(task=send_decision_to_peer,
                                      task_args=peer_info_list,
-                                     num_processes=len(self.peer_list),
+                                     num_processes=len(self.sock_list),
                                      prompt=SEND_FINAL_DECISION_START_MSG)
