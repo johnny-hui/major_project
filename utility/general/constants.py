@@ -215,7 +215,8 @@ SAVE_GRAPH_DIR = "data/graphs/{}"
 
 
 # SEND MESSAGE CONSTANTS
-SELECT_CLIENT_SEND_MSG_PROMPT = "\n[+] Select a specific client to send a message to (enter a number from {} to {}): "
+SELECT_PEER_SEND_MSG_PROMPT = "\n[+] Select a specific peer to send a message to (enter a number from {} to {}): "
+
 
 # TRANSFER FILE CONSTANTS
 SEND_FILE_MODE_PROMPT = ("[+] SEND FILE: Enter 1 to send in chunks; Enter 2 to send in bulk (as whole);"
@@ -274,9 +275,9 @@ REQUEST_SIGNAL = "REQUEST"
 APPROVED_SIGNAL = "APPROVED"
 CONSENSUS_SIGNAL = "CONSENSUS"
 SYNCHRONIZE_SIGNAL = "SYNC"
-REMOVE_SIGNAL = "REMOVE_PEER"
+REMOVE_PEER_SIGNAL = "REMOVE_PEER"
 PROMOTION_SIGNAL = "PROMOTION"
-REQUEST_REJECTED_SIGNAL = "REQUEST_REJECTED"
+UPDATE_NEW_PROMOTED_PEER_SIGNAL = "UPDATE_DEL"
 REQUEST_APPROVAL_SIGNAL = "REQUIRE_APPROVAL"
 RECEIVED_TRANSACTION_SUCCESS = ("[+] CONNECTION REQUEST RECEIVED: Successfully received and verified peer's "
                                 "Transaction (connection request) from ({})")
@@ -445,6 +446,15 @@ SEND_TOKEN_MULTIPROCESS_MSG = ("[+] Now issuing an approval token for the approv
 
 # BROADCAST MESSAGE CONSTANTS
 BROADCAST_MESSAGE_PROMPT = "[+] Now broadcasting your message to all connected peers..."
+
+
+# PROMOTE PEER CONSTANTS
+PROMOTE_PEER_PROMPT = "\n[+] Select a specific peer to promote to delegate (enter a number from {} to {}): "
+PROMOTE_PEER_SEND_SIGNAL_MSG = "[+] Now sending a promotion signal to all connected peers..."
+
+
+# KICK PEER CONSTANTS
+KICK_PEER_PROMPT = "[+] Now sending a signal to all connected peers to remove the kicked peer..."
 
 
 # OTHER CONSTANTS

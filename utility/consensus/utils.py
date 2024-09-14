@@ -107,7 +107,7 @@ def arg_check(mode: str, peer_list: list[socket.socket], peer_sock: socket.socke
             raise ConsensusInitError(reason=INITIATOR_SOCK_NOT_PROVIDED_ERROR)
 
 
-def check_peer_list_empty(self: object, msg: str):
+def check_sock_list_empty(self: object, msg: str):
     """
     Checks if peer list is empty.
 
@@ -123,7 +123,7 @@ def check_peer_list_empty(self: object, msg: str):
 
     @return: None
     """
-    if len(self.peer_list) == 0:
+    if len(self.sock_list) == 0:
         print(msg)
         return True
     return False
@@ -151,21 +151,21 @@ def process_peer_info(self: object, purpose: str):
     info_list = []
 
     if purpose == PURPOSE_SEND_REQ:
-        for peer_sock in self.peer_list:    # => peer_list == list of peer sockets
+        for peer_sock in self.sock_list:    # => sock_list == list of peer sockets
             ip = peer_sock.getpeername()[0]
             peer = self.peer_dict[ip]       # => get peer
             info_list.append((peer_sock, ip, peer.secret, peer.mode, PURPOSE_CONSENSUS, self.request, peer.iv))
         return info_list
 
     if purpose == PURPOSE_GET_PEER_VOTES:
-        for peer_sock in self.peer_list:
+        for peer_sock in self.sock_list:
             ip = peer_sock.getpeername()[0]
             peer = self.peer_dict[ip]
             info_list.append((peer_sock, self.request, ip, peer.secret, peer.mode, peer.iv))
         return info_list
 
     if purpose == PURPOSE_SEND_FINAL_DECISION:
-        for peer_sock in self.peer_list:
+        for peer_sock in self.sock_list:
             ip = peer_sock.getpeername()[0]
             peer = self.peer_dict[ip]
             info_list.append((peer_sock, self.final_decision, ip, peer.secret, peer.mode, peer.iv))

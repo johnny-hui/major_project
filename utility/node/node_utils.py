@@ -20,17 +20,12 @@ from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import hash_data
 from utility.crypto.token_utils import verify_token
 from utility.general.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, MENU_OPTIONS_CONNECTED,
-                                       MENU_OPTIONS,
-                                       PEER_TABLE_TITLE, PEER_TABLE_FIELD_PERSON,
-                                       PEER_TABLE_FIELD_IP, PEER_TABLE_FIELD_CIPHER_MODE,
-                                       PEER_TABLE_FIELD_SECRET, PEER_TABLE_FIELD_IV,
+                                       MENU_OPTIONS, PEER_TABLE_TITLE, PEER_TABLE_FIELD_PERSON, PEER_TABLE_FIELD_IP,
+                                       PEER_TABLE_FIELD_CIPHER_MODE, PEER_TABLE_FIELD_SECRET, PEER_TABLE_FIELD_IV,
                                        ROLE_DELEGATE, DELEGATE_MENU_OPTIONS, ROLE_ADMIN, ADMIN_MENU_OPTIONS, ROLE_PEER,
-                                       CBC,
-                                       INIT_FACTOR_BYTE_MAPPING,
-                                       MODE_CBC_BYTE_MAPPING, MODE_ECB_BYTE_MAPPING, SHARED_KEY_BYTE_MAPPING,
-                                       TRANSACTIONS_DIR,
-                                       SAVE_TRANSACTION_SUCCESS, CBC_FLAG, ECB_FLAG, ECB,
-                                       INVALID_MENU_SELECTION, MENU_ACTION_START_MSG, INVALID_INPUT_MENU_ERROR,
+                                       CBC, INIT_FACTOR_BYTE_MAPPING, MODE_CBC_BYTE_MAPPING, MODE_ECB_BYTE_MAPPING,
+                                       SHARED_KEY_BYTE_MAPPING, TRANSACTIONS_DIR, SAVE_TRANSACTION_SUCCESS, CBC_FLAG,
+                                       ECB_FLAG, ECB, INVALID_MENU_SELECTION, MENU_ACTION_START_MSG, INVALID_INPUT_MENU_ERROR,
                                        TRANSACTION_INVALID_SIG_MSG, STATUS_PENDING, PEER_TABLE_FIELD_STATUS,
                                        VIEW_REQUEST_FURTHER_ACTION_PROMPT, VIEW_PHOTO_PROMPT, REVOKE_REQUEST_PROMPT,
                                        REVOKE_REQUEST_INITIAL_PROMPT, RESPONSE_REJECTED, APPLICATION_PORT,
@@ -40,11 +35,11 @@ from utility.general.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD
                                        STATUS_APPROVED, PEER_TABLE_FIELD_ROLE, ESTABLISHED_NETWORK_SUCCESS_MSG,
                                        APPROVE_NOT_CONNECTED_MSG, SELECT_ADMIN_DELEGATE_PROMPT,
                                        PURPOSE_REQUEST_APPROVAL, MODE_VOTER, REQUEST_APPROVAL_SIGNAL, CONSENSUS_SIGNAL,
-                                       REMOVE_SIGNAL, PROMOTION_SIGNAL, FORMAT_STRING, STATUS_CONNECTED,
-                                       SEND_TOKEN_SUCCESS, BLOCK_SIZE, ACK, REQUEST_REJECTED_SIGNAL,
-                                       SEND_PEER_DICT_SUCCESS, SYNCHRONIZE_SIGNAL, CONSENSUS_PEER_WIN_MSG,
-                                       CONSENSUS_PEER_LOSE_MSG, REQ_BUFFER_TIME_INITIAL,
-                                       MONITOR_APPROVAL_TOKENS_INTERVAL, SELECT_CLIENT_SEND_MSG_PROMPT)
+                                       REMOVE_PEER_SIGNAL, PROMOTION_SIGNAL, FORMAT_STRING, STATUS_CONNECTED,
+                                       SEND_TOKEN_SUCCESS, BLOCK_SIZE, ACK, SEND_PEER_DICT_SUCCESS, SYNCHRONIZE_SIGNAL,
+                                       CONSENSUS_PEER_WIN_MSG, CONSENSUS_PEER_LOSE_MSG, REQ_BUFFER_TIME_INITIAL,
+                                       MONITOR_APPROVAL_TOKENS_INTERVAL, SELECT_PEER_SEND_MSG_PROMPT,
+                                       UPDATE_NEW_PROMOTED_PEER_SIGNAL)
 from utility.general.utils import create_directory, is_directory_empty, write_to_file, get_img_path, load_image, \
     get_user_command_option, delete_file, create_transaction_table, determine_delegate_status
 from utility.node.node_init import get_current_timestamp
@@ -140,7 +135,7 @@ def monitor_peer_approval_token_expiry(self: object, event: threading.Event):
         if self.terminate is True:
             break
 
-        if not len(self.peer_dict) == 0 and self.is_connected:
+        if self.is_connected and not len(self.peer_dict) == 0:
             print("[+] APPROVAL TOKEN CHECK: Checking for any pending peers with expired approval tokens...")
             peers_to_remove = []
 
@@ -151,6 +146,9 @@ def monitor_peer_approval_token_expiry(self: object, event: threading.Event):
             for ip in peers_to_remove:
                 del self.peer_dict[ip]
                 print(f"[+] A pending peer been removed due to an expired approval token! [IP: {ip}]")
+
+            if len(peers_to_remove) == 0:
+                print("[+] CHECK COMPLETE: There are currently no pending peers with expired tokens!")
 
         event.wait(MONITOR_APPROVAL_TOKENS_INTERVAL)  # => 3 minutes (180 seconds)
 
@@ -184,7 +182,25 @@ def remove_pending_peer(self: object, peer_sock: socket.socket, ip: str):
         print(f"[+] REMOVE PENDING PEER: Pending peer (IP: {ip}) has been successfully removed!")
 
 
-def get_specific_peer_info(self: object, prompt: str):
+def remove_approved_peer(self: object, peer_to_remove: Peer):
+    """
+    Removes an approved peer from the network.
+
+    @param self:
+        A reference to the calling class object (Node, DelegateNode, AdminNode)
+
+    @param peer_to_remove:
+        The peer to remove
+
+    @return: None
+    """
+    del self.peer_dict[peer_to_remove.ip]
+    self.fd_list.remove(peer_to_remove)
+    time.sleep(1.2)
+    peer_to_remove.socket.close()
+
+
+def get_specific_peer_prompt(self: object, prompt: str) -> Peer | None:
     """
     Prompts user to select a specific peer to
     send a message to and returns saved peer
@@ -213,14 +229,14 @@ def get_specific_peer_info(self: object, prompt: str):
                     client_index = int(input(prompt.format(1, len(self.peer_dict))))
 
                 # Get information of the client (from dictionary)
-                ip, peer = list(self.peer_dict.items())[client_index - 1]
-                return peer.socket, peer.ip, peer.secret, peer.iv, peer.mode
+                _, peer = list(self.peer_dict.items())[client_index - 1]
+                return peer
 
             except (ValueError, TypeError) as e:
                 print(f"[+] ERROR: An invalid selection provided ({e}); please enter again.")
     else:
         print("[+] ERROR: There are currently no connected peers to perform the selected option!")
-        return None, None, None, None, None
+        return None
 
 
 def get_info_admins_and_delegates(self: object):
@@ -825,10 +841,22 @@ def close_application(self: object):
 
 
 def send_message_to_specific_peer(self: object):
-    client_sock, _, secret, iv, mode = get_specific_peer_info(self, prompt=SELECT_CLIENT_SEND_MSG_PROMPT)
-    ip = client_sock.getpeername()[0]
-    message = input(f"[+] Enter a message to send to ({ip}): ")
-    send_message(client_sock, secret, iv, mode, message)
+    """
+    Sends a message to a specific peer.
+
+    @param self:
+        A reference to the calling class object (Node, DelegateNode, AdminNode)
+
+    @return: None
+    """
+    while True:
+        peer = get_specific_peer_prompt(self, prompt=SELECT_PEER_SEND_MSG_PROMPT)
+        if peer.status != STATUS_PENDING:
+            break
+        print("[+] SEND MESSAGE ERROR: You cannot send message to a pending peer; please try again!")
+
+    message = input(f"[+] Enter a message to send to ({peer.ip}): ")
+    send_message(peer.socket, peer.secret, peer.iv, peer.mode, message)
 
 
 def send_message(sock: socket.socket, secret: bytes, iv: bytes | None, mode: str, msg: str):
@@ -1088,7 +1116,10 @@ def revoke_connection_request(self: object):
                                   prompt=REVOKE_REQUEST_PROMPT.format(len(self.pending_transactions)))
         if request is not None:
             peer = get_peer(self.peer_dict, ip=request.ip_addr)
-            revoke_helper(peer.socket)
+            if peer:
+                revoke_helper(peer.socket)  # => perform if responsible peer
+            else:
+                delete_transaction(self.pending_transactions, ip=request.ip_addr)
 
         print("[+] REVOKE SUCCESSFUL: The selected connection request has been successfully revoked!")
 
@@ -1294,16 +1325,18 @@ def approved_peer_activity_handler(self: object, peer_sock: socket.socket):
 
         # Define signals for all roles
         signals_if_admin_delegate = {
+            CONSENSUS_SIGNAL: lambda: perform_consensus_signal(self, peer),
             REQUEST_APPROVAL_SIGNAL: lambda: receive_request_handler(self, peer_sock, peer_ip, peer.secret,
                                                                      peer.mode, peer.iv, save_info=False,
-                                                                     save_file=False, set_stamp=False)
+                                                                     save_file=False, set_stamp=False),
+            REMOVE_PEER_SIGNAL: lambda: handle_kicked_peer(self, peer),
+            UPDATE_NEW_PROMOTED_PEER_SIGNAL: lambda: handle_new_promoted_peer(self, peer),
         }
         signals_if_regular_peer = {
             CONSENSUS_SIGNAL: lambda: perform_consensus_signal(self, peer),
-            REMOVE_SIGNAL: lambda: print("[+] Check if signal is coming from admin or delegate -> admin/delegate"
-                                         "kicks a peer and informs regular peer to remove them locally"),
-            REQUEST_REJECTED_SIGNAL: lambda: print("[+] Informs peer that admin/delegate has rejected the request they sent"),
-            PROMOTION_SIGNAL: lambda: print("[+] Check if signal is coming from admin or delegate; promote to delegate"),
+            REMOVE_PEER_SIGNAL: lambda: handle_kicked_peer(self, peer),
+            PROMOTION_SIGNAL: lambda: perform_promotion(self, peer),
+            UPDATE_NEW_PROMOTED_PEER_SIGNAL: lambda: handle_new_promoted_peer(self, peer),
             SYNCHRONIZE_SIGNAL: lambda: print("[+] Synchronize peer dictionary and blockchain with initiating peer")
         }
 
@@ -1352,7 +1385,6 @@ def perform_consensus_signal(self: object, peer: Peer):
 
     @return: None
     """
-    # Verify if peer is admin/delegate
     if verify_admin_or_delegate(self.peer_dict, peer.ip):
         from utility.client_server.utils import receive_request_handler
 
@@ -1390,7 +1422,74 @@ def perform_consensus_signal(self: object, peer: Peer):
             else:
                 delete_transaction(self.pending_transactions, request.ip_addr)
     else:
-        print(f"[+] INVALID PROTOCOL ERROR [Consensus]: Insufficient privileges to start action (from peer {peer.ip})!")
+        print(f"[+] INVALID PROTOCOL [Consensus]: Insufficient privileges to start action (from peer {peer.ip})!")
+
+
+def handle_kicked_peer(self: object, peer: Peer):
+    """
+    Handles a kicked peer (as signaled by an Admin).
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @param peer:
+        A peer object representing the AdminNode
+
+    @return: None
+    """
+    if verify_admin_or_delegate(self.peer_dict, peer.ip):
+        print(f"[+] Received a signal from admin (IP: {peer.ip}) to kick a peer...")
+        peer.socket.send(AES_encrypt(data=ACK.encode(), key=peer.secret, mode=peer.mode, iv=peer.iv))
+        kicked_peer_ip = AES_decrypt(data=peer.socket.recv(1024), key=peer.secret, mode=peer.mode, iv=peer.iv).decode()
+        remove_approved_peer(self, peer_to_remove=get_peer(self.peer_dict, ip=kicked_peer_ip))
+        peer.socket.send(AES_encrypt(data=ACK.encode(), key=peer.secret, mode=peer.mode, iv=peer.iv))
+        print(f"[+] Peer (IP: {kicked_peer_ip}) has been removed from the P2P network!")
+    else:
+        print(f"[+] INVALID PROTOCOL [Kick Peer]: Insufficient privileges to start action (from peer {peer.ip})!")
+
+
+def perform_promotion(self: object, peer: Peer):
+    """
+    Performs a promotion to delegate peer (as appointed by an AdminNode).
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @param peer:
+        A peer object representing the AdminNode
+
+    @return: None
+    """
+    if verify_admin_or_delegate(self.peer_dict, peer.ip):
+        print(f"[+] PROMOTION: Congratulations, you have been promoted by admin peer (IP: {peer.ip}) to delegate role!")
+        peer.socket.send(AES_encrypt(data=ACK.encode(), key=peer.secret, mode=peer.mode, iv=peer.iv))
+        self.is_promoted = True
+    else:
+        print(f"[+] INVALID PROTOCOL [Promotion]: Insufficient privileges to start action (from peer {peer.ip})!")
+
+
+def handle_new_promoted_peer(self: object, peer: Peer):
+    """
+    Handles the newly promoted peer by updating their role to delegate,
+    as signaled by an Admin.
+
+    @param self:
+        A reference to the calling class object (Node)
+
+    @param peer:
+        A peer object representing the AdminNode
+
+    @return: None
+    """
+    if verify_admin_or_delegate(self.peer_dict, peer.ip):
+        print(f"[+] Received a signal from admin (IP: {peer.ip}) about a newly-approved peer...")
+        peer.socket.send(AES_encrypt(data=ACK.encode(), key=peer.secret, mode=peer.mode, iv=peer.iv))
+        promoted_peer_ip = AES_decrypt(data=peer.socket.recv(1024), key=peer.secret, mode=peer.mode, iv=peer.iv).decode()
+        change_peer_role(self.peer_dict, ip=promoted_peer_ip, role=ROLE_DELEGATE)
+        peer.socket.send(AES_encrypt(data=ACK.encode(), key=peer.secret, mode=peer.mode, iv=peer.iv))
+        print(f"[+] Peer (IP: {promoted_peer_ip}) has been recently promoted to delegate by admin (IP: {peer.ip})!")
+    else:
+        print(f"[+] INVALID PROTOCOL [Update Promoted Peer]: Insufficient privileges to start action (from peer {peer.ip})!")
 
 
 def send_approval_token(peer_socket: socket.socket, token: Token, secret: bytes, mode: str, iv: bytes = None):
@@ -1435,7 +1534,7 @@ def send_approval_token(peer_socket: socket.socket, token: Token, secret: bytes,
     peer_socket.sendall(encrypted_token)
 
     # Wait for results
-    response = AES_encrypt(data=peer_socket.recv(1024), key=secret, mode=mode, iv=iv).decode()
+    response = AES_decrypt(data=peer_socket.recv(1024), key=secret, mode=mode, iv=iv).decode()
     if response == ACK:
         print(SEND_TOKEN_SUCCESS.format(token.peer_ip, peer_socket.getpeername()[0]))
         return None

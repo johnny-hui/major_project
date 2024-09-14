@@ -3,6 +3,7 @@ Description:
 This Python file provides utility functions for the DelegateNode class.
 
 """
+import time
 from models.Consensus import Consensus
 from utility.crypto.token_utils import generate_approval_token
 from utility.general.constants import INITIATE_CONSENSUS_PROMPT, CONSENSUS_SELECT_REQUEST_PROMPT, MODE_INITIATOR, \
@@ -70,8 +71,9 @@ def initiate_consensus(self: object):
         if request:
             temp_list = []
             transfer_items_to_list(_to=temp_list, _from=self.fd_list, idx_start=1)  # idx=1 to ignore own socket
+            time.sleep(1.2)  # => wait for select() in main thread to see the changes
 
-            # Start consensus among other peers in the network
+            # Start consensus among other approved peers in the network
             consensus = Consensus(request=request,
                                   mode=MODE_INITIATOR,
                                   sock_list=temp_list,
@@ -91,6 +93,7 @@ def initiate_consensus(self: object):
                 peer_info_list = []
                 for sock in temp_list:
                     peer = self.peer_dict[sock.getpeername()[0]]
+                    print(f"Peer IP: {peer.ip}")
                     peer_info_list.append((peer.socket, token, peer.secret, peer.mode, peer.iv))
 
                 # Send token to all peers
@@ -101,7 +104,7 @@ def initiate_consensus(self: object):
 
                 # Re-transfer sockets from temp_list back to the original list
                 transfer_items_to_list(_to=self.fd_list, _from=temp_list)
-                del temp_list
+                time.sleep(1.2)
 
                 # Set all sockets to blocking mode
                 set_blocking_all_sockets(self.fd_list)
@@ -123,7 +126,8 @@ def initiate_consensus(self: object):
                     perform_responsible_peer_tasks(self, request, final_decision)
                 else:
                     delete_transaction(self.pending_transactions, request.ip_addr)
+
+            print("[+] OPERATION COMPLETE: A consensus has been completed!")
         else:
             print(CONSENSUS_REQ_NEAR_EXPIRY_MSG)
             delete_transaction(self.pending_transactions, request.ip_addr)
-        print("[+] OPERATION COMPLETE: A consensus has been completed!")

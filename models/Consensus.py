@@ -3,7 +3,7 @@ import socket
 import sys
 from models.Transaction import Transaction
 from utility.client_server.client_server import send_request
-from utility.consensus.utils import (arg_check, check_peer_list_empty,
+from utility.consensus.utils import (arg_check, check_sock_list_empty,
                                      process_peer_info, get_vote_from_peer,
                                      send_decision_to_peer)
 from utility.crypto.aes_utils import AES_encrypt, AES_decrypt
@@ -254,7 +254,7 @@ class Consensus:
                             remove_peer(i, ip_to_remove)
                             break
         # ===============================================================================
-        if not check_peer_list_empty(self, msg=INITIATOR_NO_PEER_SEND_REQ_ERROR):
+        if not check_sock_list_empty(self, msg=INITIATOR_NO_PEER_SEND_REQ_ERROR):
             peer_info_list = process_peer_info(self, purpose=PURPOSE_SEND_REQ)
 
             # Use multiprocessing to send to request to multiple peers (in parallel)
@@ -279,7 +279,7 @@ class Consensus:
                 self.__add_vote(vote)
         # ===============================================================================
         if self.mode == MODE_INITIATOR:
-            if not check_peer_list_empty(self, msg=INITIATOR_NO_PEER_GET_VOTES_ERROR):
+            if not check_sock_list_empty(self, msg=INITIATOR_NO_PEER_GET_VOTES_ERROR):
                 peer_info_list = process_peer_info(self, purpose=PURPOSE_GET_PEER_VOTES)
 
                 # Use multiprocessing to get votes from peers (in parallel)
@@ -307,7 +307,7 @@ class Consensus:
 
         @return: None
         """
-        if not check_peer_list_empty(self, msg=INITIATOR_NO_PEER_SEND_RESULTS_ERROR):
+        if not check_sock_list_empty(self, msg=INITIATOR_NO_PEER_SEND_RESULTS_ERROR):
             peer_info_list = process_peer_info(self, purpose=PURPOSE_SEND_FINAL_DECISION)
 
             # Use multiprocessing to get votes from peers (in parallel)

@@ -2,23 +2,20 @@ import select
 import socket
 import sys
 import threading
-
 from models.Peer import Peer
-from utility.client_server.client_server import (accept_new_peer_handler,
-                                                 connect_to_P2P_network)
+from utility.client_server.client_server import accept_new_peer_handler, connect_to_P2P_network
 from utility.crypto.ec_keys_utils import generate_keys
-from utility.general.constants import NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_THREAD_NAME, \
-    USER_INPUT_START_MSG, \
-    INPUT_PROMPT, MIN_MENU_ITEM_VALUE, MAX_MENU_ITEM_VALUE, ROLE_PEER, MONITOR_PENDING_PEERS_THREAD_NAME, \
-    MONITOR_PENDING_PEERS_START_MSG, APPLICATION_PORT, \
-    ACCEPT_PEER_HANDLER_THREAD_NAME, PEER_ACTIVITY_HANDLER_THREAD_NAME, ROLE_DELEGATE, DELEGATE_MIN_MENU_ITEM_VALUE, \
-    DELEGATE_MAX_MENU_ITEM_VALUE, ROLE_ADMIN, ADMIN_MAX_MENU_ITEM_VALUE, ADMIN_MIN_MENU_ITEM_VALUE, FORMAT_STRING, \
-    MONITOR_APPROVAL_TOKENS_START_MSG, MONITOR_APPROVAL_TOKENS_THREAD_NAME
+from utility.general.constants import (NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_THREAD_NAME, USER_INPUT_START_MSG,
+                                       INPUT_PROMPT, MIN_MENU_ITEM_VALUE, MAX_MENU_ITEM_VALUE, ROLE_PEER,
+                                       MONITOR_PENDING_PEERS_THREAD_NAME, MONITOR_PENDING_PEERS_START_MSG,
+                                       APPLICATION_PORT, ACCEPT_PEER_HANDLER_THREAD_NAME, PEER_ACTIVITY_HANDLER_THREAD_NAME,
+                                       ROLE_DELEGATE, DELEGATE_MIN_MENU_ITEM_VALUE, DELEGATE_MAX_MENU_ITEM_VALUE,
+                                       ROLE_ADMIN, ADMIN_MAX_MENU_ITEM_VALUE, ADMIN_MIN_MENU_ITEM_VALUE, FORMAT_STRING,
+                                       MONITOR_APPROVAL_TOKENS_START_MSG, MONITOR_APPROVAL_TOKENS_THREAD_NAME)
 from utility.node.node_init import parse_arguments, initialize_socket, get_current_timestamp
 from utility.node.node_utils import (display_menu, view_current_peers, close_application, get_user_menu_option,
-                                     monitor_pending_peers,
-                                     load_transactions, view_pending_connection_requests, approve_connection_request,
-                                     revoke_connection_request, approved_peer_activity_handler,
+                                     monitor_pending_peers, load_transactions, view_pending_connection_requests,
+                                     approve_connection_request, revoke_connection_request, approved_peer_activity_handler,
                                      monitor_peer_approval_token_expiry, send_message_to_specific_peer)
 
 
@@ -145,7 +142,8 @@ class Node:
 
         @return: None
         """
-        thread = threading.Thread(target=monitor_peer_approval_token_expiry, args=(self, threading.Event()),
+        thread = threading.Thread(target=monitor_peer_approval_token_expiry,
+                                  args=(self, threading.Event()),
                                   name=MONITOR_APPROVAL_TOKENS_THREAD_NAME)
         thread.daemon = True
         thread.start()

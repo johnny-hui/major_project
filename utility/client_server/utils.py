@@ -247,7 +247,7 @@ def receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: s
                 transaction_path = save_transaction_to_file(data=data,
                                                             shared_secret=shared_secret,
                                                             iv=peer_iv,
-                                                            mode=mode)  if save_file else None
+                                                            mode=mode) if save_file else None
                 print(RECEIVED_TRANSACTION_SUCCESS.format(peer_ip))
                 return request, transaction_path
             except RequestAlreadyExistsError:
