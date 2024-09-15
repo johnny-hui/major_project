@@ -78,7 +78,8 @@ def initiate_consensus(self: object):
                                   mode=MODE_INITIATOR,
                                   sock_list=temp_list,
                                   peer_dict=self.peer_dict,
-                                  is_connected=True)
+                                  is_connected=True,
+                                  event=self.consensus_event)
             final_decision = consensus.start()
 
             # Set all sockets to blocking mode
@@ -93,7 +94,6 @@ def initiate_consensus(self: object):
                 peer_info_list = []
                 for sock in temp_list:
                     peer = self.peer_dict[sock.getpeername()[0]]
-                    print(f"Peer IP: {peer.ip}")
                     peer_info_list.append((peer.socket, token, peer.secret, peer.mode, peer.iv))
 
                 # Send token to all peers

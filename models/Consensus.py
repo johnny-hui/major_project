@@ -1,6 +1,8 @@
 import select
 import socket
 import sys
+import threading
+
 from models.Transaction import Transaction
 from utility.client_server.client_server import send_request
 from utility.consensus.utils import (arg_check, check_sock_list_empty,
@@ -34,11 +36,13 @@ class Consensus:
         peer_socket - A socket object (Used by only the 'VOTER' to send their votes to)
         peer_list - A list of peer sockets (Used by the 'INITIATOR' to send the request to all connected peers
         final_decision - A string indicating consensus status; holds two values (CONSENSUS_FAILURE, CONSENSUS_SUCCESS)
+        consensus_event - An threading Event object that is used to communicate with other threads
     """
     def __init__(self,
                  request: Transaction,
                  is_connected: bool,
                  mode: str, peer_dict: dict,
+                 event: threading.Event,
                  peer_socket: socket.socket = None,
                  sock_list: list[socket.socket] = None):
         """
@@ -76,6 +80,7 @@ class Consensus:
         self.peer_socket = peer_socket
         self.sock_list = sock_list               # => socket list
         self.final_decision = CONSENSUS_FAILURE  # => default value
+        self.consensus_event = event
         print(CONSENSUS_INIT_SUCCESS_MSG)
 
     def start(self):
@@ -86,7 +91,8 @@ class Consensus:
             A string that determines the consensus results (SUCCESS | FAILURE)
         """
         try:
-            if self.peer_socket and self.mode == MODE_VOTER: # => VOTER
+            self.consensus_event.set()                          # => set event (to prevent main menu interference)
+            if self.peer_socket and self.mode == MODE_VOTER:    # => VOTER
                 vote = self.__perform_vote()
                 if self.is_connected:
                     return self.__get_vote_results()
@@ -108,6 +114,8 @@ class Consensus:
         finally:
             print(f"[+] CONSENSUS ENDED: Consensus for requesting peer (IP: {self.request.ip_addr}) has been completed!")
             print("=" * 160)
+            self.consensus_event.clear()
+
 
     def __add_vote(self, vote: str):
         if vote in self.votes:

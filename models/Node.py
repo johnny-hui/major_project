@@ -37,6 +37,7 @@ class Node:
         peer_dict - A dictionary containing information about each peer (APPROVED and PENDING)
         pending_transactions - A list containing pending Transaction objects of requesting peers
         app_timestamp - A string containing the timestamp (from NTP Server) of when the Node application was started
+        consensus_event - A threading Event object that is used to communicate with main thread when consensus starts/ends
         is_connected - A boolean flag indicating whether the Node is connected
         is_promoted - A boolean flag indicating whether the Node is promoted to DelegateNode
         terminate - A boolean flag that determines if the server should terminate
@@ -56,6 +57,7 @@ class Node:
         self.peer_dict: dict[str, Peer] = {}  # => Format {IP: [Peer Objects]}
         self.pending_transactions = []
         self.app_timestamp = get_current_timestamp(FORMAT_STRING)
+        self.consensus_event = threading.Event()
         self.is_connected = False
         self.is_promoted = False
         self.terminate = False
@@ -162,7 +164,6 @@ class Node:
 
         @return: None
         """
-        inputs = [sys.stdin]
         print("=" * 100)
         display_menu(role=self.role, is_connected=self.is_connected)
         print(INPUT_PROMPT)
@@ -172,7 +173,11 @@ class Node:
                 print("=" * 100)
                 break
 
-            readable, _, _ = select.select(inputs, [], [], 1)
+            # If consensus event, then wait until cleared (to prevent menu input interference)
+            while self.consensus_event.is_set():
+                self.consensus_event.wait(timeout=1)
+
+            readable, _, _ = select.select([sys.stdin], [], [], 1)
 
             # Get User Command from the Menu and perform the task
             for fd in readable:

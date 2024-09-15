@@ -436,7 +436,8 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
                                   mode=MODE_VOTER,
                                   peer_socket=target_sock,
                                   peer_dict=self.peer_dict,
-                                  is_connected=False)
+                                  is_connected=False,
+                                  event=self.consensus_event)
             vote = consensus.start()
 
             # Based on vote result, perform follow-up or remove pending peer

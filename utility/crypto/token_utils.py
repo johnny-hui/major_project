@@ -80,6 +80,7 @@ def verify_token(token: Token):
 
     # Verify the signature
     if verify_signature(pub_key=token.issuers_pub_key, signature=token.signature, data=serialized_data):
+        print("[+] The provided access token is valid!")
         return True
     else:
         raise InvalidTokenError(ip=token.peer_ip)

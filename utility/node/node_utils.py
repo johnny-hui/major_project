@@ -3,7 +3,6 @@ Description:
 This Python file contains utility functions for the Node class.
 
 """
-import copy
 import os
 import pickle
 import select
@@ -25,7 +24,8 @@ from utility.general.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD
                                        ROLE_DELEGATE, DELEGATE_MENU_OPTIONS, ROLE_ADMIN, ADMIN_MENU_OPTIONS, ROLE_PEER,
                                        CBC, INIT_FACTOR_BYTE_MAPPING, MODE_CBC_BYTE_MAPPING, MODE_ECB_BYTE_MAPPING,
                                        SHARED_KEY_BYTE_MAPPING, TRANSACTIONS_DIR, SAVE_TRANSACTION_SUCCESS, CBC_FLAG,
-                                       ECB_FLAG, ECB, INVALID_MENU_SELECTION, MENU_ACTION_START_MSG, INVALID_INPUT_MENU_ERROR,
+                                       ECB_FLAG, ECB, INVALID_MENU_SELECTION, MENU_ACTION_START_MSG,
+                                       INVALID_INPUT_MENU_ERROR,
                                        TRANSACTION_INVALID_SIG_MSG, STATUS_PENDING, PEER_TABLE_FIELD_STATUS,
                                        VIEW_REQUEST_FURTHER_ACTION_PROMPT, VIEW_PHOTO_PROMPT, REVOKE_REQUEST_PROMPT,
                                        REVOKE_REQUEST_INITIAL_PROMPT, RESPONSE_REJECTED, APPLICATION_PORT,
@@ -705,7 +705,7 @@ def view_current_peers(self: object):
                 [
                     process_name(peer.first_name, peer.last_name),
                     ip,
-                    peer.mode.upper(),
+                    peer.mode.upper() if peer.mode else None,
                     hash_data(peer.secret),
                     hash_data(peer.iv),
                     peer.status,
@@ -1222,7 +1222,8 @@ def approve_connection_request(self: object):
                                   mode=MODE_INITIATOR,
                                   sock_list=temp_list,
                                   peer_dict=self.peer_dict,
-                                  is_connected=False)
+                                  is_connected=False,
+                                  event=self.consensus_event)
             final_decision = consensus.start()
 
             # Evaluate and handle the decision
@@ -1398,7 +1399,8 @@ def perform_consensus_signal(self: object, peer: Peer):
                               mode=MODE_VOTER,
                               peer_socket=peer.socket,
                               peer_dict=self.peer_dict,
-                              is_connected=self.is_connected)
+                              is_connected=self.is_connected,
+                              event=self.consensus_event)
         final_decision = consensus.start()
 
         # Perform follow-up (receive token from admin/delegate + other tasks)
@@ -1585,7 +1587,6 @@ def receive_approval_token(peer_socket: socket.socket, secret: bytes, mode: str,
         if verify_token(token):
             peer_socket.send(AES_encrypt(data=ACK.encode(), key=secret, mode=mode, iv=iv))
             print("[+] OPERATION SUCCESS: Successfully received the approval token!")
-            print("[+] APPROVAL GRANTED: The provided access token is valid.")
             return token
     except InvalidTokenError:
         print(f"[+] APPROVAL REJECTED: Peer socket connection has been terminated ({peer_socket.getpeername()})")
@@ -1688,14 +1689,18 @@ def create_copy_peer_dict(self: object, own_peer_dict: dict[str, Peer], ip_to_re
 
     @return: copy_dict
     """
-    copy_dict = copy.deepcopy(own_peer_dict)
-    remove_peer_from_dict(copy_dict, ip_to_remove)              # => remove the pending peer from copy dict
-    remove_all_pending_peers(copy_dict)                         # => only return APPROVED peers (exclude pending)
-    clear_security_params_from_peer_dict(copy_dict)
-    own_self = Peer(ip=self.ip, first_name=self.first_name,     # => add yourself in the copy dict
+    copy_dict = {}
+    for ip, peer in own_peer_dict.items():
+        if peer.status == STATUS_APPROVED and peer.ip != ip_to_remove:      # => Exclude any pending peers + new peer
+            copy_peer = Peer(ip=peer.ip, first_name=peer.first_name,
+                             last_name=peer.last_name, role=peer.role,
+                             status=peer.status)
+            copy_dict[ip] = copy_peer
+
+    own_self = Peer(ip=self.ip, first_name=self.first_name,                 # => add yourself to the copy dict
                     last_name=self.last_name, role=self.role,
                     status=STATUS_APPROVED)
-    add_peer_to_dict(copy_dict, peer=own_self)
+    copy_dict[self.ip] = own_self
     return copy_dict
 
 
@@ -1727,6 +1732,7 @@ def perform_responsible_peer_tasks(self: object, request: Transaction,
     if consensus_result == CONSENSUS_SUCCESS:
         # Responsible peers already have pending peer in dictionary (from initial request)
         pending_peer = get_peer(self.peer_dict, request.ip_addr)
+        pending_peer.token = token
 
         # Remove peer socket from pending list (prevent select-related errors)
         if pending_peer.socket in self.fd_pending:
@@ -1745,7 +1751,8 @@ def perform_responsible_peer_tasks(self: object, request: Transaction,
 
         # Send token to the pending peer
         send_approval_token(peer_socket=pending_peer.socket, token=token,
-                            secret=pending_peer.secret, mode=pending_peer.mode, iv=pending_peer.iv)
+                            secret=pending_peer.secret, mode=pending_peer.mode,
+                            iv=pending_peer.iv)
 
         # Create a copy of own peer dictionary (exclude security info)
         copy_dict = create_copy_peer_dict(self, own_peer_dict=self.peer_dict, ip_to_remove=pending_peer.ip)
