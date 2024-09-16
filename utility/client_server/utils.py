@@ -267,6 +267,7 @@ def receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: s
             save_pending_peer_info(self, peer_socket, peer_ip, request.first_name, request.last_name,
                                    shared_secret, mode, file_path, request.role, peer_iv)
 
+        print(f"[+] A connection request (issued by peer (IP: {request.ip_addr})) has been successfully been received!")
         peer_socket.send(AES_encrypt(data=ACK.encode(), key=shared_secret, mode=self.mode, iv=peer_iv))
         peer_socket.settimeout(None)
         return request, file_path

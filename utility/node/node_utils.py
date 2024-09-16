@@ -1382,7 +1382,7 @@ def perform_consensus_signal(self: object, peer: Peer):
         A reference to the calling class object (Node)
 
     @param peer:
-        The initiating Peer object
+        The admin/delegate Peer object
 
     @return: None
     """
@@ -1769,6 +1769,11 @@ def perform_responsible_peer_tasks(self: object, request: Transaction,
 
     if consensus_result == CONSENSUS_FAILURE:
         pending_peer = get_peer(self.peer_dict, request.ip_addr)
+
+        if pending_peer.socket in self.fd_pending:
+            self.fd_pending.remove(pending_peer.socket)
+            time.sleep(1)
+
         pending_peer.socket.send(AES_encrypt(data=RESPONSE_REJECTED.encode(), key=pending_peer.secret,
                                              mode=pending_peer.mode, iv=pending_peer.iv))
         remove_pending_peer(self, pending_peer.socket, pending_peer.ip)

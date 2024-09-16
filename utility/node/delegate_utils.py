@@ -86,48 +86,45 @@ def initiate_consensus(self: object):
             set_blocking_all_sockets(temp_list)
 
             # Perform final tasks depending on the decision
-            if final_decision == CONSENSUS_SUCCESS:
-                print(CONSENSUS_SUCCESS_TOKEN_MSG)
-                token = generate_approval_token(self.pvt_key, self.pub_key, request.ip_addr)
+            try:
+                if final_decision == CONSENSUS_SUCCESS:
+                    print(CONSENSUS_SUCCESS_TOKEN_MSG)
+                    token = generate_approval_token(self.pvt_key, self.pub_key, request.ip_addr)
 
-                # Process peer info for parallel sending of token (multiprocessing)
-                peer_info_list = []
-                for sock in temp_list:
-                    peer = self.peer_dict[sock.getpeername()[0]]
-                    peer_info_list.append((peer.socket, token, peer.secret, peer.mode, peer.iv))
+                    # Process peer info for parallel sending of token (multiprocessing)
+                    peer_info_list = []
+                    for sock in temp_list:
+                        peer = self.peer_dict[sock.getpeername()[0]]
+                        peer_info_list.append((peer.socket, token, peer.secret, peer.mode, peer.iv))
 
-                # Send token to all peers
-                start_parallel_operation(task=send_approval_token,
-                                         task_args=peer_info_list,
-                                         num_processes=len(peer_info_list),
-                                         prompt=SEND_TOKEN_MULTIPROCESS_MSG)
+                    # Send token to all peers
+                    start_parallel_operation(task=send_approval_token,
+                                             task_args=peer_info_list,
+                                             num_processes=len(peer_info_list),
+                                             prompt=SEND_TOKEN_MULTIPROCESS_MSG)
 
-                # Re-transfer sockets from temp_list back to the original list
-                transfer_items_to_list(_to=self.fd_list, _from=temp_list)
+                    # Perform finishing tasks
+                    if request.received_by == self.ip:
+                        perform_responsible_peer_tasks(self, request, final_decision, token)
+                    else:
+                        from models.Peer import Peer
+                        new_peer = Peer(ip=request.ip_addr, first_name=request.first_name,
+                                        last_name=request.last_name, role=request.role,
+                                        status=STATUS_PENDING, token=token)
+                        add_peer_to_dict(self.peer_dict, new_peer)
+                        delete_transaction(self.pending_transactions, request.ip_addr)
+
+                if final_decision == CONSENSUS_FAILURE:
+                    print(CONSENSUS_PEER_LOSE_MSG.format(request.ip_addr))
+                    if request.received_by == self.ip:
+                        perform_responsible_peer_tasks(self, request, final_decision)
+                    else:
+                        delete_transaction(self.pending_transactions, request.ip_addr)
+            finally:
+                transfer_items_to_list(_to=self.fd_list, _from=temp_list)  # => Re-add sockets back to fd_list
                 time.sleep(1.2)
-
-                # Set all sockets to blocking mode
                 set_blocking_all_sockets(self.fd_list)
-
-                # Perform finishing tasks
-                if request.received_by == self.ip:
-                    perform_responsible_peer_tasks(self, request, final_decision, token)
-                else:
-                    from models.Peer import Peer
-                    new_peer = Peer(ip=request.ip_addr, first_name=request.first_name,
-                                    last_name=request.last_name, role=request.role,
-                                    status=STATUS_PENDING, token=token)
-                    add_peer_to_dict(self.peer_dict, new_peer)
-                    delete_transaction(self.pending_transactions, request.ip_addr)
-
-            if final_decision == CONSENSUS_FAILURE:
-                print(CONSENSUS_PEER_LOSE_MSG.format(request.ip_addr))
-                if request.received_by == self.ip:
-                    perform_responsible_peer_tasks(self, request, final_decision)
-                else:
-                    delete_transaction(self.pending_transactions, request.ip_addr)
-
-            print("[+] OPERATION COMPLETE: A consensus has been completed!")
+                print("[+] OPERATION COMPLETE: A consensus has been completed!")
         else:
             print(CONSENSUS_REQ_NEAR_EXPIRY_MSG)
             delete_transaction(self.pending_transactions, request.ip_addr)

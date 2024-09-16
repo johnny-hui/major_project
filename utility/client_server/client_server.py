@@ -203,7 +203,6 @@ def accept_new_peer_handler(self: object, own_sock: socket.socket):
         print("[+] NEW PEER TIMEOUT: A new peer connection has timed out; connection has been terminated!")
         peer_socket.close()
     finally:
-        print(f"[+] THREAD TERMINATED: A thread handling new peer ({peer_address}) has been successfully terminated!")
         print("=" * 100)
 
 

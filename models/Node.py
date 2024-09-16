@@ -84,7 +84,7 @@ class Node:
         # =========================================================================================
         self.__start_user_menu_thread()
         self.__start_monitor_pending_peers_thread()
-        self.__start_monitor_peers_with_approved_tokens()
+        self.__start_monitor_peers_with_approved_tokens_thread()
 
         while not self.is_promoted:
             if self.terminate is True:
@@ -104,8 +104,7 @@ class Node:
 
     def __start_user_menu_thread(self):
         """
-        Starts a thread for handling user input
-        for the menu.
+        Starts a thread for handling user input for the menu.
         @return: None
         """
         role_menu_values = {
@@ -122,9 +121,8 @@ class Node:
 
     def __start_monitor_pending_peers_thread(self):
         """
-        Stores and monitors pending peers and their
-        corresponding socket objects for any timeouts
-        or disconnections.
+        Starts a thread that stores and monitors pending peers and their
+        corresponding socket objects for any timeouts or disconnections.
 
         @return: None
         """
@@ -134,10 +132,11 @@ class Node:
         thread.start()
         print(MONITOR_PENDING_PEERS_START_MSG)
 
-    def __start_monitor_peers_with_approved_tokens(self):
+    def __start_monitor_peers_with_approved_tokens_thread(self):
         """
-        Monitors all pending peers that have been issued approval tokens
-        to the network and checks if they have been expired.
+        Starts a thread that monitors all pending peers that have been
+        issued approval tokens to the network and checks if they have
+        been expired.
 
         @attention Check Interval:
             Every 3 minutes
@@ -150,6 +149,21 @@ class Node:
         thread.daemon = True
         thread.start()
         print(MONITOR_APPROVAL_TOKENS_START_MSG)
+
+    def __start_network_synchronization(self):
+        """
+        Starts a thread to synchronize the blockchain with a random
+        connected peer in the network every 5 minutes.
+
+        @return: None
+        """
+        print("[+] To be implemented later")
+        # Verify current blockchain
+        # Select a random host from peer dict
+        # Send signal to synchronize with the random host
+        # The random host sends blockchain, then the signature
+        # Verify the signatures
+        # If any is invalid, then get next peer's info (rinse & repeat)
 
     def _menu(self, min_menu_value: int, max_menu_value: int):
         """
@@ -218,7 +232,7 @@ class Node:
         actions_when_connected = {
             1: lambda: send_message_to_specific_peer(self),
             2: lambda: approve_connection_request(self),
-            3: lambda: None,
+            3: lambda: revoke_connection_request(self),
             4: lambda: None,
             5: lambda: view_pending_connection_requests(self),
             6: lambda: view_current_peers(self),

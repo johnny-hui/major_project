@@ -30,6 +30,7 @@ class DelegateNode(Node):
         is_connected - A boolean flag indicating whether the Node is connected
         is_promoted - A boolean flag indicating whether the Node is promoted to DelegateNode
         terminate - A boolean flag that determines if the server should terminate
+        consensus_event - A threading Event object that is used to communicate with main thread when consensus starts/ends
     """
     def __init__(self, original_data: list):
         """
@@ -74,8 +75,7 @@ class DelegateNode(Node):
                                      prompt=BROADCAST_MESSAGE_PROMPT)
 
         def perform_post_action_steps():
-            actions_list = actions_when_connected if self.is_connected else actions_when_not_connected
-            if command == len(actions_list):
+            if command == max_menu_value:
                 return None
             display_menu(role=self.role, is_connected=self.is_connected)
             print(INPUT_PROMPT)
@@ -90,7 +90,6 @@ class DelegateNode(Node):
             5: lambda: view_pending_connection_requests(self),
             6: lambda: view_current_peers(self),
             7: lambda: close_application(self)
-
         }
         actions_when_connected = {
             1: lambda: send_message_to_specific_peer(self),
