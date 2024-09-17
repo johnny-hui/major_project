@@ -9,15 +9,14 @@ import pickle
 import socket
 import threading
 import time
-
-from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
-from tinyec.ec import Point
 from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError,
                                    InvalidSignatureError, TransactionNotFoundError,
                                    ConsensusInitError, InvalidTokenError)
 from models.Peer import Peer
 from models.Token import Token
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
+from utility.crypto.ec_keys_utils import serialize_private_key, serialize_public_key, deserialize_private_key, \
+    deserialize_public_key
 from utility.general.constants import (APPLICATION_PORT, FIND_HOST_TIMEOUT,
                                        CONNECTION_TIMEOUT_ERROR, CONNECTION_ERROR, ACK, STATUS_NOT_CONNECTED,
                                        STATUS_CONNECTED,
@@ -387,7 +386,7 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
             # Use multiprocessing to connect to new peers and get security parameters + socket
             results = start_parallel_operation(task=_connect_to_peer_after_approved,
                                                task_args=peer_info,
-                                               num_processes=len(self.peer_dict),
+                                               num_processes=len(peer_info),
                                                prompt=CONNECT_PEERS_AFTER_APPROVAL_MSG)
 
             # Process the results
@@ -494,8 +493,7 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
         not_connected_handler()
 
 
-def _connect_to_peer_after_approved(pvt_key: int, pub_key: EllipticCurvePublicKey,
-                                    target_peer: Peer, token: Token, mode: str):
+def _connect_to_peer_after_approved(pvt_key: bytes, pub_key: bytes, target_peer: Peer, token: Token, mode: str):
     """
     Connects to and returns a target peer after being approved into the P2P network.
 
@@ -523,15 +521,20 @@ def _connect_to_peer_after_approved(pvt_key: int, pub_key: EllipticCurvePublicKe
     """
     try:
         print(f"[+] Now connecting to peer (IP: {target_peer.ip})...")
-        target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        target_sock.settimeout(FIND_HOST_TIMEOUT)         # => 3-second timeout
+
+        # Deserialize private/public key pairs
+        deserialized_pvt_key = deserialize_private_key(pvt_key_bytes=pvt_key)
+        deserialized_pub_key = deserialize_public_key(pub_key_bytes=pub_key)
 
         # Connect to peer
+        target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        target_sock.settimeout(FIND_HOST_TIMEOUT)         # => 3-second timeout
         target_sock.connect((target_peer.ip, APPLICATION_PORT))
 
         # Establish security parameters (secret, iv, etc.)
         from utility.client_server.client_server import establish_secure_parameters
-        secret, iv = establish_secure_parameters(pvt_key, pub_key, target_sock, mode=MODE_INITIATOR, encryption=mode)
+        secret, iv = establish_secure_parameters(deserialized_pvt_key, deserialized_pub_key,
+                                                 target_sock, mode=MODE_INITIATOR, encryption=mode)
 
         # Send approval signal to target peer
         target_sock.send(AES_encrypt(data=APPROVED_SIGNAL.encode(), key=secret, iv=iv, mode=mode))
@@ -622,57 +625,7 @@ def _process_peer_info_into_list(self: object, token: Token, exclude: list):
     peer_info = []
     for peer in self.peer_dict.values():
         if peer.ip not in exclude:
-            peer_info.append((self.pvt_key, self.pub_key, peer, token, self.mode))
+            serialized_pvt_key = serialize_private_key(self.pvt_key)
+            serialized_pub_key = serialize_public_key(self.pub_key)
+            peer_info.append((serialized_pvt_key, serialized_pub_key, peer, token, self.mode))
     return peer_info
-
-# def _connect_to_peer_after_approved(pvt_key: int, pub_key: Point, target_ip: str, token: Token, mode: str):
-#     """
-#     Connects to a target peer after being approved into the P2P network.
-#
-#     @attention Use Case:
-#         Used by a newly approved peer when connecting to
-#         other peers within the P2P network
-#
-#     @param pvt_key:
-#         The host's private key
-#
-#     @param pub_key:
-#         The host's public key
-#
-#     @param target_ip:
-#         A string for the target peer's IP to connect to
-#
-#     @param token:
-#         An approval Token object
-#
-#     @param mode:
-#         A string for the mode of encryption (ECB or CBC)
-#
-#     @return: (target_socket, secret, iv, mode) or target_ip
-#         Return the above if success; otherwise, target_ip (if anty errors)
-#     """
-#     try:
-#         print(f"[+] Now connecting to peer (IP: {target_ip})...")
-#         target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#         target_sock.settimeout(FIND_HOST_TIMEOUT)         # => 3-second timeout
-#
-#         # Connect to peer
-#         target_sock.connect((target_ip, APPLICATION_PORT))
-#
-#         # Establish security parameters (secret, iv, etc.)
-#         from utility.client_server.client_server import establish_secure_parameters
-#         secret, iv = establish_secure_parameters(pvt_key, pub_key, target_sock, mode=MODE_INITIATOR, encryption=mode)
-#
-#         # Send approval signal to target peer
-#         target_sock.send(AES_encrypt(data=APPROVED_SIGNAL.encode(), key=secret, iv=iv, mode=mode))
-#
-#         # Wait for ACK
-#         target_sock.recv(1024)
-#
-#         # Verify with target peer by sending your approval token
-#         send_approval_token(target_sock, token, secret, mode, iv)
-#         return target_sock, secret, iv, mode
-#
-#     except (socket.error, socket.timeout, BrokenPipeError, ConnectionResetError, InvalidTokenError) as e:
-#         print(f"[+] ERROR: An error has occurred while connecting to peer (IP: {target_ip})! [REASON: {e}]")
-#         return target_ip

@@ -9,6 +9,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey, EllipticCurvePrivateKey
+from utility.general.constants import BLOCK_SIZE
 
 
 def compress_public_key(public_key: EllipticCurvePublicKey):
@@ -93,7 +94,20 @@ def hash_data(data: bytes | None):
     return None
 
 
-def serialize_private_key(private_key: EllipticCurvePrivateKey):
+def serialize_private_key(private_key: EllipticCurvePrivateKey) -> bytes:
+    """
+    Serializes a private key into a byte string.
+
+    @attention Use Case:
+        Use this function to convert the private key into bytes
+        for over-the-network transmission
+
+    @param private_key:
+        A random integer under the 'brainpoolP256r1' elliptic curve
+
+    @return: private_key (in bytes)
+        The serialized public key
+    """
     return private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
@@ -104,6 +118,10 @@ def serialize_private_key(private_key: EllipticCurvePrivateKey):
 def serialize_public_key(public_key: EllipticCurvePublicKey) -> bytes:
     """
     Serializes a public key into a byte string.
+
+    @attention Use Case:
+        Use this function to convert the public key into bytes
+        for over-the-network transmission
 
     @param public_key:
         A point (x, y) under an Elliptic Curve
@@ -117,26 +135,58 @@ def serialize_public_key(public_key: EllipticCurvePublicKey) -> bytes:
     )
 
 
-def deserialize_public_key(public_key: bytes):
+def deserialize_private_key(pvt_key_bytes: bytes):
+    """
+    Deserializes a private key from byte string into an
+    EllipticCurvePrivateKey object.
+
+    @param pvt_key_bytes:
+        A bytearray containing bytes of the private key
+
+    @return: EllipticCurvePrivateKey
+        A random integer generated under an Elliptic Curve
+    """
+    return serialization.load_pem_private_key(pvt_key_bytes, password=None)
+
+
+def deserialize_public_key(pub_key_bytes: bytes):
     """
     Deserializes a public key from byte string into an
-    EllipticCurvePublicKey.
+    EllipticCurvePublicKey object.
 
-    @param public_key:
+    @param pub_key_bytes:
         A bytearray containing bytes of the public key
 
     @return: EllipticCurvePublicKey
         A public key generated under an Elliptic Curve
     """
-    return serialization.load_pem_public_key(public_key)
+    return serialization.load_pem_public_key(pub_key_bytes)
 
 
 def public_key_to_string(public_key: EllipticCurvePublicKey) -> str:
+    """
+    Converts and PEM encodes an EllipticCurvePublicKey to a string.
+
+    @param public_key:
+        A public key generated under the 'brainpoolP256r1' elliptic curve
+
+    @return: public_key (String)
+        A string representation of the public key
+    """
     return public_key.public_bytes(encoding=serialization.Encoding.PEM,
                                    format=serialization.PublicFormat.SubjectPublicKeyInfo).decode()
 
 
 def load_public_key_from_string(public_key_str: str):
+    """
+    Loads an elliptic curve public key from a PEM-encoded key string.
+
+    @param public_key_str:
+        The string containing the public key (PEM-encoded)
+
+    @return: EllipticCurvePublicKey
+        An EllipticCurvePublicKey object
+    """
     return serialization.load_pem_public_key(public_key_str.encode())
 
 
@@ -152,11 +202,13 @@ def derive_shared_secret(pvt_key: EllipticCurvePrivateKey, pub_key: EllipticCurv
         The other host's public key
 
     @return: shared_secret
-        A 32-byte shared key derived from the 'brainpoolP256r1'
-        elliptic curve
+        A 16-byte shared key derived from the 'brainpoolP256r1' elliptic curve
     """
-    secret_key = pvt_key.exchange(ec.ECDH(), pub_key)
-    return secret_key
+    shared_key_bytes = pvt_key.exchange(ec.ECDH(), pub_key)
+
+    # Compress the key by taking only the first 16-bytes of the SHA3-256 hash
+    shared_key_hash = hashlib.sha3_256(shared_key_bytes).digest()
+    return shared_key_hash[:BLOCK_SIZE]
 
 
 def generate_keys():

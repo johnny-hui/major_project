@@ -122,7 +122,7 @@ def establish_secure_parameters(pvt_key: EllipticCurvePrivateKey, pub_key: Ellip
 
         peer_pub_key = exchange_public_keys(pub_key, peer_socket, mode=MODE_RECEIVER)
         print(f"[+] PUBLIC KEY RECEIVED: Successfully received the peer's public key "
-              f"({peer_pub_key})")
+              f"({compress_public_key(peer_pub_key)})")
 
         shared_secret = derive_shared_secret(pvt_key, peer_pub_key)
         print(SHARED_SECRET_SUCCESS_MSG.format(compress_shared_secret(shared_secret), len(shared_secret)))
@@ -144,7 +144,7 @@ def establish_secure_parameters(pvt_key: EllipticCurvePrivateKey, pub_key: Ellip
 
         # Exchange Public Keys with Server
         server_pub_key = exchange_public_keys(pub_key, peer_socket, mode=MODE_INITIATOR)
-        print(f"[+] PUBLIC KEY RECEIVED: Successfully received the server's public key "
+        print(f"[+] PUBLIC KEY RECEIVED: Successfully received the target peer's public key "
               f"({compress_public_key(server_pub_key)})")
 
         # Derive the shared secret
