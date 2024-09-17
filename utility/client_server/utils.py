@@ -9,6 +9,8 @@ import pickle
 import socket
 import threading
 import time
+
+from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
 from tinyec.ec import Point
 from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError,
                                    InvalidSignatureError, TransactionNotFoundError,
@@ -492,7 +494,8 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
         not_connected_handler()
 
 
-def _connect_to_peer_after_approved(pvt_key: int, pub_key: Point, target_peer: Peer, token: Token, mode: str):
+def _connect_to_peer_after_approved(pvt_key: int, pub_key: EllipticCurvePublicKey,
+                                    target_peer: Peer, token: Token, mode: str):
     """
     Connects to and returns a target peer after being approved into the P2P network.
 

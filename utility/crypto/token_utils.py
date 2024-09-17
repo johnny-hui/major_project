@@ -8,16 +8,18 @@ managing, and signing of Tokens.
 import pickle
 import secrets
 from datetime import timedelta
-from tinyec.ec import Point
+
+from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey, EllipticCurvePrivateKey
 
 from exceptions.exceptions import InvalidTokenError
 from models.Token import Token
-from utility.crypto.ec_keys_utils import create_signature, verify_signature
+from utility.crypto.ec_keys_utils import create_signature, verify_signature, load_public_key_from_string, \
+    public_key_to_string
 from utility.general.constants import FORMAT_DATETIME, TOKEN_EXPIRY_TIME
 from utility.node.node_init import get_current_timestamp
 
 
-def generate_approval_token(pvt_key: int, pub_key: Point, peer_ip: str):
+def generate_approval_token(pvt_key: EllipticCurvePrivateKey, pub_key: EllipticCurvePublicKey, peer_ip: str):
     """
     A factory method that generates, signs and returns an approval Token.
 
@@ -44,7 +46,7 @@ def generate_approval_token(pvt_key: int, pub_key: Point, peer_ip: str):
     # Instantiate Token object
     token = Token(token=random_token, peer_ip=peer_ip,
                   issued_time=timestamp, expiry_time=expiration,
-                  issuers_pub_key=pub_key)
+                  issuers_pub_key=public_key_to_string(pub_key))
 
     # Create an ECDSA signature of the token using private key
     _sign_token(token, pvt_key)
@@ -78,15 +80,18 @@ def verify_token(token: Token):
     # Preprocess the data by serialization
     serialized_data = pickle.dumps(data)
 
+    # Load the public key
+    pub_key = load_public_key_from_string(token.issuers_pub_key)
+
     # Verify the signature
-    if verify_signature(pub_key=token.issuers_pub_key, signature=token.signature, data=serialized_data):
+    if verify_signature(pub_key=pub_key, signature=token.signature, data=serialized_data):
         print("[+] The provided access token is valid!")
         return True
     else:
         raise InvalidTokenError(ip=token.peer_ip)
 
 
-def _sign_token(token: Token, pvt_key: int):
+def _sign_token(token: Token, pvt_key: EllipticCurvePrivateKey):
     """
     Creates and sets an ECDSA signature from the data in the
     Token dataclass.
