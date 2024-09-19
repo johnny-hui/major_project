@@ -1,7 +1,11 @@
 from dataclasses import dataclass
 from datetime import datetime
+
+from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
 from tinyec.ec import Point
-from utility.general.constants import FORMAT_DATETIME
+
+from utility.crypto.ec_keys_utils import load_public_key_from_string, compress_public_key, compress_signature
+from utility.general.constants import FORMAT_DATETIME, TOKEN_TO_STRING
 from utility.node.node_init import get_current_timestamp
 
 
@@ -23,8 +27,8 @@ class Token:
     peer_ip: str
     issued_time: datetime
     expiry_time: datetime
-    issuers_pub_key: Point
-    signature: tuple = None
+    issuers_pub_key: str
+    signature: bytes = None
 
     def has_expired(self) -> bool:
         """
@@ -38,3 +42,18 @@ class Token:
             return True
         else:
             return False
+
+    def __str__(self):
+        """
+        Returns the string representation of the Token object.
+
+        @attention Override:
+            This function overrides the default toString() for object class
+
+        @return: None
+        """
+        pub_key = load_public_key_from_string(self.issuers_pub_key)
+        hashed_pub_key = compress_public_key(pub_key)
+        hashed_signature = compress_signature(self.signature)
+        return (TOKEN_TO_STRING.format(self.token, self.peer_ip, self.issued_time,
+                                       self.expiry_time, hashed_pub_key, hashed_signature))

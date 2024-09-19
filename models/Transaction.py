@@ -3,10 +3,11 @@ import pickle
 from base64 import b64encode
 from datetime import datetime, timedelta
 from PIL import Image
-from tinyec.ec import Point
+from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey, EllipticCurvePrivateKey
+from utility.crypto.ec_keys_utils import create_signature, verify_signature, compress_public_key, compress_signature, \
+    public_key_to_string, load_public_key_from_string
 from utility.general.constants import TRANSACTION_TO_STRING, TRANSACTION_EXPIRY_TIME_SECONDS, TRANSACTION_MAX_IMG_SIZE, \
     TIMESTAMP_FORMAT, TRANSACTION_EXPIRY_TIME_MINUTES
-from utility.crypto.ec_keys_utils import create_signature, verify_signature, compress_pub_key, compress_signature
 
 
 class Transaction:
@@ -14,7 +15,7 @@ class Transaction:
     (i.e., Network Connection Request)
     """
     def __init__(self, ip: str, port: int, first_name: str,
-                 last_name: str, public_key: Point):
+                 last_name: str, public_key: EllipticCurvePublicKey):
         """
         A constructor for a Transaction object.
 
@@ -36,7 +37,7 @@ class Transaction:
         self.ip_addr = ip
         self.port = port
         self.role = None
-        self.pub_key = public_key
+        self.pub_key = public_key_to_string(public_key)  # => saved as string for pickle (serialization)
         self.first_name = first_name
         self.last_name = last_name
         self.image = None
@@ -44,7 +45,7 @@ class Transaction:
         self.signature = None
         self.received_by = None
 
-    def sign_transaction(self, pvt_key: int):
+    def sign_transaction(self, pvt_key: EllipticCurvePrivateKey):
         """
         Signs the transaction using a private key.
 
@@ -93,8 +94,11 @@ class Transaction:
         # Preprocess the data by serialization
         serialized_data = pickle.dumps(data)
 
+        # Load the public key from Transaction
+        pub_key = load_public_key_from_string(self.pub_key)
+
         # Verify the signature
-        if verify_signature(pub_key=self.pub_key, signature=self.signature, data=serialized_data):
+        if verify_signature(pub_key=pub_key, signature=self.signature, data=serialized_data):
             return True
         else:
             return False
@@ -205,11 +209,15 @@ class Transaction:
 
     def __str__(self):
         """
-        Returns the string representation of the
-        Transaction object.
+        Returns the string representation of the Transaction object.
+
+        @attention Override:
+            This function overrides the default toString() for object class
+
         @return: None
         """
-        hashed_pub_key = compress_pub_key(self.pub_key)
+        pub_key = load_public_key_from_string(self.pub_key)
+        hashed_pub_key = compress_public_key(pub_key)
         hashed_signature = compress_signature(self.signature)
         return (TRANSACTION_TO_STRING.format(self.ip_addr, self.port, self.role, hashed_pub_key, self.first_name,
                                              self.last_name, self.timestamp, hashed_signature, self.received_by))

@@ -9,14 +9,17 @@ import pickle
 import secrets
 import socket
 import time
-from tinyec.ec import Point
+from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey, EllipticCurvePrivateKey
+
 from exceptions.exceptions import (RequestAlreadyExistsError, RequestExpiredError,
                                    InvalidSignatureError, InvalidProtocolError)
 from models.Transaction import Transaction
+from utility.client_server.photo_receiver import receive_photo
 from utility.client_server.utils import (_perform_iterative_host_search, _connect_to_target_peer,
                                          receive_request_handler, approved_handler, approved_signal_handler)
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
-from utility.crypto.ec_keys_utils import compress_pub_key, derive_shared_secret, compress_shared_secret
+from utility.crypto.ec_keys_utils import compress_public_key, derive_shared_secret, compress_shared_secret, \
+    serialize_public_key, deserialize_public_key
 from utility.general.constants import CBC, MODE_RECEIVER, MODE_INITIATOR, PHOTO_SIGNAL, REQUEST_SIGNAL, \
     SHARED_SECRET_SUCCESS_MSG, APPROVED_SIGNAL, CONNECT_METHOD_PROMPT, BLOCK_SIZE, ACCEPT_NEW_PEER_TIMEOUT, \
     CONNECTION_AWAIT_TIMEOUT_MSG, CONNECTION_AWAIT_RESPONSE_MSG, RESPONSE_EXPIRED, RESPONSE_EXISTS, \
@@ -37,7 +40,7 @@ ERROR_RESPONSE_MAP = {
 }
 
 
-def exchange_public_keys(pub_key: Point, sock: socket.socket, mode: str):
+def exchange_public_keys(pub_key: EllipticCurvePublicKey, sock: socket.socket, mode: str):
     """
     Performs the ECDH public key exchange process.
 
@@ -58,29 +61,29 @@ def exchange_public_keys(pub_key: Point, sock: socket.socket, mode: str):
         print("[+] PUBLIC KEY EXCHANGE: Now exchanging public keys with the requesting peer...")
 
         # Receive public key from requesting peer
-        serialized_peer_pub_key = sock.recv(4096)
-        peer_pub_key = pickle.loads(serialized_peer_pub_key)
+        peer_pub_key_bytes = sock.recv(4096)
+        peer_pub_key = deserialize_public_key(peer_pub_key_bytes)
 
         # Send over the public key to requesting peer
-        serialized_key = pickle.dumps(pub_key)
-        sock.sendall(serialized_key)
+        pub_key_bytes = serialize_public_key(pub_key)
+        sock.sendall(pub_key_bytes)
         return peer_pub_key
 
     if mode == MODE_INITIATOR:
         print("[+] PUBLIC KEY EXCHANGE: Now exchanging public keys with the target peer...")
 
         # Send Public Key to Target
-        serialized_key = pickle.dumps(pub_key)
-        sock.sendall(serialized_key)
+        pub_key_bytes = serialize_public_key(pub_key)
+        sock.sendall(pub_key_bytes)
 
         # Receive Public Key from Target
-        serialized_target_pub_key = sock.recv(4096)
-        peer_pub_key = pickle.loads(serialized_target_pub_key)
+        peer_pub_key_bytes = sock.recv(4096)
+        peer_pub_key = deserialize_public_key(peer_pub_key_bytes)
         return peer_pub_key
 
 
-def establish_secure_parameters(pvt_key: int, pub_key: Point, peer_socket: socket.socket,
-                                mode: str, encryption: str = None):
+def establish_secure_parameters(pvt_key: EllipticCurvePrivateKey, pub_key: EllipticCurvePublicKey,
+                                peer_socket: socket.socket, mode: str, encryption: str = None):
     """
     Establishes a secure connection by exchanging & deriving
     protocol parameters (cipher mode, ECDH public key exchange,
@@ -118,7 +121,7 @@ def establish_secure_parameters(pvt_key: int, pub_key: Point, peer_socket: socke
 
         peer_pub_key = exchange_public_keys(pub_key, peer_socket, mode=MODE_RECEIVER)
         print(f"[+] PUBLIC KEY RECEIVED: Successfully received the peer's public key "
-              f"({compress_pub_key(peer_pub_key)})")
+              f"({compress_public_key(peer_pub_key)})")
 
         shared_secret = derive_shared_secret(pvt_key, peer_pub_key)
         print(SHARED_SECRET_SUCCESS_MSG.format(compress_shared_secret(shared_secret), len(shared_secret)))
@@ -140,8 +143,8 @@ def establish_secure_parameters(pvt_key: int, pub_key: Point, peer_socket: socke
 
         # Exchange Public Keys with Server
         server_pub_key = exchange_public_keys(pub_key, peer_socket, mode=MODE_INITIATOR)
-        print(f"[+] PUBLIC KEY RECEIVED: Successfully received the server's public key "
-              f"({compress_pub_key(server_pub_key)})")
+        print(f"[+] PUBLIC KEY RECEIVED: Successfully received the target peer's public key "
+              f"({compress_public_key(server_pub_key)})")
 
         # Derive the shared secret
         shared_secret = derive_shared_secret(pvt_key, server_pub_key)  # In bytes
@@ -177,7 +180,7 @@ def accept_new_peer_handler(self: object, own_sock: socket.socket):
         """
         try:
             if signal == PHOTO_SIGNAL:
-                print("[+] Receive photo from app")  # TODO: Implement this part using AES instead
+                receive_photo(peer_socket, shared_secret, mode, iv=session_iv)
             elif signal == REQUEST_SIGNAL:
                 receive_request_handler(self, peer_socket, peer_address[0], shared_secret, mode, session_iv)
             elif signal == APPROVED_SIGNAL:
@@ -206,9 +209,8 @@ def accept_new_peer_handler(self: object, own_sock: socket.socket):
         print("=" * 100)
 
 
-def send_request(peer_socket: socket.socket, ip: str,
-                 shared_secret: bytes, mode: str, purpose: str,
-                 transaction: Transaction, peer_iv: bytes = None):
+def send_request(peer_socket: socket.socket, ip: str, shared_secret: bytes,
+                 mode: str, purpose: str, transaction: Transaction, peer_iv: bytes = None):
     """
     Securely sends the Transaction (connection request) to a target peer.
 

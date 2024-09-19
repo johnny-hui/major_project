@@ -14,7 +14,7 @@ from datetime import datetime
 from prettytable import PrettyTable
 from models.Transaction import Transaction
 from utility.crypto.aes_utils import AES_encrypt, AES_decrypt
-from utility.crypto.ec_keys_utils import compress_pub_key, compress_signature
+from utility.crypto.ec_keys_utils import compress_public_key, compress_signature, load_public_key_from_string
 from utility.general.constants import ENTER_IP_PROMPT, INVALID_IP_ERROR, OWN_IP_ERROR_MSG, MAX_IP_VALUE, \
     CONN_REQUEST_TABLE_TITLE, CONN_REQUEST_TABLE_FIELD_IP, CONN_REQUEST_TABLE_FIELD_PORT, \
     CONN_REQUEST_TABLE_FIELD_PERSON, CONN_REQUEST_TABLE_FIELD_ROLE, CONN_REQUEST_TABLE_FIELD_SIGNATURE, \
@@ -326,7 +326,7 @@ def create_transaction_table(req_list: list[Transaction]):
             [
                 transaction.ip_addr, transaction.port,
                 process_name(transaction.first_name, transaction.last_name),
-                transaction.role, compress_pub_key(transaction.pub_key),
+                transaction.role, compress_public_key(load_public_key_from_string(transaction.pub_key)),
                 compress_signature(transaction.signature),
                 transaction.received_by, transaction.timestamp
             ]

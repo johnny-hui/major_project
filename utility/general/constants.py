@@ -230,12 +230,12 @@ END_OF_FILE = "EOF"
 
 # TRANSACTION (CONNECTION REQUESTS) CONSTANTS
 TRANSACTION_TO_STRING = ("Transaction <Object>: ip_addr={}, port={}, role={}, pub_key={}, "
-                         "first_name={}, last_name={}, timestamp={}, signature(r,s)={}, received_by={}")
+                         "first_name={}, last_name={}, timestamp={}, signature={}, received_by={}")
 
 TRANSACTION_EXPIRY_TIME_SECONDS = 300  # => Controls peer wait-time (before timeout)
 TRANSACTION_EXPIRY_TIME_MINUTES = 5    # => Controls peer wait-time (before timeout)
 
-TRANSACTIONS_DIR = "data/transactions/"
+DEFAULT_TRANSACTIONS_DIR = "data/transactions/"
 SAVE_TRANSACTION_SUCCESS = ("[+] REQUEST SAVED: The connection request has been successfully created and saved to the "
                             "following JSON file: {}")
 TRANSACTION_INVALID_SIG_MSG = ("[+] A transaction (connection request) from {} has an invalid signature "
@@ -437,6 +437,8 @@ CONSENSUS_REQ_NEAR_EXPIRY_MSG = ("[+] CONSENSUS ERROR: The selected request is n
 
 
 # TOKEN CONSTANTS
+TOKEN_TO_STRING = ("Token <Object>: token={}, peer_ip={}, issued_time={}, expiry_time={}, "
+                                    "issuers_pub_key={}, signature={}")
 TOKEN_EXPIRY_TIME = 5  # => minutes
 SEND_TOKEN_SUCCESS = ("[+] The approval token issued for requesting peer (IP: {}) has been successfully sent, verified, "
                       "and received by ({})!")
