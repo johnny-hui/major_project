@@ -9,16 +9,17 @@ import pickle
 import secrets
 import socket
 import time
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey, EllipticCurvePrivateKey
 
 from exceptions.exceptions import (RequestAlreadyExistsError, RequestExpiredError,
                                    InvalidSignatureError, InvalidProtocolError)
 from models.Transaction import Transaction
+from utility.client_server.photo_receiver import receive_photo
 from utility.client_server.utils import (_perform_iterative_host_search, _connect_to_target_peer,
                                          receive_request_handler, approved_handler, approved_signal_handler)
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
-from utility.crypto.ec_keys_utils import compress_public_key, derive_shared_secret, compress_shared_secret
+from utility.crypto.ec_keys_utils import compress_public_key, derive_shared_secret, compress_shared_secret, \
+    serialize_public_key, deserialize_public_key
 from utility.general.constants import CBC, MODE_RECEIVER, MODE_INITIATOR, PHOTO_SIGNAL, REQUEST_SIGNAL, \
     SHARED_SECRET_SUCCESS_MSG, APPROVED_SIGNAL, CONNECT_METHOD_PROMPT, BLOCK_SIZE, ACCEPT_NEW_PEER_TIMEOUT, \
     CONNECTION_AWAIT_TIMEOUT_MSG, CONNECTION_AWAIT_RESPONSE_MSG, RESPONSE_EXPIRED, RESPONSE_EXISTS, \
@@ -61,11 +62,10 @@ def exchange_public_keys(pub_key: EllipticCurvePublicKey, sock: socket.socket, m
 
         # Receive public key from requesting peer
         peer_pub_key_bytes = sock.recv(4096)
-        peer_pub_key = serialization.load_pem_public_key(peer_pub_key_bytes)
+        peer_pub_key = deserialize_public_key(peer_pub_key_bytes)
 
         # Send over the public key to requesting peer
-        pub_key_bytes = pub_key.public_bytes(encoding=serialization.Encoding.PEM,
-                                             format=serialization.PublicFormat.SubjectPublicKeyInfo)
+        pub_key_bytes = serialize_public_key(pub_key)
         sock.sendall(pub_key_bytes)
         return peer_pub_key
 
@@ -73,13 +73,12 @@ def exchange_public_keys(pub_key: EllipticCurvePublicKey, sock: socket.socket, m
         print("[+] PUBLIC KEY EXCHANGE: Now exchanging public keys with the target peer...")
 
         # Send Public Key to Target
-        pub_key_bytes = pub_key.public_bytes(encoding=serialization.Encoding.PEM,
-                                             format=serialization.PublicFormat.SubjectPublicKeyInfo)
+        pub_key_bytes = serialize_public_key(pub_key)
         sock.sendall(pub_key_bytes)
 
         # Receive Public Key from Target
         peer_pub_key_bytes = sock.recv(4096)
-        peer_pub_key = serialization.load_pem_public_key(peer_pub_key_bytes)
+        peer_pub_key = deserialize_public_key(peer_pub_key_bytes)
         return peer_pub_key
 
 
@@ -181,7 +180,7 @@ def accept_new_peer_handler(self: object, own_sock: socket.socket):
         """
         try:
             if signal == PHOTO_SIGNAL:
-                print("[+] Receive photo from app")  # TODO: Implement this part using AES instead
+                receive_photo(peer_socket, shared_secret, mode, iv=session_iv)
             elif signal == REQUEST_SIGNAL:
                 receive_request_handler(self, peer_socket, peer_address[0], shared_secret, mode, session_iv)
             elif signal == APPROVED_SIGNAL:

@@ -50,8 +50,8 @@ class Node:
         self.first_name, self.last_name, self.mode, self.ip = parse_arguments()
         self.port = APPLICATION_PORT
         self.role = ROLE_PEER
-        self.own_socket = initialize_socket(self.ip, self.port)
         self.pvt_key, self.pub_key = generate_keys()
+        self.own_socket = initialize_socket(self.ip, self.port)
         self.fd_list = [self.own_socket]  # => Stores approved peer sockets
         self.fd_pending = []  # => Stores pending peer sockets awaiting consensus (waiting room)
         self.peer_dict: dict[str, Peer] = {}  # => Format {IP: [Peer Objects]}

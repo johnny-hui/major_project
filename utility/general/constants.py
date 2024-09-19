@@ -235,7 +235,7 @@ TRANSACTION_TO_STRING = ("Transaction <Object>: ip_addr={}, port={}, role={}, pu
 TRANSACTION_EXPIRY_TIME_SECONDS = 300  # => Controls peer wait-time (before timeout)
 TRANSACTION_EXPIRY_TIME_MINUTES = 5    # => Controls peer wait-time (before timeout)
 
-TRANSACTIONS_DIR = "data/transactions/"
+DEFAULT_TRANSACTIONS_DIR = "data/transactions/"
 SAVE_TRANSACTION_SUCCESS = ("[+] REQUEST SAVED: The connection request has been successfully created and saved to the "
                             "following JSON file: {}")
 TRANSACTION_INVALID_SIG_MSG = ("[+] A transaction (connection request) from {} has an invalid signature "

@@ -1,3 +1,8 @@
+"""
+Description:
+This Python file tests the Token dataclass object.
+
+"""
 from exceptions.exceptions import InvalidTokenError
 from utility.crypto.ec_keys_utils import generate_keys
 from utility.crypto.token_utils import generate_approval_token, verify_token

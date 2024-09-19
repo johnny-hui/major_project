@@ -1,6 +1,7 @@
 """
 Description:
-This Python file is used to test functions.
+This Python file is used to test the Transaction class
+and the verification of ECDSA signatures.
 
 """
 import pickle
@@ -46,9 +47,9 @@ if __name__ == '__main__':
     decrypted_object = pickle.loads(AES_decrypt(data=encrypted_object, key=shared_key, mode=ECB, iv=iv))
     print(f"Decrypted: {decrypted_object}")
 
-    # Verify transaction after decryption
+    # Test Verification: No data manipulation
     print(decrypted_object.is_verified())
 
-    # Introduce manipulation in data to test verification
+    # Test Verification: With data manipulation
     decrypted_object.ip_addr = "10.0.0.1"
     print(decrypted_object.is_verified())
