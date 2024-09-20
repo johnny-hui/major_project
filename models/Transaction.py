@@ -166,7 +166,10 @@ class Transaction:
 
     def set_image(self, image_bytes: bytes):
         """
-        Set the image attribute
+        Set the image attribute.
+
+        @param image_bytes:
+            Bytes of the image
 
         @raise ValueError:
             The required image must be larger than 1 MB in size
@@ -219,5 +222,8 @@ class Transaction:
         pub_key = load_public_key_from_string(self.pub_key)
         hashed_pub_key = compress_public_key(pub_key)
         hashed_signature = compress_signature(self.signature)
-        return (TRANSACTION_TO_STRING.format(self.ip_addr, self.port, self.role, hashed_pub_key, self.first_name,
-                                             self.last_name, self.timestamp, hashed_signature, self.received_by))
+        return TRANSACTION_TO_STRING.format(
+            self.ip_addr, self.port, self.role, hashed_pub_key,
+            self.first_name, self.last_name, self.timestamp,
+            hashed_signature, self.received_by
+        )

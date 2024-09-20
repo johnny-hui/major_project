@@ -26,7 +26,8 @@ class Node:
     Attributes:
         ip - The ip address
         port - The port number (default=323)
-        name - The name of the Node
+        first_name - The first name of the Node user
+        last_name - The last name of the Node user
         role - The role of the Node (default=PEER)
         mode - A string for the encryption mode (default=ECB)
         own_socket - The socket object for the Node

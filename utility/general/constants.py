@@ -459,6 +459,17 @@ PROMOTE_PEER_SEND_SIGNAL_MSG = "[+] Now sending a promotion signal to all connec
 KICK_PEER_PROMPT = "[+] Now sending a signal to all connected peers to remove the kicked peer..."
 
 
+# BLOCK CONSTANTS
+BLOCK_TO_STRING = ("Block <Object>: index={}, ip_addr={}, first_name={}, last_name={}, "
+                   "timestamp={}, pub_key={}, previous_hash={}, hash={}, signers_ip={}, "
+                   "signers_role={}, signature={}")
+GENESIS_INDEX = 0
+GENESIS_PREV_HASH = ("0" * 64)
+
+
+# BLOCKCHAIN CONSTANTS
+
+
 # OTHER CONSTANTS
 OP_ENCRYPT = "ENCRYPTION"
 OP_DECRYPT = "DECRYPTION"
