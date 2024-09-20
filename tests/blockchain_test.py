@@ -9,6 +9,7 @@ from models.Blockchain import Blockchain
 from utility.crypto.ec_keys_utils import generate_keys
 from utility.general.constants import ROLE_ADMIN, GENESIS_INDEX
 
+
 # INIT CONSTANTS
 FIRST_NAMES = [None, "Teresa", "Bob", "Eric"]
 LAST_NAMES = [None, "Villanueva", "Simpleton", "Newman"]
@@ -52,6 +53,69 @@ class TestBlockchain(unittest.TestCase):
         self.assertEqual(self.blockchain.get_latest_block().is_verified(), True)
         self.assertTrue(self.blockchain.is_valid())
 
+    def testGetBlock(self):
+        """
+        Tests getting a block from the blockchain by providing index and IP.
+        @return: None
+        """
+        pvt_key, pub_key = generate_keys()
+        signers_ip, signers_role = "10.0.0.153", ROLE_ADMIN
+
+        for i in range(1, 4):  # => Add 3 new blocks
+            new_block = Block(
+                first_name=FIRST_NAMES[i],
+                last_name=LAST_NAMES[i],
+                ip=IP_ADDRESSES[i],
+                public_key=pub_key
+            )
+            self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key)
+
+        # INDEX TEST: Getting block within boundaries
+        block = self.blockchain.get_specific_block(index=1)
+        self.assertEqual(block.index, 1)
+
+        # INDEX TEST: Getting block out of bounds
+        block = self.blockchain.get_specific_block(index=100)
+        self.assertEqual(block, None)
+        block = self.blockchain.get_specific_block(index=-10)
+        self.assertEqual(block, None)
+
+        # IP TEST: Getting block from IP that does not exist
+        block = self.blockchain.get_specific_block(ip="10.0.0.4")
+        self.assertEqual(block, None)
+
+        # IP TEST: Getting block from IP that does exist
+        block = self.blockchain.get_specific_block(ip="10.0.0.2")
+        self.assertIsNotNone(block, "Block should not be None!")
+        self.assertEqual(block.ip_addr, "10.0.0.2")
+
+    def testGetMultipleBlocks(self):
+        pvt_key, pub_key = generate_keys()
+        signers_ip, signers_role = "10.0.0.153", ROLE_ADMIN
+
+        for i in range(1, 7):
+            if i in (4, 5, 6):  # => Put 3 blocks with IP = 10.0.0.4
+                new_block = Block(first_name="Bob",last_name="Ross",
+                                  ip="10.0.0.4", public_key=pub_key)
+                self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key)
+                continue
+            else:
+                new_block = Block(first_name=FIRST_NAMES[i], last_name=LAST_NAMES[i],
+                                  ip=IP_ADDRESSES[i], public_key=pub_key)
+                self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key)
+
+        # TEST 1: Get all blocks from IP=10.0.0.4
+        blocks = self.blockchain.get_blocks_from_ip(ip="10.0.0.4", return_all=True)
+        self.assertEqual(len(blocks), 3)
+
+        # TEST 2: Get only 2 blocks from IP=10.0.0.4
+        blocks = self.blockchain.get_blocks_from_ip(ip="10.0.0.4", n_blocks=2)
+        self.assertEqual(len(blocks), 2)
+
+        # TEST 3: Get blocks from IP not in blockchain
+        blocks = self.blockchain.get_blocks_from_ip(ip="10.0.0.163", n_blocks=2)
+        self.assertEqual(blocks, None)
+
     def testAddMultipleBlocks(self):
         """
         Tests the functionality of adding multiple blocks to the blockchain.
@@ -93,7 +157,7 @@ class TestBlockchain(unittest.TestCase):
 
         # Manually tamper with the genesis block
         gen_block = self.blockchain.get_specific_block(index=GENESIS_INDEX)
-        gen_block.ip_addr = "10.0.0.68"
+        gen_block.ip_addr = "123.123.123.123"
         self.assertEqual(self.blockchain.is_valid(), False)
 
     def testBlockchainValidityAfterDataTamperOfAnyBlock(self):

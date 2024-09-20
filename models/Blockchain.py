@@ -4,7 +4,10 @@ from models.Block import Block
 
 class Blockchain:
     """
-    A class representing a Blockchain object.
+    A class representing a Blockchain.
+
+    Attributes:
+        chain - A list of Block objects
     """
     def __init__(self):
         """
@@ -19,19 +22,59 @@ class Blockchain:
         """
         return self.chain[-1]
 
-    def get_specific_block(self, index: int) -> Block | None:
+    def get_specific_block(self, index: int = None, ip: str = None) -> Block | None:
         """
-        Returns the block at the provided index.
+        Returns the block at the provided index or returns the most
+        recent block from the provided IP address.
 
         @param index:
-            An integer for the block index
+            An integer for the block index (Optional)
+
+        @param ip:
+            A string for the IP address of the block to find (Optional)
 
         @return: Block
         """
-        if index < 0 or index >= len(self.chain):
-            print(f"[+] ERROR: Cannot get Block object at the specified index! [Index: {index}]")
-        else:
+        if index is not None and 0 <= index < len(self.chain):           # OPTION 1: Index-based search
             return self.chain[index]
+        if ip:                                               # OPTION 2: IP-based search
+            for block in reversed(self.chain):
+                if block.ip_addr == ip:
+                    return block
+            print(f"[+] ERROR: No block was found for the provided IP address! ({ip})")
+            return None
+
+    def get_blocks_from_ip(self, ip: str, n_blocks: int = None, return_all: bool = None) -> list[Block] | None:
+        """
+        Returns a list of blocks based on the provided IP address.
+
+        @param ip:
+            The IP address of the blocks to find
+
+        @param n_blocks:
+            An integer for the number of blocks to return (Optional)
+
+        @param return_all:
+            A boolean to return all blocks based on given IP (Optional)
+
+        @return: block_list or None
+        """
+        if not n_blocks and not return_all:
+            print("[+] ERROR: Either 'n_blocks' or 'return_all' must be specified!")
+            return None
+
+        block_list = []
+        for block in reversed(self.chain):
+            if block.ip_addr == ip:
+                block_list.append(block)
+                if not return_all and len(block_list) == n_blocks:
+                    break
+
+        if not block_list:
+            print(f"[+] ERROR: No blocks were found for the provided IP address {ip}!")
+            return None
+
+        return block_list
 
     def add_block(self, new_block: Block, signers_ip: str, signers_role: str, signers_pvt_key: EllipticCurvePrivateKey):
         """
@@ -77,10 +120,12 @@ class Blockchain:
         for i in range(1, len(self.chain)):
             current_block = self.chain[i]
             previous_block = self.chain[i - 1]
+
             if previous_block.hash != Block.calculate_hash(previous_block):
                 return False
             if current_block.previous_hash != previous_block.hash:
                 return False
             if not current_block.is_verified():
                 return False
+
         return True
