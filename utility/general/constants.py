@@ -468,6 +468,13 @@ GENESIS_PREV_HASH = ("0" * 64)
 
 
 # BLOCKCHAIN CONSTANTS
+DEFAULT_BLOCKCHAIN_DIR = "data/blockchain/"
+SAVE_BLOCKCHAIN_SUCCESS = "[+] BLOCKCHAIN SAVED: The blockchain has been successfully saved to the following file: {}"
+LOAD_BLOCKCHAIN_SUCCESS = ("[+] BLOCKCHAIN LOADED: The following blockchain file has been successfully verified and "
+                           "loaded from ({})!")
+INVALID_SIG_BLOCKCHAIN_MSG = ("[+] INVALID SIGNATURE: The following blockchain file has an invalid signature and will be"
+                              " removed. ({})")
+INVALID_BLOCKCHAIN_MSG = "[+] INVALID BLOCKCHAIN: "
 
 
 # OTHER CONSTANTS

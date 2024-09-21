@@ -931,7 +931,7 @@ def save_transaction_to_file(data: bytes, shared_secret: bytes, mode: str, iv: b
     # ===============================================================================
 
     create_directory(path=DEFAULT_TRANSACTIONS_DIR)
-    new_data = _obfuscate(data, shared_secret, mode, iv)
+    new_data = obfuscate(data, shared_secret, mode, iv)
 
     if is_directory_empty(path=DEFAULT_TRANSACTIONS_DIR):
         file_path = os.path.join(DEFAULT_TRANSACTIONS_DIR, "request_1.json")
@@ -946,7 +946,7 @@ def save_transaction_to_file(data: bytes, shared_secret: bytes, mode: str, iv: b
     return file_path
 
 
-def load_transactions(self: object):
+def load_transactions_from_file(self: object):
     """
     Loads and decrypts Transactions (pending connection requests)
     from files within the 'data/transactions/' directory and
@@ -957,7 +957,7 @@ def load_transactions(self: object):
 
     @return: None
     """
-    def _extract_bytes_from_data(data: bytearray, byte_map: dict):
+    def extract_bytes_from_data(data: bytearray, byte_map: dict):
         item = bytearray()
         for (position, _) in byte_map.items():
             item.append(data[position])
@@ -974,13 +974,13 @@ def load_transactions(self: object):
         @return: mode, secret, iv
         """
         mode, secret, iv = data[53], None, None
-        secret = _extract_bytes_from_data(data=data, byte_map=SHARED_KEY_BYTE_MAPPING)
+        secret = extract_bytes_from_data(data=data, byte_map=SHARED_KEY_BYTE_MAPPING)
         if mode == CBC_FLAG:
-            iv = _extract_bytes_from_data(data=data, byte_map=INIT_FACTOR_BYTE_MAPPING)
+            iv = extract_bytes_from_data(data=data, byte_map=INIT_FACTOR_BYTE_MAPPING)
         return mode, secret, iv
 
-    def restore_original_bytes(data: bytearray, mode: int):
-        if mode == CBC_FLAG:
+    def restore_original_bytes(data: bytearray, mode_flag: int):
+        if mode_flag == CBC_FLAG:
             original_bytes = data[-33:]  # Last 33 bytes (IV, mode, secret)
             counter = 0
 
@@ -995,7 +995,7 @@ def load_transactions(self: object):
                 data[position] = original_bytes[counter]
                 counter += 1
 
-        elif mode == ECB_FLAG:
+        elif mode_flag == ECB_FLAG:
             original_bytes = data[-17:]  # Last 17 bytes (mode, secret)
             counter = 0
 
@@ -1042,10 +1042,10 @@ def load_transactions(self: object):
 
             if os.path.isfile(file_path):
                 with open(file_path, 'rb') as file:
-                    content = bytearray(file.read())
+                    content = bytearray(file.read())  # => Create a mutable copy of file bytes
 
                     mode, shared_key, iv = extract_mode_secret_iv(data=content)
-                    restore_original_bytes(data=content, mode=mode)
+                    restore_original_bytes(data=content, mode_flag=mode)
 
                     try:
                         if mode == CBC_FLAG:
@@ -1780,7 +1780,7 @@ def perform_responsible_peer_tasks(self: object, request: Transaction,
         delete_transaction(self.pending_transactions, request.ip_addr, pending_peer.transaction_path)
 
 
-def _obfuscate(data: bytes, shared_secret: bytes, mode: str, iv: bytes = None):
+def obfuscate(data: bytes, shared_secret: bytes, mode: str, iv: bytes = None):
     """
     Takes the shared secret and IV (if CBC mode) and
     assigns them to random byte positions within the
@@ -1828,9 +1828,7 @@ def _obfuscate(data: bytes, shared_secret: bytes, mode: str, iv: bytes = None):
             replaced_bytes.append(transaction_data[pos])
             transaction_data[pos] = byte
 
-    def add_mode_flag(transaction_data: bytearray,
-                      mode_map: tuple,
-                      replaced_bytes: bytearray):
+    def add_mode_flag(transaction_data: bytearray, mode_map: tuple, replaced_bytes: bytearray):
         """
         Updates a specific byte at a byte position in the
         Transaction data for the cipher mode.
@@ -1848,9 +1846,9 @@ def _obfuscate(data: bytes, shared_secret: bytes, mode: str, iv: bytes = None):
         transaction_data[position] = byte
     # ===============================================================================
 
-    data_array = bytearray(data)  # Transaction data
-    secret_array = bytearray(shared_secret)  # Shared Secret
-    original_bytes = bytearray()  # Replaced Bytes
+    data_array = bytearray(data)                # Transaction data
+    secret_array = bytearray(shared_secret)     # Shared Secret
+    original_bytes = bytearray()                # Replaced Bytes
 
     # Hide IV data in Transaction data (if CBC)
     if mode == CBC:

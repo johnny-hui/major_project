@@ -228,7 +228,7 @@ def receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: s
         information (in file and memory) and the socket.
 
         @param data:
-            Encrypted data in bytearray
+            Encrypted data in a bytearray
 
         @return: request & file_path
             A decrypted, verified Transaction object and the

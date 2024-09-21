@@ -3,11 +3,14 @@ Description:
 This Python file tests the Blockchain class.
 
 """
+import pickle
 import unittest
 from models.Block import Block
 from models.Blockchain import Blockchain
+from utility.blockchain.utils import save_blockchain_to_file, load_blockchain_from_file
 from utility.crypto.ec_keys_utils import generate_keys
-from utility.general.constants import ROLE_ADMIN, GENESIS_INDEX
+from utility.general.constants import ROLE_ADMIN, GENESIS_INDEX, DEFAULT_BLOCKCHAIN_DIR
+from utility.general.utils import is_directory_empty, load_image
 
 
 # INIT CONSTANTS
@@ -170,7 +173,7 @@ class TestBlockchain(unittest.TestCase):
         pvt_key, pub_key = generate_keys()
         signers_ip, signers_role = "10.0.0.153", ROLE_ADMIN
 
-        for i in range(1, 4): # => Add 3 new blocks
+        for i in range(1, 4):
             new_block = Block(
                 first_name=FIRST_NAMES[i],
                 last_name=LAST_NAMES[i],
@@ -195,7 +198,7 @@ class TestBlockchain(unittest.TestCase):
         pvt_key, pub_key = generate_keys()
         signers_ip, signers_role = "10.0.0.153", ROLE_ADMIN
 
-        for i in range(1, 4): # => Add 3 new blocks
+        for i in range(1, 4):
             new_block = Block(
                 first_name=FIRST_NAMES[i],
                 last_name=LAST_NAMES[i],
@@ -208,6 +211,46 @@ class TestBlockchain(unittest.TestCase):
             current_block = self.blockchain.chain[i]
             previous_block = self.blockchain.chain[i - 1]
             self.assertEqual(current_block.previous_hash, previous_block.hash)
+
+    def testSaveBlockchainToFile(self):
+        """
+        Tests the save functionality of a Blockchain to a file.
+        @return: None
+        """
+        pvt_key, pub_key = generate_keys()
+        signers_ip, signers_role = "10.0.0.153", ROLE_ADMIN
+
+        for i in range(1, 4):
+            new_block = Block(
+                first_name=FIRST_NAMES[i],
+                last_name=LAST_NAMES[i],
+                ip=IP_ADDRESSES[i],
+                public_key=pub_key
+            )
+            img = load_image(path="../data/photos/photo_1.png")
+            new_block.set_image(img)
+            self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key)
+        self.assertEqual(self.blockchain.is_valid(), True)
+
+        # Serialize the blockchain object
+        blockchain_bytes = pickle.dumps(self.blockchain)
+        save_blockchain_to_file(blockchain_bytes, pvt_key, pub_key)
+        self.assertEqual(is_directory_empty(path=DEFAULT_BLOCKCHAIN_DIR), False)
+
+    def testLoadBlockchainFromFile(self):
+        """
+        Tests loading the Blockchain from an encrypted file.
+
+        @attention Prerequisite:
+            To properly run this test, you must run
+            testSaveBlockchainToFile() first!
+
+        @return: None
+        """
+        load_blockchain_from_file(self)
+        self.assertEqual(is_directory_empty(path=DEFAULT_BLOCKCHAIN_DIR), False)
+        self.assertEqual(len(self.blockchain.chain), 4)
+        print(self.blockchain)
 
 if __name__ == "__main__":
     unittest.main()

@@ -201,7 +201,7 @@ def load_public_key_from_string(public_key_str: str):
     return serialization.load_pem_public_key(public_key_str.encode())
 
 
-def derive_shared_secret(pvt_key: EllipticCurvePrivateKey, pub_key: EllipticCurvePublicKey):
+def derive_shared_secret(pvt_key: EllipticCurvePrivateKey, pub_key: EllipticCurvePublicKey) -> bytes:
     """
     Derives the shared secret between a private key and another
     host's public key by performing ECC point multiplication.
@@ -220,22 +220,26 @@ def derive_shared_secret(pvt_key: EllipticCurvePrivateKey, pub_key: EllipticCurv
     return shared_key_hash[:BLOCK_SIZE]
 
 
-def generate_keys():
+def generate_keys(verbose: bool = True) -> tuple[EllipticCurvePrivateKey, EllipticCurvePublicKey]:
     """
     Generates a public/private key pair using the
     'brainpoolP256r1' elliptic curve.
+
+    @param verbose:
+        A boolean flag to toggle verbose mode (default=True/On)
 
     @return: private_key, public_key
     """
     private_key = ec.generate_private_key(ec.BrainpoolP256R1())
     public_key = private_key.public_key()
-    print("[+] ECDH Private/Public Key pairs have been successfully generated!")
-    print(f"[+] Your private key: {compress_private_key(private_key)}")
-    print(f"[+] Your public key: {compress_public_key(public_key)}")
+    if verbose:
+        print("[+] ECDH Private/Public Key pairs have been successfully generated!")
+        print(f"[+] Your private key: {compress_private_key(private_key)}")
+        print(f"[+] Your public key: {compress_public_key(public_key)}")
     return private_key, public_key
 
 
-def create_signature(pvt_key: EllipticCurvePrivateKey, data: bytes):
+def create_signature(pvt_key: EllipticCurvePrivateKey, data: bytes) -> bytes:
     """
     Creates an SHA3-256 ECDSA hash signature for a defined set of data.
 
@@ -256,7 +260,7 @@ def create_signature(pvt_key: EllipticCurvePrivateKey, data: bytes):
     return signature
 
 
-def verify_signature(signature: bytes, data: bytes, pub_key: EllipticCurvePublicKey):
+def verify_signature(signature: bytes, data: bytes, pub_key: EllipticCurvePublicKey) -> bool:
     """
     Verifies a hash signature created by an ECDSA algorithm.
 
@@ -282,7 +286,7 @@ def verify_signature(signature: bytes, data: bytes, pub_key: EllipticCurvePublic
         return False
 
 
-def generate_shared_secret():
+def generate_shared_secret() -> bytes:
     """
     Generates a random shared secret key using ECDH key exchange
     and the 'brainpoolP256r1' elliptic curve.

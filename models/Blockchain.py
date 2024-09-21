@@ -1,4 +1,6 @@
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
+
+from exceptions.exceptions import InvalidBlockchainError
 from models.Block import Block
 
 
@@ -37,7 +39,7 @@ class Blockchain:
         """
         if index is not None and 0 <= index < len(self.chain):           # OPTION 1: Index-based search
             return self.chain[index]
-        if ip:                                               # OPTION 2: IP-based search
+        if ip:                                                           # OPTION 2: IP-based search
             for block in reversed(self.chain):
                 if block.ip_addr == ip:
                     return block
@@ -46,7 +48,8 @@ class Blockchain:
 
     def get_blocks_from_ip(self, ip: str, n_blocks: int = None, return_all: bool = None) -> list[Block] | None:
         """
-        Returns a list of blocks based on the provided IP address.
+        Returns a list of the most-recent blocks based on
+        the provided IP address.
 
         @param ip:
             The IP address of the blocks to find
@@ -117,15 +120,31 @@ class Blockchain:
         @return: Boolean (T/F)
             True if valid, False otherwise
         """
-        for i in range(1, len(self.chain)):
-            current_block = self.chain[i]
-            previous_block = self.chain[i - 1]
+        try:
+            for i in range(1, len(self.chain)):
+                current_block = self.chain[i]
+                previous_block = self.chain[i - 1]
 
-            if previous_block.hash != Block.calculate_hash(previous_block):
-                return False
-            if current_block.previous_hash != previous_block.hash:
-                return False
-            if not current_block.is_verified():
-                return False
+                if previous_block.hash != Block.calculate_hash(previous_block):
+                    raise InvalidBlockchainError(reason=f"An invalid hash found in Block {previous_block.index}!")
+                if current_block.previous_hash != previous_block.hash:
+                    raise InvalidBlockchainError(reason=f"Block {current_block.index}'s previous hash does not match "
+                                                        f"the hash of Block {previous_block.index}!")
+                if not current_block.is_verified():
+                    raise InvalidBlockchainError(reason=f"Block {current_block.index} has an invalid signature!")
 
-        return True
+            return True
+        except InvalidBlockchainError as msg:
+            print(msg)
+            return False
+
+    def __str__(self):
+        """
+        Returns the string representation of the Blockchain object.
+
+        @attention Override:
+            This function overrides the default toString() for object class
+
+        @return: None
+        """
+        return '\n'.join(str(block) for block in self.chain)

@@ -3,6 +3,7 @@ import socket
 import sys
 import threading
 from models.Peer import Peer
+from utility.blockchain.utils import load_blockchain_from_file
 from utility.client_server.client_server import accept_new_peer_handler, connect_to_P2P_network
 from utility.crypto.ec_keys_utils import generate_keys
 from utility.general.constants import (NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_THREAD_NAME, USER_INPUT_START_MSG,
@@ -14,7 +15,7 @@ from utility.general.constants import (NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USE
                                        MONITOR_APPROVAL_TOKENS_START_MSG, MONITOR_APPROVAL_TOKENS_THREAD_NAME)
 from utility.node.node_init import parse_arguments, initialize_socket, get_current_timestamp
 from utility.node.node_utils import (display_menu, view_current_peers, close_application, get_user_menu_option,
-                                     monitor_pending_peers, load_transactions, view_pending_connection_requests,
+                                     monitor_pending_peers, load_transactions_from_file, view_pending_connection_requests,
                                      approve_connection_request, revoke_connection_request, approved_peer_activity_handler,
                                      monitor_peer_approval_token_expiry, send_message_to_specific_peer)
 
@@ -28,6 +29,7 @@ class Node:
         port - The port number (default=323)
         first_name - The first name of the Node user
         last_name - The last name of the Node user
+        blockchain - A list of Block objects (default=None)
         role - The role of the Node (default=PEER)
         mode - A string for the encryption mode (default=ECB)
         own_socket - The socket object for the Node
@@ -49,6 +51,7 @@ class Node:
         """
         print(NODE_INIT_MSG)
         self.first_name, self.last_name, self.mode, self.ip = parse_arguments()
+        self.blockchain = None
         self.port = APPLICATION_PORT
         self.role = ROLE_PEER
         self.pvt_key, self.pub_key = generate_keys()
@@ -62,7 +65,8 @@ class Node:
         self.is_connected = False
         self.is_promoted = False
         self.terminate = False
-        load_transactions(self)
+        load_transactions_from_file(self)
+        load_blockchain_from_file(self)
         print(f"[+] Application Timestamp: {self.app_timestamp}")
         print(NODE_INIT_SUCCESS_MSG.format(self.role))
 

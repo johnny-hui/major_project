@@ -16,6 +16,7 @@ INVALID_PROTOCOL_MSG = "[+] ERROR: Invalid protocol; connection with peer has be
 TRANSACTION_NOT_FOUND_MSG = "[+] ERROR: Cannot find the Transaction object for the following IP ({})!"
 CONSENSUS_INIT_ERROR_MSG = "[+] ERROR: Consensus cannot be started due to insufficient arguments provided! [REASON: {}]"
 INVALID_TOKEN_ERROR_MSG = "Cannot verify the signature in the provided approval token [sent from IP: ({})]"
+INVALID_BLOCKCHAIN_ERROR_MSG = "[+] ERROR: An error has occurred while validating a blockchain [REASON: {}]"
 
 
 class RequestAlreadyExistsError(Exception):
@@ -121,4 +122,19 @@ class InvalidTokenError(Exception):
     """
     def __init__(self, ip: str):
         self.message = INVALID_TOKEN_ERROR_MSG.format(ip)
+        super().__init__(self.message)
+
+
+class InvalidBlockchainError(Exception):
+    """
+    An exception that raises an InvalidBlockchainError.
+
+    @attention Use Case:
+        Thrown when validating a blockchain and an invalid
+        hash or signature is found between one or more blocks.
+
+    @return: None
+    """
+    def __init__(self, reason: str):
+        self.message = INVALID_BLOCKCHAIN_ERROR_MSG.format(reason)
         super().__init__(self.message)
