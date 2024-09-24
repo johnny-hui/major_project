@@ -4,6 +4,7 @@ This Python file provides utility functions for the DelegateNode class.
 
 """
 import time
+
 from models.Consensus import Consensus
 from utility.crypto.token_utils import generate_approval_token
 from utility.general.constants import INITIATE_CONSENSUS_PROMPT, CONSENSUS_SELECT_REQUEST_PROMPT, MODE_INITIATOR, \
@@ -49,6 +50,15 @@ def get_delegate_node(old_node: object):
 
 
 def initiate_consensus(self: object):
+    """
+    Initiates a consensus vote on a pending connection request
+    among others in the network.
+
+    @param self:
+        A reference to the calling class object (AdminNode, DelegateNode)
+
+    @return: None
+    """
     if len(self.pending_transactions) == 0:
         print("[+] INITIATE CONSENSUS ERROR: There are currently no pending connection requests to approve!")
         return None
@@ -102,6 +112,17 @@ def initiate_consensus(self: object):
                                              task_args=peer_info_list,
                                              num_processes=len(peer_info_list),
                                              prompt=SEND_TOKEN_MULTIPROCESS_MSG)
+
+                    # Create Block
+
+                    # Add block to blockchain
+
+                    # Verify the blockchain
+
+                    # Encrypt and send the block (in parallel)
+
+                    # Wait for the result (per process)
+
 
                     # Perform finishing tasks
                     if request.received_by == self.ip:

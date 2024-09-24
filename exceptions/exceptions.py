@@ -4,6 +4,7 @@ This module contains various custom exceptions used in
 this project.
 
 """
+from models.Block import Block
 
 # CONSTANTS
 REQUEST_EXISTS_MSG = ("[+] REQUEST REFUSED: An existing request already exists for the current peer; "
@@ -16,7 +17,11 @@ INVALID_PROTOCOL_MSG = "[+] ERROR: Invalid protocol; connection with peer has be
 TRANSACTION_NOT_FOUND_MSG = "[+] ERROR: Cannot find the Transaction object for the following IP ({})!"
 CONSENSUS_INIT_ERROR_MSG = "[+] ERROR: Consensus cannot be started due to insufficient arguments provided! [REASON: {}]"
 INVALID_TOKEN_ERROR_MSG = "Cannot verify the signature in the provided approval token [sent from IP: ({})]"
-INVALID_BLOCKCHAIN_ERROR_MSG = "[+] ERROR: An error has occurred while validating a blockchain [REASON: {}]"
+INVALID_BLOCK_ERROR_MSG = "Block {} has an invalid signature!"
+INVALID_BLOCKCHAIN_ERROR_MSG = "[+] An error has occurred while validating a blockchain [REASON: {}]"
+PEER_REFUSED_BLOCK_ERROR_MSG = "Peer has refused the sent block due to an invalid signature! ({})"
+PEER_INVALID_BLOCKCHAIN_MSG = ("The requesting peer has an invalid blockchain! [REASON: blockchain belongs to another "
+                               "local P2P network or tampering has occurred]")
 
 
 class RequestAlreadyExistsError(Exception):
@@ -125,6 +130,20 @@ class InvalidTokenError(Exception):
         super().__init__(self.message)
 
 
+class InvalidBlockError(Exception):
+    """
+    An exception that raises an InvalidBlockError.
+
+    @attention Use Case:
+        Thrown when a Block object has an invalid signature
+
+    @return: None
+    """
+    def __init__(self, index: int):
+        self.message = INVALID_BLOCK_ERROR_MSG.format(index)
+        super().__init__(self.message)
+
+
 class InvalidBlockchainError(Exception):
     """
     An exception that raises an InvalidBlockchainError.
@@ -137,4 +156,35 @@ class InvalidBlockchainError(Exception):
     """
     def __init__(self, reason: str):
         self.message = INVALID_BLOCKCHAIN_ERROR_MSG.format(reason)
+        super().__init__(self.message)
+
+
+class PeerRefusedBlockError(Exception):
+    """
+    An exception that raises an PeerRefusedBlockError.
+
+    @attention Use Case:
+        Thrown when a peer refuses a block sent by
+        another peer due to an invalid signature
+
+    @return: None
+    """
+    def __init__(self, block: Block):
+        self.message = PEER_REFUSED_BLOCK_ERROR_MSG.format(block)
+        super().__init__(self.message)
+
+
+class PeerInvalidBlockchainError(Exception):
+    """
+    An exception that raises an PeerInvalidBlockchainError.
+
+    @attention Use Case:
+        Thrown when a peer has an invalid blockchain (possibly due
+        to tampering or blockchain belonging to a different local
+        P2P network)
+
+    @return: None
+    """
+    def __init__(self):
+        self.message = PEER_INVALID_BLOCKCHAIN_MSG
         super().__init__(self.message)

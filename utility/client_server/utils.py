@@ -9,11 +9,12 @@ import pickle
 import socket
 import threading
 import time
-from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError,
-                                   InvalidSignatureError, TransactionNotFoundError,
-                                   ConsensusInitError, InvalidTokenError)
+from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError, InvalidSignatureError,
+                                   TransactionNotFoundError, ConsensusInitError, InvalidTokenError,
+                                   InvalidBlockchainError, InvalidBlockError, PeerInvalidBlockchainError)
 from models.Peer import Peer
 from models.Token import Token
+from utility.blockchain.utils import save_blockchain_to_file
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import serialize_private_key, serialize_public_key, deserialize_private_key, \
     deserialize_public_key
@@ -33,7 +34,7 @@ from utility.node.node_utils import (peer_exists, add_new_transaction, save_tran
                                      save_pending_peer_info, remove_pending_peer, delete_transaction,
                                      change_peer_status, change_peer_role, receive_approval_token,
                                      receive_peer_dictionary, update_peer_dict, get_peer, send_approval_token,
-                                     remove_all_approved_peers)
+                                     remove_all_approved_peers, synchronize_blockchain_when_not_connected)
 
 
 def _connect_to_target_peer(ip: str,
@@ -434,12 +435,9 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
 
             # Start Consensus (a trust vote on verifying target peer)
             from models.Consensus import Consensus
-            consensus = Consensus(request=request,
-                                  mode=MODE_VOTER,
-                                  peer_socket=target_sock,
-                                  peer_dict=self.peer_dict,
-                                  is_connected=False,
-                                  event=self.consensus_event)
+            consensus = Consensus(request=request, mode=MODE_VOTER,
+                                  peer_socket=target_sock, peer_dict=self.peer_dict,
+                                  is_connected=False, event=self.consensus_event)
             vote = consensus.start()
 
             # Based on vote result, perform follow-up or remove pending peer
@@ -457,6 +455,11 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
                     else:
                         change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
 
+                # Synchronize blockchain with target peer
+                synchronize_blockchain_when_not_connected(self, target_sock, secret=secret,
+                                                          enc_mode=self.mode, mode=MODE_RECEIVER, iv=iv)
+                save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
+
                 # Perform finishing steps
                 self.fd_list.append(target_sock)  # fd_list == approved list
                 change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
@@ -469,7 +472,7 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
                 remove_pending_peer(self, target_sock, ip=target_sock.getpeername()[0])
 
         except exceptions as msg:
-            print(f"[+] ERROR: An error has occurred while performing approved_handler() [REASON: {msg}]")
+            print(f"[+] ERROR: An error has occurred while performing approved_handler()! [REASON: {msg}]")
             remove_pending_peer(self, target_sock, ip=target_sock.getpeername()[0])
     # ================================================================================
     print(APPROVED_TO_NETWORK_MSG_INITIAL)
@@ -477,7 +480,8 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
 
     # Define exceptions
     exceptions = (ConsensusInitError, InvalidSignatureError, TransactionNotFoundError,
-                  RequestAlreadyExistsError, RequestExpiredError, socket.timeout)
+                  RequestAlreadyExistsError, RequestExpiredError, socket.timeout, InvalidBlockError,
+                  InvalidBlockchainError, PeerInvalidBlockchainError)
 
     # Send ACK for synchronization
     target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=self.mode, iv=iv))

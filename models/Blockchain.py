@@ -1,5 +1,4 @@
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
-
 from exceptions.exceptions import InvalidBlockchainError
 from models.Block import Block
 
@@ -17,7 +16,7 @@ class Blockchain:
         """
         self.chain = [Block.create_genesis_block()]
 
-    def get_latest_block(self):
+    def get_latest_block(self) -> Block:
         """
         Returns the last, most recent block in the Blockchain.
         @return block
@@ -79,13 +78,19 @@ class Blockchain:
 
         return block_list
 
-    def add_block(self, new_block: Block, signers_ip: str, signers_role: str, signers_pvt_key: EllipticCurvePrivateKey):
+    def add_block(self, new_block: Block, signers_ip: str = None, signers_role: str = None,
+                  signers_pvt_key: EllipticCurvePrivateKey = None, is_signing: bool = False):
         """
-        Signs and adds a new Block object to the Blockchain.
+        Adds a new Block object to the Blockchain and optionally signs a block.
 
-        @attention Private Key
+        @attention Private Key:
             The private key should always be from an admin/delegate
             since they have authority to add blocks to blockchain.
+
+        @attention If signing:
+            If you are signing the block, you have to provide
+            signers ip, role, private key, and is_signing=True
+            as parameter
 
         @param new_block:
             A new Block object to be added
@@ -99,15 +104,22 @@ class Blockchain:
         @param signers_pvt_key:
             A private key generated under the 'brainpoolP256r1' elliptic curve
 
+        @param is_signing:
+            A boolean to indicate if the block should be signed
+            when adding it to the blockchain
+
         @return: None
         """
         new_block.index = self.get_latest_block().index + 1
         new_block.previous_hash = self.get_latest_block().hash
-        new_block.set_signers_ip(signers_ip)
-        new_block.set_signers_role(signers_role)
-        if new_block.hash is None:
-            new_block.set_hash()
-        new_block.sign_block(signers_pvt_key)
+
+        if is_signing:
+            new_block.set_signers_ip(signers_ip)
+            new_block.set_signers_role(signers_role)
+            if new_block.hash is None:
+                new_block.set_hash()
+            new_block.sign_block(signers_pvt_key)
+
         self.chain.append(new_block)
 
     def is_valid(self) -> bool:

@@ -155,21 +155,6 @@ class Node:
         thread.start()
         print(MONITOR_APPROVAL_TOKENS_START_MSG)
 
-    def __start_network_synchronization(self):
-        """
-        Starts a thread to synchronize the blockchain with a random
-        connected peer in the network every 5 minutes.
-
-        @return: None
-        """
-        print("[+] To be implemented later")
-        # Verify current blockchain
-        # Select a random host from peer dict
-        # Send signal to synchronize with the random host
-        # The random host sends blockchain, then the signature
-        # Verify the signatures
-        # If any is invalid, then get next peer's info (rinse & repeat)
-
     def _menu(self, min_menu_value: int, max_menu_value: int):
         """
         Displays the menu and handles user input

@@ -8,6 +8,8 @@ import os
 import pickle
 import secrets
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey, EllipticCurvePublicKey
+
+from models.Blockchain import Blockchain
 from utility.crypto.aes_utils import AES_encrypt, AES_decrypt
 from utility.crypto.ec_keys_utils import (hash_data, create_signature, serialize_public_key, generate_keys,
                                           derive_shared_secret, verify_signature, deserialize_public_key)
@@ -26,18 +28,16 @@ PUB_KEY_MARKER = b'\n--PUBLIC_KEY--\n'
 BLOCKCHAIN_FILE_NAME = "blockchain.json"
 
 
-def save_blockchain_to_file(blockchain_data: bytes, pvt_key: EllipticCurvePrivateKey, pub_key: EllipticCurvePublicKey):
+def prepare_blockchain_data(blockchain_data: bytes, pvt_key: EllipticCurvePrivateKey,
+                            pub_key: EllipticCurvePublicKey, shared_secret: bytes,
+                            mode: str, iv: bytes = None):
     """
-    Saves the blockchain data to a file.
-
-    @attention When is this called?
-        Scenario 1 - The moment you join P2P network (entire blockchain encrypted and sent from responsible peer)
-        Scenario 2 - You join P2P network but already have some parts of blockchain, and are
-                     receiving more from responsible peer upon joining)
-        Scenario 3 - The moment you receive a new block from admin/delegate (after a peer is approved)
+    Prepares the blockchain data for saving to file or transmission over the network
+    by creating an ECDSA digital signature and embedding it with the public key for
+    future verification of the blockchain; encryption is also performed.
 
     @param blockchain_data:
-        Bytes containing the Blockchain object
+        Bytes of the blockchain data
 
     @param pvt_key:
         A private key generated under the 'brainpoolP256r1' elliptic curve
@@ -45,7 +45,16 @@ def save_blockchain_to_file(blockchain_data: bytes, pvt_key: EllipticCurvePrivat
     @param pub_key:
         A point (x,y) in the field of 'brainpoolP256r1' elliptic curve
 
-    @return: None
+    @param shared_secret:
+        Bytes of the shared secret
+
+    @param mode:
+        A string containing the cipher mode (CBC or ECB)
+
+    @param iv:
+        Bytes of the initialization vector (IV)
+
+    @return:
     """
     def embed_signature_and_pub_key(data: bytearray, _signature: bytes, _pub_key_bytes: bytes):
         data.extend(SIGNATURE_MARKER)
@@ -57,11 +66,6 @@ def save_blockchain_to_file(blockchain_data: bytes, pvt_key: EllipticCurvePrivat
         data.extend(_pub_key_bytes)
     # ========================================================================================
     content = bytearray(blockchain_data)  # => create mutable copy
-
-    # Derive a new shared secret from a new public key and generate an IV
-    _, alt_pub_key = generate_keys(verbose=False)
-    shared_secret = derive_shared_secret(pvt_key, alt_pub_key)
-    iv = secrets.token_bytes(BLOCK_SIZE)
 
     # Generate hash of the data
     generated_hash = hash_data(content)
@@ -75,9 +79,69 @@ def save_blockchain_to_file(blockchain_data: bytes, pvt_key: EllipticCurvePrivat
     # Embed the signature and public key to the end of the file bytes
     embed_signature_and_pub_key(data=content, _signature=signature, _pub_key_bytes=pub_key_bytes)
 
+    # Encrypt the data
+    encrypted_data = AES_encrypt(data=content, key=shared_secret, iv=iv, mode=mode)
+    return encrypted_data
+
+
+def extract_signature_and_pub_key(blockchain_data: bytearray):
+    """
+    Extracts signature and public key bytes from prepared blockchain data.
+
+    @param blockchain_data:
+        The blockchain data to be verified
+
+    @return: None
+    """
+    signature_start = blockchain_data.rfind(SIGNATURE_MARKER)                  # Extract signature
+    signature_len_start = signature_start + len(SIGNATURE_MARKER)
+    signature_len = int.from_bytes(blockchain_data[signature_len_start:signature_len_start + 4], 'big')
+    extracted_signature = blockchain_data[signature_len_start + 4:signature_len_start + 4 + signature_len]
+
+    public_key_start = blockchain_data.rfind(PUB_KEY_MARKER)                   # Extract public key
+    public_key_len_start = public_key_start + len(PUB_KEY_MARKER)
+    public_key_len = int.from_bytes(blockchain_data[public_key_len_start:public_key_len_start + 4], 'big')
+    public_key_bytes = blockchain_data[public_key_len_start + 4:public_key_len_start + 4 + public_key_len]
+
+    # Get original data without the signature and public key bytes
+    orig_data = blockchain_data[:signature_start]
+    return orig_data, extracted_signature, public_key_bytes
+
+
+def save_blockchain_to_file(blockchain: Blockchain, pvt_key: EllipticCurvePrivateKey, pub_key: EllipticCurvePublicKey):
+    """
+    Encrypts and saves the blockchain data to a file.
+
+    @attention When is this called?
+        Scenario 1 - The moment you join P2P network (entire blockchain encrypted and sent from responsible peer)
+        Scenario 2 - You join P2P network but already have some parts of blockchain, and are
+                     receiving more from responsible peer upon joining)
+        Scenario 3 - The moment you receive a new block from admin/delegate (after a peer is approved)
+
+    @param blockchain:
+        A Blockchain object
+
+    @param pvt_key:
+        A private key generated under the 'brainpoolP256r1' elliptic curve
+
+    @param pub_key:
+        A point (x,y) in the field of 'brainpoolP256r1' elliptic curve
+
+    @return: None
+    """
+    # Convert blockchain to bytes
+    blockchain_data = pickle.dumps(blockchain)
+
+    # Derive a new shared secret from a new public key and generate an IV (for encryption)
+    _, random_pub_key = generate_keys(verbose=False)
+    shared_secret = derive_shared_secret(pvt_key, random_pub_key)
+    iv = secrets.token_bytes(BLOCK_SIZE)
+
+    # Prepare blockchain data by creating a signature, including own public key, and encrypting it
+    encrypted_content = prepare_blockchain_data(blockchain_data, pvt_key, pub_key, shared_secret, mode=CBC, iv=iv)
+
     # Encrypt the data and obfuscate key and IV (Use CBC by default)
-    encrypted_data = AES_encrypt(data=content, key=shared_secret, iv=iv, mode=CBC)
-    new_data = obfuscate(encrypted_data, shared_secret, mode=CBC, iv=iv)
+    new_data = obfuscate(encrypted_content, shared_secret, mode=CBC, iv=iv)
 
     # Save data to file
     try:
@@ -146,21 +210,6 @@ def load_blockchain_from_file(self: object):
             for position in SHARED_KEY_BYTE_MAPPING:
                 data[position] = original_bytes[counter]
                 counter += 1
-
-    def extract_signature_and_pub_key(data: bytearray):
-        signature_start = data.rfind(SIGNATURE_MARKER)                  # Extract signature
-        signature_len_start = signature_start + len(SIGNATURE_MARKER)
-        signature_len = int.from_bytes(data[signature_len_start:signature_len_start + 4], 'big')
-        extracted_signature = data[signature_len_start + 4:signature_len_start + 4 + signature_len]
-
-        public_key_start = data.rfind(PUB_KEY_MARKER)                   # Extract public key
-        public_key_len_start = public_key_start + len(PUB_KEY_MARKER)
-        public_key_len = int.from_bytes(data[public_key_len_start:public_key_len_start + 4], 'big')
-        public_key_bytes = data[public_key_len_start + 4:public_key_len_start + 4 + public_key_len]
-
-        # Get original data without the signature and public key bytes
-        orig_data = data[:signature_start]
-        return orig_data, extracted_signature, public_key_bytes
     # =========================================================================================
     # Create 'data/transactions' directory if it does not exist
     create_directory(path=DEFAULT_BLOCKCHAIN_DIR)
@@ -185,7 +234,7 @@ def load_blockchain_from_file(self: object):
                     os.remove(file_path)
                     return None
 
-                # Extract signature, and public key for verification of signature
+                # Extract signature and public key for verification of signature
                 original_data, signature, signers_pub_key_bytes = extract_signature_and_pub_key(decrypted_data)
                 signers_pub_key = deserialize_public_key(signers_pub_key_bytes)
                 generated_hash = hash_data(original_data)

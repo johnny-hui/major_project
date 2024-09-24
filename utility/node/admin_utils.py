@@ -5,6 +5,8 @@ This Python file provides utility functions for the AdminNode class.
 """
 import socket
 import time
+
+from models.Block import Block
 from utility.crypto.aes_utils import AES_encrypt
 from utility.general.constants import (PROMOTE_PEER_PROMPT, ROLE_PEER, PROMOTION_SIGNAL,
                                        UPDATE_NEW_PROMOTED_PEER_SIGNAL, STATUS_APPROVED,
@@ -188,3 +190,25 @@ def _send_remove_peer_signal(kicked_peer_ip: str, peer_sock: socket.socket,
     # Wait for ACK
     peer_sock.recv(1024)
     print(f"[+] A Peer update (promotion) have been successfully sent to peer (IP: {peer_sock.getpeername()[0]})")
+
+
+def sign_block(self: object, new_block: Block) -> None:
+    """
+    Signs a block.
+
+    @attention DelegateNode:
+        DelegateNode can also use this function
+
+    @param self:
+        A reference to the calling class object (AdminNode, DelegateNode)
+
+    @param new_block:
+        A Block object to be signed
+
+    @return: None
+    """
+    new_block.set_signers_ip(self.ip)
+    new_block.set_signers_role(self.role)
+    if new_block.hash is None:
+        new_block.set_hash()
+    new_block.sign_block(self.pvt_key)

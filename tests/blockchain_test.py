@@ -4,6 +4,7 @@ This Python file tests the Blockchain class.
 
 """
 import pickle
+import time
 import unittest
 from models.Block import Block
 from models.Blockchain import Blockchain
@@ -47,7 +48,7 @@ class TestBlockchain(unittest.TestCase):
         pvt_key, pub_key = generate_keys()
         signers_ip, signers_role = "10.0.0.153", ROLE_ADMIN
         new_block = Block(first_name="Tom", last_name="Wheeler", ip="10.0.0.132", public_key=pub_key)
-        self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key)
+        self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key, is_signing=True)
 
         self.assertEqual(len(self.blockchain.chain), 2)
         self.assertEqual(new_block.index, 1)
@@ -71,7 +72,7 @@ class TestBlockchain(unittest.TestCase):
                 ip=IP_ADDRESSES[i],
                 public_key=pub_key
             )
-            self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key)
+            self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key, is_signing=True)
 
         # INDEX TEST: Getting block within boundaries
         block = self.blockchain.get_specific_block(index=1)
@@ -100,12 +101,12 @@ class TestBlockchain(unittest.TestCase):
             if i in (4, 5, 6):  # => Put 3 blocks with IP = 10.0.0.4
                 new_block = Block(first_name="Bob",last_name="Ross",
                                   ip="10.0.0.4", public_key=pub_key)
-                self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key)
+                self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key, is_signing=True)
                 continue
             else:
                 new_block = Block(first_name=FIRST_NAMES[i], last_name=LAST_NAMES[i],
                                   ip=IP_ADDRESSES[i], public_key=pub_key)
-                self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key)
+                self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key, is_signing=True)
 
         # TEST 1: Get all blocks from IP=10.0.0.4
         blocks = self.blockchain.get_blocks_from_ip(ip="10.0.0.4", return_all=True)
@@ -134,7 +135,7 @@ class TestBlockchain(unittest.TestCase):
                 ip=IP_ADDRESSES[i],
                 public_key=pub_key
             )
-            self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key)
+            self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key, is_signing=True)
 
         self.assertEqual(len(self.blockchain.chain), 4)
         self.assertEqual(self.blockchain.chain[0].index, 0)
@@ -155,7 +156,7 @@ class TestBlockchain(unittest.TestCase):
 
         new_block = Block(first_name=FIRST_NAMES[1], last_name=LAST_NAMES[1],
                           ip=IP_ADDRESSES[1], public_key=pub_key)
-        self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key)
+        self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key, is_signing=True)
         self.assertEqual(self.blockchain.is_valid(), True)
 
         # Manually tamper with the genesis block
@@ -180,7 +181,7 @@ class TestBlockchain(unittest.TestCase):
                 ip=IP_ADDRESSES[i],
                 public_key=pub_key
             )
-            self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key)
+            self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key, is_signing=True)
         self.assertEqual(self.blockchain.is_valid(), True)
 
         # Manually tamper with the 3rd block
@@ -205,7 +206,7 @@ class TestBlockchain(unittest.TestCase):
                 ip=IP_ADDRESSES[i],
                 public_key=pub_key
             )
-            self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key)
+            self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key, is_signing=True)
 
         for i in range(1, len(self.blockchain.chain)):
             current_block = self.blockchain.chain[i]
@@ -229,12 +230,11 @@ class TestBlockchain(unittest.TestCase):
             )
             img = load_image(path="../data/photos/photo_1.png")
             new_block.set_image(img)
-            self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key)
+            self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key, is_signing=True)
         self.assertEqual(self.blockchain.is_valid(), True)
 
         # Serialize the blockchain object
-        blockchain_bytes = pickle.dumps(self.blockchain)
-        save_blockchain_to_file(blockchain_bytes, pvt_key, pub_key)
+        save_blockchain_to_file(self.blockchain, pvt_key, pub_key)
         self.assertEqual(is_directory_empty(path=DEFAULT_BLOCKCHAIN_DIR), False)
 
     def testLoadBlockchainFromFile(self):
@@ -247,6 +247,7 @@ class TestBlockchain(unittest.TestCase):
 
         @return: None
         """
+        time.sleep(1)
         load_blockchain_from_file(self)
         self.assertEqual(is_directory_empty(path=DEFAULT_BLOCKCHAIN_DIR), False)
         self.assertEqual(len(self.blockchain.chain), 4)
