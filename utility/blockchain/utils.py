@@ -252,3 +252,41 @@ def load_blockchain_from_file(self: object):
                     print(INVALID_SIG_BLOCKCHAIN_MSG.format(file_path))
                     os.remove(file_path)
                     return None
+
+
+def check_peer_exists_in_blockchain(blockchain: Blockchain, peer_ip: str):
+    """
+    Checks if the peer exists in the blockchain (i.e., has
+    connected to the network before).
+
+    @attention: Peer Does Not Exist
+        If they do not exist (block not present in blockchain),
+        then print a warning message
+
+    @param blockchain:
+        A Blockchain object
+
+    @param peer_ip:
+        A string for the requesting peer's IP address
+
+    @return: None
+    """
+    if blockchain is not None:
+        if blockchain.get_specific_block(ip=peer_ip) is None:
+            print(f"[+] WARNING: The requesting peer (IP: {peer_ip}) has not connected to the network before, therefore "
+                  f"facial recognition cannot be used during the consensus process!")
+        else:
+            print(f"[+] EXISTING BLOCK FOUND: The requesting peer (IP: {peer_ip}) has connected to the network before!")
+
+
+def view_blockchain(self: object):
+    """
+    Prints the blockchain.
+    @param self:
+        A reference to the calling class object (Node, DelegateNode, AdminNode)
+    @return: None
+    """
+    if self.blockchain:
+        print(self.blockchain)
+    else:
+        print("[+] VIEW BLOCKCHAIN: You currently have no blockchain!")

@@ -31,7 +31,7 @@ from utility.general.constants import (APPLICATION_PORT, FIND_HOST_TIMEOUT,
                                        TARGET_PEER_APPROVED_MSG, MODE_RECEIVER, JOIN_NETWORK_SUCCESS_MSG,
                                        ROLE_PEER, ROLE_DELEGATE, TARGET_NOT_CONNECTED_MSG,
                                        CONNECT_PEERS_AFTER_APPROVAL_MSG, MODE_INITIATOR, APPROVED_SIGNAL,
-                                       CONN_REJECTED_INVALID_TOKEN_MSG, CONNECTION_SUCCESSFUL_MSG)
+                                       CONN_REJECTED_INVALID_TOKEN_MSG, CONNECTION_SUCCESSFUL_MSG, RESPONSE_REJECTED)
 from utility.general.utils import timer, determine_delegate_status, start_parallel_operation
 from utility.node.node_utils import (peer_exists, add_new_transaction, save_transaction_to_file,
                                      save_pending_peer_info, remove_pending_peer, delete_transaction,
@@ -451,7 +451,8 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
             from models.Consensus import Consensus
             consensus = Consensus(request=request, mode=MODE_VOTER,
                                   peer_socket=target_sock, peer_dict=self.peer_dict,
-                                  is_connected=False, event=self.consensus_event)
+                                  is_connected=False, event=self.consensus_event,
+                                  blockchain=self.blockchain)
             vote = consensus.start()
 
             # Based on vote result, perform follow-up or remove pending peer
@@ -658,6 +659,7 @@ def approved_signal_handler(self: object, peer_socket: socket.socket, secret: by
         received_block_hash = AES_decrypt(data=peer_socket.recv(1024), key=secret, iv=iv, mode=mode).decode()
         issued_block = get_peer(self.peer_dict, ip=peer_ip).block
         if issued_block.hash != received_block_hash:
+            peer_socket.send(AES_encrypt(data=RESPONSE_REJECTED.encode(), key=secret, iv=iv, mode=mode))
             raise PeerInvalidBlockHashError(ip=peer_ip)
         else:
             print(f"[+] The block issued for {issued_block.ip_addr} has the correct hash!")

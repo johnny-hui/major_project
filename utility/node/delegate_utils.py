@@ -6,6 +6,7 @@ This Python file provides utility functions for the DelegateNode class.
 import time
 from models.Block import Block
 from models.Consensus import Consensus
+from utility.blockchain.utils import check_peer_exists_in_blockchain
 from utility.client_server.blockchain import send_block
 from utility.crypto.token_utils import generate_approval_token
 from utility.general.constants import INITIATE_CONSENSUS_PROMPT, CONSENSUS_SELECT_REQUEST_PROMPT, MODE_INITIATOR, \
@@ -82,6 +83,7 @@ def initiate_consensus(self: object):
                                   for_consensus=True)
         if request:
             temp_list = []
+            check_peer_exists_in_blockchain(self.blockchain, peer_ip=request.ip_addr)
             transfer_items_to_list(_to=temp_list, _from=self.fd_list, idx_start=1)  # idx=1 to ignore own socket
             time.sleep(1.2)  # => wait for select() in main thread to see the changes
 
@@ -91,7 +93,8 @@ def initiate_consensus(self: object):
                                   sock_list=temp_list,
                                   peer_dict=self.peer_dict,
                                   is_connected=True,
-                                  event=self.consensus_event)
+                                  event=self.consensus_event,
+                                  blockchain=self.blockchain)
             final_decision = consensus.start()
 
             # Set all sockets to blocking mode

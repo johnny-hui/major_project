@@ -72,7 +72,7 @@ class Blockchain:
                 if not return_all and len(block_list) == n_blocks:
                     break
 
-        if not block_list:
+        if len(block_list) == 0:
             print(f"[+] ERROR: No blocks were found for the provided IP address {ip}!")
             return None
 

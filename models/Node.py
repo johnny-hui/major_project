@@ -3,7 +3,7 @@ import socket
 import sys
 import threading
 from models.Peer import Peer
-from utility.blockchain.utils import load_blockchain_from_file
+from utility.blockchain.utils import load_blockchain_from_file, view_blockchain
 from utility.client_server.client_server import accept_new_peer_handler, connect_to_P2P_network
 from utility.crypto.ec_keys_utils import generate_keys
 from utility.general.constants import (NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_THREAD_NAME, USER_INPUT_START_MSG,
@@ -214,7 +214,7 @@ class Node:
             1: lambda: connect_to_P2P_network(self),
             2: lambda: approve_connection_request(self),
             3: lambda: revoke_connection_request(self),
-            4: lambda: None,
+            4: lambda: view_blockchain(self),
             5: lambda: view_pending_connection_requests(self),
             6: lambda: view_current_peers(self),
             7: lambda: close_application(self)
@@ -223,7 +223,7 @@ class Node:
             1: lambda: send_message_to_specific_peer(self),
             2: lambda: approve_connection_request(self),
             3: lambda: revoke_connection_request(self),
-            4: lambda: None,
+            4: lambda: view_blockchain(self),
             5: lambda: view_pending_connection_requests(self),
             6: lambda: view_current_peers(self),
             7: lambda: close_application(self),

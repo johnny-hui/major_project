@@ -1,4 +1,5 @@
 from models.Node import Node
+from utility.blockchain.utils import view_blockchain
 from utility.client_server.client_server import connect_to_P2P_network
 from utility.general.constants import (ROLE_DELEGATE, INPUT_PROMPT, NODE_INIT_SUCCESS_MSG,
                                        NODE_INIT_MSG, STATUS_APPROVED, BROADCAST_MESSAGE_PROMPT)
@@ -86,7 +87,7 @@ class DelegateNode(Node):
             1: lambda: connect_to_P2P_network(self),
             2: lambda: approve_connection_request(self),
             3: lambda: revoke_connection_request(self),
-            4: lambda: None,
+            4: lambda: view_blockchain(self),
             5: lambda: view_pending_connection_requests(self),
             6: lambda: view_current_peers(self),
             7: lambda: close_application(self)
@@ -96,7 +97,7 @@ class DelegateNode(Node):
             2: lambda: broadcast_message(),
             3: lambda: initiate_consensus(self),
             4: lambda: revoke_connection_request(self),
-            5: lambda: None,
+            5: lambda: view_blockchain(self),
             6: lambda: view_pending_connection_requests(self),
             7: lambda: view_current_peers(self),
             8: lambda: close_application(self)

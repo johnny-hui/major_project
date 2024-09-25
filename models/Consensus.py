@@ -3,6 +3,7 @@ import socket
 import sys
 import threading
 
+from models.Blockchain import Blockchain
 from models.Transaction import Transaction
 from utility.client_server.client_server import send_request
 from utility.consensus.utils import (arg_check, check_sock_list_empty,
@@ -32,6 +33,7 @@ class Consensus:
         request - The Transaction object to be voted on
         is_connected - A boolean flag indicating whether the Node is connected
         mode - A string indicating the role of the calling class (MODE_VOTER, MODE_INITIATOR)
+        blockchain - A Blockchain that is used to verify peers using facial recognition module (DeepFace)
         peer_dict - A dictionary containing peers (APPROVED and PENDING)
         peer_socket - A socket object (Used by only the 'VOTER' to send their votes to)
         peer_list - A list of peer sockets (Used by the 'INITIATOR' to send the request to all connected peers
@@ -44,7 +46,8 @@ class Consensus:
                  mode: str, peer_dict: dict,
                  event: threading.Event,
                  peer_socket: socket.socket = None,
-                 sock_list: list[socket.socket] = None):
+                 sock_list: list[socket.socket] = None,
+                 blockchain: Blockchain = None):
         """
         A constructor for a Consensus class object.
 
@@ -66,6 +69,9 @@ class Consensus:
         @param sock_list:
             A list of peer sockets (required by the INITIATOR)
 
+        @param blockchain:
+            A Blockchain object (default=None)
+
         @return Consensus():
             A Consensus object
         """
@@ -76,6 +82,7 @@ class Consensus:
         self.request = request
         self.is_connected = is_connected
         self.mode = mode
+        self.blockchain = blockchain
         self.peer_dict = peer_dict
         self.peer_socket = peer_socket
         self.sock_list = sock_list               # => socket list
@@ -194,8 +201,18 @@ class Consensus:
                     timeout_flag = True
                     return VOTE_NO, timeout_flag  # Automatically vote 'NO' on timeout
         # ===============================================================================
-        # Display the request and prompt vote
+        # Display the request on screen
         print(create_transaction_table(req_list=[self.request]))
+
+        # Check if peer exists in the blockchain
+        from utility.blockchain.utils import check_peer_exists_in_blockchain
+        check_peer_exists_in_blockchain(self.blockchain, peer_ip=self.request.ip_addr)
+
+        # TODO: Perform facial recognition (DeepFace) on each block photo of requesting peer
+        # if self.blockchain is not None:
+        #     print()
+
+        # Prompt for vote
         vote, timeout = get_vote(VOTE_PROMPT)
 
         # Voter will send their vote

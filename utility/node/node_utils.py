@@ -1229,7 +1229,8 @@ def approve_connection_request(self: object):
             from models.Consensus import Consensus
             consensus = Consensus(request=own_request, mode=MODE_INITIATOR,
                                   sock_list=temp_list, peer_dict=self.peer_dict,
-                                  is_connected=False, event=self.consensus_event)
+                                  is_connected=False, event=self.consensus_event,
+                                  blockchain=self.blockchain)
             final_decision = consensus.start()
 
             # Evaluate and handle the decision
@@ -1411,7 +1412,8 @@ def perform_consensus_signal(self: object, peer: Peer):
                               peer_socket=peer.socket,
                               peer_dict=self.peer_dict,
                               is_connected=self.is_connected,
-                              event=self.consensus_event)
+                              event=self.consensus_event,
+                              blockchain=self.blockchain)
         final_decision = consensus.start()
 
         # Perform follow-up (receive token & block from admin/delegate + other tasks)
