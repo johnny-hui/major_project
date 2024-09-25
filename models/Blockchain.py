@@ -121,6 +121,7 @@ class Blockchain:
             new_block.sign_block(signers_pvt_key)
 
         self.chain.append(new_block)
+        print(f"[+] BLOCK ADDED: Block {new_block.index} has been added to the Blockchain!")
 
     def is_valid(self) -> bool:
         """

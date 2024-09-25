@@ -11,10 +11,13 @@ import threading
 import time
 from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError, InvalidSignatureError,
                                    TransactionNotFoundError, ConsensusInitError, InvalidTokenError,
-                                   InvalidBlockchainError, InvalidBlockError, PeerInvalidBlockchainError)
+                                   InvalidBlockchainError, InvalidBlockError, PeerInvalidBlockchainError,
+                                   PeerInvalidBlockHashError)
+from models.Block import Block
 from models.Peer import Peer
 from models.Token import Token
 from utility.blockchain.utils import save_blockchain_to_file
+from utility.client_server.blockchain import receive_block
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import serialize_private_key, serialize_public_key, deserialize_private_key, \
     deserialize_public_key
@@ -34,7 +37,7 @@ from utility.node.node_utils import (peer_exists, add_new_transaction, save_tran
                                      save_pending_peer_info, remove_pending_peer, delete_transaction,
                                      change_peer_status, change_peer_role, receive_approval_token,
                                      receive_peer_dictionary, update_peer_dict, get_peer, send_approval_token,
-                                     remove_all_approved_peers, synchronize_blockchain_when_not_connected)
+                                     remove_all_approved_peers, synchronize_blockchain)
 
 
 def _connect_to_target_peer(ip: str,
@@ -369,8 +372,12 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
             print("[+] Target peer is connected to a P2P network; now initializing into the network...")
             target_sock.settimeout(TARGET_TRANSACTION_WAIT_TIME)
 
-            # Receive approval token and peer dictionary from target peer
+            # Sync blockchain with target peer
+            synchronize_blockchain(self, target_sock, secret, self.mode, MODE_RECEIVER, iv, do_init=False)
+
+            # Receive approval token, block, and peer dictionary from target peer
             token = receive_approval_token(target_sock, secret, self.mode, iv)
+            block = receive_block(self, target_sock, 0, secret, self.mode, iv, do_add=False)
             new_peer_dict = receive_peer_dictionary(target_sock, secret, iv, self.mode)
 
             # Update info from new_peer_dict into own peer dictionary
@@ -382,7 +389,7 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
             target_peer.socket, target_peer.secret, target_peer.iv, target_peer.mode = (target_sock, secret, iv, self.mode)
 
             # Generate an argument list for parallel connecting to peers (ignore target peer)
-            peer_info = _process_peer_info_into_list(self, token, exclude=[target_peer.ip])
+            peer_info = _process_peer_info_into_list(self, token, block, exclude=[target_peer.ip])
 
             # Use multiprocessing to connect to new peers and get security parameters + socket
             results = start_parallel_operation(task=_connect_to_peer_after_approved,
@@ -393,12 +400,19 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
             # Process the results
             process_results(results)
 
+            # Send final ACK to notify responsible peer initialization successful
+            target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=self.mode, iv=iv))
+
             # Perform finishing touches
+            self.blockchain.add_block(new_block=block)
+            if self.blockchain.is_valid():
+                save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
             self.fd_list.append(target_sock)
             self.is_connected = True
             print(CONNECTION_SUCCESSFUL_MSG)
 
-        except (socket.error, ConnectionResetError, BrokenPipeError, socket.timeout, InvalidTokenError) as e:
+        except (socket.error, ConnectionResetError, BrokenPipeError, socket.timeout,
+                InvalidTokenError, InvalidBlockError, InvalidBlockchainError) as e:
             print(f"[+] ERROR: An error has occurred while initializing into the network! [REASON: {e}]")
             target_sock.close()
             self.peer_dict.clear()
@@ -456,8 +470,7 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
                         change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
 
                 # Synchronize blockchain with target peer
-                synchronize_blockchain_when_not_connected(self, target_sock, secret=secret,
-                                                          enc_mode=self.mode, mode=MODE_RECEIVER, iv=iv)
+                synchronize_blockchain(self, target_sock, secret=secret, enc_mode=self.mode, mode=MODE_RECEIVER, iv=iv)
                 save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
 
                 # Perform finishing steps
@@ -497,7 +510,8 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
         not_connected_handler()
 
 
-def _connect_to_peer_after_approved(pvt_key: bytes, pub_key: bytes, target_peer: Peer, token: Token, mode: str):
+def _connect_to_peer_after_approved(pvt_key: bytes, pub_key: bytes, target_peer: Peer,
+                                    token: Token, mode: str, block_idx: int, block_hash: str):
     """
     Connects to and returns a target peer after being approved into the P2P network.
 
@@ -520,9 +534,28 @@ def _connect_to_peer_after_approved(pvt_key: bytes, pub_key: bytes, target_peer:
     @param mode:
         A string for the mode of encryption (ECB or CBC)
 
+    @param block_idx:
+        An integer for the issued block's index
+
+    @param block_hash:
+        A string for the issued block's hash
+
     @return: target_peer or target_ip
         Return an updated target peer object if success; otherwise, target_ip (if any errors)
     """
+    def present_issued_block_hash(input_hash: str, idx: int):
+        print(f"[+] Presenting your issued block's hash to {target_peer.ip}...")
+
+        # Send hash and await for response
+        target_sock.send(AES_encrypt(data=input_hash.encode(), key=secret, iv=iv, mode=mode))
+        response = AES_decrypt(data=target_sock.recv(1024), key=secret, iv=iv, mode=mode).decode()
+
+        if response == ACK:
+            print("[+] Your issued block hash is correct and has been validated!")
+            return None
+        else:
+            raise InvalidBlockError(index=idx)
+    # ==============================================================================================
     try:
         print(f"[+] Now connecting to peer (IP: {target_peer.ip})...")
 
@@ -546,8 +579,11 @@ def _connect_to_peer_after_approved(pvt_key: bytes, pub_key: bytes, target_peer:
         # Wait for ACK
         target_sock.recv(1024)
 
-        # Verify with target peer by sending your approval token
+        # Verify with target peer by presenting your approval token
         send_approval_token(target_sock, token, secret, mode, iv)
+
+        # Verify with target peer by presenting the hash for your issued block
+        present_issued_block_hash(input_hash=block_hash, idx=block_idx)
 
         # Update target_peer with information
         target_peer.socket = target_sock
@@ -556,7 +592,7 @@ def _connect_to_peer_after_approved(pvt_key: bytes, pub_key: bytes, target_peer:
         target_peer.mode = mode
         return target_peer
 
-    except (socket.error, socket.timeout, BrokenPipeError, ConnectionResetError, InvalidTokenError) as e:
+    except (socket.error, socket.timeout, BrokenPipeError, ConnectionResetError, InvalidTokenError, InvalidBlockError) as e:
         print(f"[+] ERROR: An error has occurred while connecting to peer (IP: {target_peer.ip})! [REASON: {e}]")
         return target_peer.ip
 
@@ -564,8 +600,8 @@ def _connect_to_peer_after_approved(pvt_key: bytes, pub_key: bytes, target_peer:
 def approved_signal_handler(self: object, peer_socket: socket.socket, secret: bytes, mode: str, iv: bytes = None):
     """
     Handles a newly approved peer's 'APPROVED' peer signal, which
-    includes the verification of an approval token (presented upon
-    connection).
+    includes the verification of an issued approval token and block
+    hash (presented upon connection).
 
     @attention Use of Approval Tokens:
         This function validates the newly approved peer
@@ -589,27 +625,69 @@ def approved_signal_handler(self: object, peer_socket: socket.socket, secret: by
     @return: None
     """
     def update_peer_info(peer: Peer):
+        """
+        Updates peer information after validation and connection.
+
+        @param peer:
+            The connecting peer
+
+        @return: None
+        """
         peer.status = STATUS_APPROVED
         peer.socket = peer_socket
         peer.secret, peer.iv = secret, iv
         peer.mode = mode
         peer.token = None
+        peer.block = None
         print(f"[+] Information for peer (IP: {peer.ip}) has been updated!")
-    # ================================================================================
+
+    def validate_issued_block_hash(peer_ip: str):
+        """
+        Gets the issued block hash from connecting peer
+        and validates it.
+
+        @param peer_ip:
+            The connecting peer's IP address (String)
+
+        @raise InvalidBlockError:
+            Raised if the connecting peer presents an invalid hash
+            for the block, they were issued upon being approved
+
+        @return: None
+        """
+        received_block_hash = AES_decrypt(data=peer_socket.recv(1024), key=secret, iv=iv, mode=mode).decode()
+        issued_block = get_peer(self.peer_dict, ip=peer_ip).block
+        if issued_block.hash != received_block_hash:
+            raise PeerInvalidBlockHashError(ip=peer_ip)
+        else:
+            print(f"[+] The block issued for {issued_block.ip_addr} has the correct hash!")
+            peer_socket.send(AES_encrypt(data=ACK.encode(), key=secret, iv=iv, mode=mode))
+            return None
+    # ==============================================================================================
 
     try:
         ip = peer_socket.getpeername()[0]
+
+        # Validate connecting peer's approval token and issued block's hash
         receive_approval_token(peer_socket, secret=secret, mode=mode, iv=iv)
+        validate_issued_block_hash(peer_ip=ip)
+
+        # Add block to blockchain and validate the entirety of the blockchain
+        self.blockchain.add_block(new_block=get_peer(self.peer_dict, ip).block)
+        if self.blockchain.is_valid():
+            save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
+
+        # Update peer info
         update_peer_info(get_peer(self.peer_dict, ip))
         self.fd_list.append(peer_socket)
         print(f"[+] NEW PEER CONNECTION: A new peer has been successfully verified and approved (IP: {ip}))!")
-    except InvalidTokenError as msg:
+    except (InvalidTokenError, PeerInvalidBlockHashError) as msg:
         print(msg)
         del self.peer_dict[peer_socket.getpeername()[0]]
         peer_socket.close()
 
 
-def _process_peer_info_into_list(self: object, token: Token, exclude: list):
+def _process_peer_info_into_list(self: object, token: Token, block: Block, exclude: list):
     """
     Processes information from peer dictionary into an argument list
     suitable for _connect_to_peer_after_approved() function.
@@ -631,5 +709,5 @@ def _process_peer_info_into_list(self: object, token: Token, exclude: list):
         if peer.ip not in exclude:
             serialized_pvt_key = serialize_private_key(self.pvt_key)
             serialized_pub_key = serialize_public_key(self.pub_key)
-            peer_info.append((serialized_pvt_key, serialized_pub_key, peer, token, self.mode))
+            peer_info.append((serialized_pvt_key, serialized_pub_key, peer, token, self.mode, block.index, block.hash))
     return peer_info

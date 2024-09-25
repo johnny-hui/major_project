@@ -22,6 +22,8 @@ INVALID_BLOCKCHAIN_ERROR_MSG = "[+] An error has occurred while validating a blo
 PEER_REFUSED_BLOCK_ERROR_MSG = "Peer has refused the sent block due to an invalid signature! ({})"
 PEER_INVALID_BLOCKCHAIN_MSG = ("The requesting peer has an invalid blockchain! [REASON: blockchain belongs to another "
                                "local P2P network or tampering has occurred]")
+PEER_INVALID_BLOCK_HASH_ERROR_MSG = ("[+] The connecting peer (IP: {}) has presented an invalid hash for the "
+                                     "block they were issued upon approval into the network!")
 
 
 class RequestAlreadyExistsError(Exception):
@@ -187,4 +189,19 @@ class PeerInvalidBlockchainError(Exception):
     """
     def __init__(self):
         self.message = PEER_INVALID_BLOCKCHAIN_MSG
+        super().__init__(self.message)
+
+
+class PeerInvalidBlockHashError(Exception):
+    """
+    An exception that raises an PeerInvalidBlockHashError.
+
+    @attention Use Case:
+        Thrown when a connecting peer presents an invalid hash
+        for the block, they were issued upon being approved.
+
+    @return: None
+    """
+    def __init__(self, ip: str):
+        self.message = PEER_INVALID_BLOCK_HASH_ERROR_MSG.format(ip)
         super().__init__(self.message)

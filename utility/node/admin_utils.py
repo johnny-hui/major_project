@@ -192,7 +192,7 @@ def _send_remove_peer_signal(kicked_peer_ip: str, peer_sock: socket.socket,
     print(f"[+] A Peer update (promotion) have been successfully sent to peer (IP: {peer_sock.getpeername()[0]})")
 
 
-def sign_block(self: object, new_block: Block) -> None:
+def sign_block(self: object, new_block: Block, new_index: int, previous_hash: str) -> None:
     """
     Signs a block.
 
@@ -205,8 +205,16 @@ def sign_block(self: object, new_block: Block) -> None:
     @param new_block:
         A Block object to be signed
 
+    @param new_index:
+        An integer for setting the index of the new block
+
+    @param previous_hash:
+        A string for setting the previous hash of the block
+
     @return: None
     """
+    new_block.index = new_index
+    new_block.previous_hash = previous_hash
     new_block.set_signers_ip(self.ip)
     new_block.set_signers_role(self.role)
     if new_block.hash is None:

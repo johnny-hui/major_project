@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from socket import socket
+
+from models.Block import Block
 from models.Token import Token
 
 
@@ -19,3 +21,4 @@ class Peer:
     secret: bytes = None
     iv: bytes = None
     token: Token = None
+    block: Block = None

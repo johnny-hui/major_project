@@ -6,16 +6,155 @@ socket communication, and both the Blockchain and Block classes
 """
 import pickle
 import socket
+import tqdm
 from exceptions.exceptions import InvalidBlockError, InvalidBlockchainError, PeerInvalidBlockchainError
 from models.Block import Block
 from models.Blockchain import Blockchain
 from utility.crypto.aes_utils import AES_encrypt, AES_decrypt
 from utility.crypto.ec_keys_utils import deserialize_public_key, hash_data, verify_signature
-from utility.general.constants import BLOCK_SIZE, ERROR_BLOCK, ACK, ERROR_BLOCKCHAIN
+from utility.general.constants import BLOCK_SIZE, ERROR_BLOCK, ACK, ERROR_BLOCKCHAIN, MODE_INITIATOR, MODE_RECEIVER
+
+
+def exchange_blockchain_index(self: object, peer_sock: socket.socket, secret: bytes, enc_mode: str, iv, mode: str):
+    """
+    Performs a blockchain index exchange process between two peers
+    for their most recent block.
+
+    @attention Use Case:
+        This is used to allow the initiator and receiver how many
+        blocks should be sent/received to sync their blockchains
+        with each other
+
+    @param self:
+        A reference to the calling class object (Node, AdminNode, DelegateNode)
+
+    @param peer_sock:
+        A socket object
+
+    @param secret:
+        Bytes containing the shared secret
+
+    @param enc_mode:
+        The encryption mode (CBC or ECB)
+
+    @param mode:
+        A string to denote whether calling class should
+        receive or initiate the index exchange process
+
+    @param iv:
+        Bytes of the initialization factor IV (optional)
+
+    @return: peer_current_block_index
+        An integer representing the peer's current blockchain index
+    """
+    if mode == MODE_INITIATOR:
+        print("[+] Now exchanging blockchain indexes with the requesting peer...")
+
+        # Send own current block index
+        current_index = self.blockchain.get_latest_block().index
+        peer_sock.send(AES_encrypt(
+            data=len(current_index).to_bytes(4, byteorder='big'),
+            key=secret,
+            mode=enc_mode,
+            iv=iv
+        ))
+
+        # Receive peer's current block index
+        data = AES_decrypt(data=peer_sock.recv(BLOCK_SIZE), key=secret, mode=enc_mode, iv=iv)
+        peer_current_block_index = int.from_bytes(data, byteorder='big')
+        return peer_current_block_index
+
+    if mode == MODE_RECEIVER:
+        print("[+] Now exchanging blockchain indexes with the target peer...")
+
+        # Receive target peer's current block index
+        data = AES_decrypt(data=peer_sock.recv(BLOCK_SIZE), key=secret, mode=enc_mode, iv=iv)
+        peer_current_block_index = int.from_bytes(data, byteorder='big')
+
+        # Send own current block index
+        current_index = self.blockchain.get_latest_block().index
+        peer_sock.send(AES_encrypt(
+            data=len(current_index).to_bytes(4, byteorder='big'),
+            key=secret,
+            mode=enc_mode,
+            iv=iv
+        ))
+        return peer_current_block_index
+
+
+def compare_latest_hash(self: object, peer_sock: socket.socket, secret: bytes, enc_mode: str, iv, mode: str):
+    """
+    Compares the latest block's hash between two peers to ensure
+    blockchain compatibility.
+
+    @attention Use Case:
+        This is used to allow the initiator to determine if
+        the receiver's blockchain is the same
+
+    @raise PeerInvalidBlockchainError, InvalidBlockchainError:
+        Thrown if the hashes are not the same; hence - difference in
+        blockchains
+
+    @param self:
+        A reference to the calling class object (Node, AdminNode, DelegateNode)
+
+    @param peer_sock:
+        A socket object
+
+    @param secret:
+        Bytes containing the shared secret
+
+    @param enc_mode:
+        The encryption mode (CBC or ECB)
+
+    @param mode:
+        A string to denote whether calling class should
+        receive or initiate the index exchange process
+
+    @param iv:
+        Bytes of the initialization factor IV (optional)
+
+    @return: None
+    """
+    if mode == MODE_INITIATOR:
+        print("[+] Now comparing the latest hash with the requesting peer to test blockchain compatibility...")
+
+        # Send own current block index
+        latest_block_hash = self.blockchain.get_latest_block().hash
+        peer_sock.send(AES_encrypt(data=latest_block_hash.encode(), key=secret, mode=enc_mode, iv=iv))
+
+        # Receive peer's current block index
+        peer_latest_block_hash = AES_decrypt(data=peer_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
+
+        # Compare the hashes
+        if peer_latest_block_hash != latest_block_hash:
+            print("[+] BLOCKCHAIN INVALID: The requesting peer's blockchain is incompatible with yours!")
+            raise PeerInvalidBlockchainError
+        else:
+            print("[+] BLOCKCHAIN COMPATIBLE: The requesting peer's blockchain is valid!")
+            return None
+
+    if mode == MODE_RECEIVER:
+        print("[+] Now comparing the latest hash with the target peer to test blockchain compatibility...")
+
+        # Receive target peer's current block index
+        peer_latest_block_hash = AES_decrypt(data=peer_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
+
+        # Send own current block index
+        latest_block_hash = self.blockchain.get_latest_block().hash
+        peer_sock.send(AES_encrypt(data=latest_block_hash, key=secret, mode=enc_mode, iv=iv))
+
+        # Compare the hashes
+        if peer_latest_block_hash != latest_block_hash:
+            print("[+] BLOCKCHAIN INVALID: Your blockchain is incompatible as it belongs to another network!")
+            raise InvalidBlockchainError(reason="Your blockchain is incompatible as it belongs to another network!")
+        else:
+            print("[+] BLOCKCHAIN COMPATIBLE: Your blockchain is valid!")
+            return None
 
 
 def send_block(target_sock: socket.socket, input_block: Block,
-               secret: bytes, enc_mode: str, iv: bytes = None):
+               secret: bytes, enc_mode: str, iv: bytes = None, do_wait: bool = False):
     """
     Encrypts and sends a block object to a target peer.
 
@@ -34,18 +173,48 @@ def send_block(target_sock: socket.socket, input_block: Block,
     @param iv:
         Bytes of the initialization factor IV (optional)
 
+    @param do_wait:
+        A boolean to force calling class to wait for a response
+        before proceeding
+
     @return: None
     """
     print(f"[+] Sending block {input_block.index}...")
+
+    # Serialize and encrypt the block
     block_bytes = pickle.dumps(input_block)
     encrypted_block = AES_encrypt(data=block_bytes, key=secret, mode=enc_mode, iv=iv)
+
+    # Prepare to send the size of the encrypted block (4 bytes)
     size = len(encrypted_block).to_bytes(4, byteorder='big')
-    target_sock.sendall(AES_encrypt(data=size, key=secret, mode=enc_mode, iv=iv))
-    target_sock.sendall(encrypted_block)
+
+    # Encrypt and send the size
+    encrypted_size = AES_encrypt(data=size, key=secret, mode=enc_mode, iv=iv)
+    target_sock.sendall(encrypted_size)
+
+    # Initialize progress bar
+    total_size = len(encrypted_block)
+    progress_bar = tqdm.tqdm(total=total_size, unit='B', unit_scale=True, desc='Sending block')
+
+    # Send the encrypted block in chunks with progress
+    sent_bytes = 0
+    chunk_size = 1024  # Send in 1024 byte chunks
+    while sent_bytes < total_size:
+        chunk = encrypted_block[sent_bytes:sent_bytes + chunk_size]
+        target_sock.sendall(chunk)  # Send each chunk
+        sent_bytes += len(chunk)
+        progress_bar.update(len(chunk))  # Update the progress bar
+
+    # Close the progress bar
+    progress_bar.close()
+
+    # Wait for a response if required
+    if do_wait:
+        target_sock.recv(1024)  # Waiting for a response
 
 
 def receive_block(self: object, target_sock: socket.socket, index: int,
-                  secret: bytes, enc_mode: str, iv: bytes = None):
+                  secret: bytes, enc_mode: str, iv: bytes = None, do_add: bool = True):
     """
     Receives a block from a target peer.
 
@@ -79,24 +248,38 @@ def receive_block(self: object, target_sock: socket.socket, index: int,
     @param iv:
         Bytes of the initialization factor IV (optional)
 
+    @param do_add:
+        A boolean to add the received block to blockchain
+
     @return: status (T/F)
         True if block and blockchain are valid, False otherwise
     """
-    print(f"[+] Receiving block {index}...")
     buffer = bytearray()
+    if index != 0:
+        print(f"[+] Receiving block {index}...")
+    else:
+        print("[+] Receiving an approval block issued for new peer from admin/delegate...")
 
-    # Receive block size
-    data = AES_decrypt(data=target_sock.recv(BLOCK_SIZE), key=secret, mode=enc_mode, iv=iv)
-    block_size = int.from_bytes(data, byteorder='big')
+    # Receive the encrypted block size (4 bytes)
+    encrypted_size = target_sock.recv(1024)  # Adjust buffer size as needed
+    block_size = int.from_bytes(AES_decrypt(data=encrypted_size, key=secret, mode=enc_mode, iv=iv), byteorder='big')
 
-    # Receive block data
+    # Initialize the progress bar
+    progress_bar = tqdm.tqdm(total=block_size, unit='B', unit_scale=True, desc='Receiving block')
+
+    # Receive the block data
     while len(buffer) < block_size:
-        chunk = target_sock.recv(min(block_size - len(buffer), 4096))
+        chunk_size = min(block_size - len(buffer), 4096)
+        chunk = target_sock.recv(chunk_size)
         if not chunk:
             break
         buffer += chunk
+        progress_bar.update(len(chunk))
 
-    # Decrypt block data
+    # Close the progress bar
+    progress_bar.close()
+
+    # Decrypt the received block
     decrypted_data = AES_decrypt(data=buffer, key=secret, mode=enc_mode, iv=iv)
     block = pickle.loads(decrypted_data)
 
@@ -107,10 +290,15 @@ def receive_block(self: object, target_sock: socket.socket, index: int,
             raise InvalidBlockError(index=block.index)  # closes connection
 
         # Add block to blockchain and validate the entirety of the blockchain
-        self.blockchain.add_block(block)
-        if self.blockchain.is_valid():
+        if do_add:
+            self.blockchain.add_block(block)
+            if self.blockchain.is_valid():
+                target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=enc_mode, iv=iv))
+                print(f"[+] BLOCK RECEIVED: Successfully received block {index}!")
+        else:
+            print(f"[+] BLOCK RECEIVED: Successfully received the approval block!")
             target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=enc_mode, iv=iv))
-            print(f"[+] BLOCK RECEIVED: Successfully received block {index}!")
+            return block
 
     except InvalidBlockchainError as error:
         invalid_block_index = self.blockchain.get_latest_block().index
@@ -147,12 +335,29 @@ def send_blockchain(self: object, target_sock: socket.socket, secret: bytes, enc
     from utility.blockchain.utils import prepare_blockchain_data
     print(f"[+] Now sending blockchain to (IP: {target_sock.getpeername()[0]})...")
 
-    # Prepare the blockchain and send it
+    # Serialize and encrypt the blockchain
     blockchain_bytes = pickle.dumps(self.blockchain)
     encrypted_blockchain = prepare_blockchain_data(blockchain_bytes, self.pvt_key, self.pub_key, secret, enc_mode, iv)
+
+    # Get the size of the encrypted blockchain and send it
     blockchain_size = len(encrypted_blockchain).to_bytes(4, byteorder='big')
     target_sock.sendall(AES_encrypt(data=blockchain_size, key=secret, mode=enc_mode, iv=iv))
-    target_sock.sendall(encrypted_blockchain)
+
+    # Initialize the progress bar
+    total_size = len(encrypted_blockchain)
+    progress_bar = tqdm.tqdm(total=total_size, unit='B', unit_scale=True, desc='Sending blockchain')
+
+    # Send the encrypted blockchain in chunks
+    chunk_size = 4096  # Adjust chunk size as needed
+    sent_bytes = 0
+    while sent_bytes < total_size:
+        chunk = encrypted_blockchain[sent_bytes:sent_bytes + chunk_size]
+        target_sock.sendall(chunk)  # Send the current chunk
+        sent_bytes += len(chunk)
+        progress_bar.update(len(chunk))  # Update the progress bar with the size of the sent chunk
+
+    # Close the progress bar
+    progress_bar.close()
 
     # Wait for status
     status = AES_decrypt(data=target_sock.recv(1024), key=secret, mode=enc_mode, iv=iv)
@@ -191,12 +396,20 @@ def receive_blockchain(target_sock: socket.socket, secret: bytes, enc_mode: str,
     size = AES_decrypt(data=target_sock.recv(BLOCK_SIZE), key=secret, mode=enc_mode, iv=iv)
     blockchain_size = int.from_bytes(size, byteorder='big')
 
-    # Receive blockchain data
+    # Initialize the progress bar
+    progress_bar = tqdm.tqdm(total=blockchain_size, unit='B', unit_scale=True, desc='Receiving blockchain')
+
+    # Receive the blockchain data
     while len(buffer) < blockchain_size:
-        chunk = target_sock.recv(min(size - len(buffer), 4096))
+        chunk_size = min(blockchain_size - len(buffer), 4096)
+        chunk = target_sock.recv(chunk_size)
         if not chunk:
             break
         buffer += chunk
+        progress_bar.update(len(chunk))  # Update the progress bar with the size of the received chunk
+
+    # Close the progress bar
+    progress_bar.close()
 
     # Decrypt blockchain data
     from utility.blockchain.utils import extract_signature_and_pub_key

@@ -4,14 +4,16 @@ This Python file provides utility functions for the DelegateNode class.
 
 """
 import time
-
+from models.Block import Block
 from models.Consensus import Consensus
+from utility.client_server.blockchain import send_block
 from utility.crypto.token_utils import generate_approval_token
 from utility.general.constants import INITIATE_CONSENSUS_PROMPT, CONSENSUS_SELECT_REQUEST_PROMPT, MODE_INITIATOR, \
     CONSENSUS_SUCCESS, CONSENSUS_SUCCESS_TOKEN_MSG, SEND_TOKEN_MULTIPROCESS_MSG, STATUS_PENDING, CONSENSUS_FAILURE, \
-    CONSENSUS_PEER_LOSE_MSG, CONSENSUS_REQ_NEAR_EXPIRY_MSG
+    CONSENSUS_PEER_LOSE_MSG, CONSENSUS_REQ_NEAR_EXPIRY_MSG, SEND_BLOCK_MULTIPROCESS_MSG
 from utility.general.utils import perform_cleanup, get_user_command_option, transfer_items_to_list, \
     set_blocking_all_sockets, start_parallel_operation
+from utility.node.admin_utils import sign_block
 from utility.node.node_utils import view_pending_connection_requests, get_transaction, send_approval_token, \
     perform_responsible_peer_tasks, add_peer_to_dict, delete_transaction
 
@@ -107,31 +109,39 @@ def initiate_consensus(self: object):
                         peer = self.peer_dict[sock.getpeername()[0]]
                         peer_info_list.append((peer.socket, token, peer.secret, peer.mode, peer.iv))
 
-                    # Send token to all peers
+                    # Send token to all connected peers (in parallel)
                     start_parallel_operation(task=send_approval_token,
                                              task_args=peer_info_list,
                                              num_processes=len(peer_info_list),
                                              prompt=SEND_TOKEN_MULTIPROCESS_MSG)
 
-                    # Create Block
+                    # Create and sign a new block
+                    new_block = Block(ip=request.ip_addr, first_name=request.first_name,
+                                      last_name=request.last_name, public_key=self.pub_key)
+                    sign_block(self, new_block,
+                               new_index=self.blockchain.get_latest_block().index + 1,
+                               previous_hash=self.blockchain.get_latest_block().hash)
 
-                    # Add block to blockchain
+                    # Process peer info for parallel sending of the block (multiprocessing)
+                    peer_info_list = []
+                    for sock in temp_list:
+                        peer = self.peer_dict[sock.getpeername()[0]]
+                        peer_info_list.append((peer.socket, new_block, peer.secret, peer.mode, peer.iv, True))
 
-                    # Verify the blockchain
-
-                    # Encrypt and send the block (in parallel)
-
-                    # Wait for the result (per process)
-
+                    # Send the new block to all connected peers (in parallel)
+                    start_parallel_operation(task=send_block,
+                                             task_args=peer_info_list,
+                                             num_processes=len(peer_info_list),
+                                             prompt=SEND_BLOCK_MULTIPROCESS_MSG)
 
                     # Perform finishing tasks
                     if request.received_by == self.ip:
-                        perform_responsible_peer_tasks(self, request, final_decision, token)
+                        perform_responsible_peer_tasks(self, request, final_decision, token, new_block)
                     else:
                         from models.Peer import Peer
                         new_peer = Peer(ip=request.ip_addr, first_name=request.first_name,
                                         last_name=request.last_name, role=request.role,
-                                        status=STATUS_PENDING, token=token)
+                                        status=STATUS_PENDING, token=token, block=new_block)
                         add_peer_to_dict(self.peer_dict, new_peer)
                         delete_transaction(self.pending_transactions, request.ip_addr)
 
