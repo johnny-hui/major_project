@@ -10,6 +10,7 @@ from utility.consensus.utils import (arg_check, check_sock_list_empty,
                                      process_peer_info, get_vote_from_peer,
                                      send_decision_to_peer)
 from utility.crypto.aes_utils import AES_encrypt, AES_decrypt
+from utility.deepface.utils import perform_facial_recognition_on_peer
 from utility.general.constants import (VOTE_YES, VOTE_NO, CONSENSUS_SUCCESS, CONSENSUS_FAILURE, MODE_INITIATOR,
                                        VOTE_PROMPT, VOTE_YES_KEY, VOTE_NO_KEY, VOTE_SHOW_IMAGE_KEY, MODE_VOTER,
                                        REQ_BUFFER_TIME_VOTER, REQ_BUFFER_TIME_INITIATOR, VOTE_RESULTS_WAIT_MSG,
@@ -208,9 +209,8 @@ class Consensus:
         from utility.blockchain.utils import check_peer_exists_in_blockchain
         check_peer_exists_in_blockchain(self.blockchain, peer_ip=self.request.ip_addr)
 
-        # TODO: Perform facial recognition (DeepFace) on each block photo of requesting peer
-        # if self.blockchain is not None:
-        #     print()
+        # Perform facial recognition on each block photo of the requesting peer against the request photo
+        perform_facial_recognition_on_peer(self.blockchain, request=self.request)
 
         # Prompt for a vote
         vote, timeout = get_vote(VOTE_PROMPT)

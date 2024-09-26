@@ -276,7 +276,7 @@ def check_peer_exists_in_blockchain(blockchain: Blockchain, peer_ip: str):
             print(f"[+] WARNING: The requesting peer (IP: {peer_ip}) has not connected to the network before, therefore "
                   f"facial recognition cannot be used during the consensus process!")
         else:
-            print(f"[+] EXISTING BLOCK FOUND: The requesting peer (IP: {peer_ip}) has connected to the network before!")
+            print(f"[+] EXISTING BLOCK RECORD FOUND: The requesting peer (IP: {peer_ip}) has connected to the network before!")
 
 
 def view_blockchain(self: object):

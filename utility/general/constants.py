@@ -483,6 +483,11 @@ PEER_REFUSE_ASSIMILATE = "NO_ASSIMILATE"
 SEND_BLOCK_MULTIPROCESS_MSG = ("[+] Now issuing an approval block for the approved peer and "
                                "sending it to all connected peers...")
 
+
+# FACIAL RECOGNITION CONSTANTS (DEEPFACE)
+FACIAL_RECOGNITION_PROMPT = "Now performing facial recognition scan (using DeepFace module)..."
+
+
 # OTHER CONSTANTS
 OP_ENCRYPT = "ENCRYPTION"
 OP_DECRYPT = "DECRYPTION"

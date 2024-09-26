@@ -10,10 +10,8 @@ import socket
 import threading
 import time
 from typing import TextIO
-
 from prettytable import PrettyTable
 from tqdm import tqdm
-
 from exceptions.exceptions import (RequestAlreadyExistsError, TransactionNotFoundError, InvalidTokenError,
                                    PeerRefusedBlockError, PeerInvalidBlockchainError, InvalidBlockchainError,
                                    InvalidBlockError)

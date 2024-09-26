@@ -8,6 +8,7 @@ import ipaddress
 import multiprocessing
 import os
 import socket
+import tempfile
 import threading
 import time
 from datetime import datetime
@@ -145,6 +146,23 @@ def load_image(path: str):
         raise FileNotFoundError(f"FileNotFoundError: An invalid image path was provided ({path})!")
     except IOError:
         raise IOError(f"IOError: An invalid image path was provided ({path})!")
+
+
+def create_temp_file_from_bytes(data: bytes) -> str:
+    """
+    Creates a temporary file from a byte array.
+
+    @param data:
+        A byte array containing the data to be
+        embedded into a temp file
+
+    @return: temp_file_path
+        A string for the path of the saved temp file
+    """
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        temp_file.write(data)
+        temp_file_path = temp_file.name
+        return temp_file_path
 
 
 def create_directory(path: str):
