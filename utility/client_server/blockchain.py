@@ -204,9 +204,9 @@ def send_block(target_sock: socket.socket, input_block: Block,
     sent_bytes = 0
     while sent_bytes < total_size:
         chunk = encrypted_block[sent_bytes:sent_bytes + chunk_size]
-        target_sock.sendall(chunk)  # Send each chunk
+        target_sock.sendall(chunk)
         sent_bytes += len(chunk)
-        progress_bar.update(len(chunk))  # Update the progress bar
+        progress_bar.update(len(chunk))
     progress_bar.close()
 
     # Wait for a response if required
@@ -350,13 +350,13 @@ def send_blockchain(self: object, target_sock: socket.socket, secret: bytes, enc
     progress_bar = tqdm(total=total_size, unit='B', unit_scale=True, desc='Sending blockchain')
 
     # Send the encrypted blockchain in chunks
-    chunk_size = 4096  # Adjust chunk size as needed
+    chunk_size = 4096
     sent_bytes = 0
     while sent_bytes < total_size:
         chunk = encrypted_blockchain[sent_bytes:sent_bytes + chunk_size]
-        target_sock.sendall(chunk)  # Send the current chunk
+        target_sock.sendall(chunk)
         sent_bytes += len(chunk)
-        progress_bar.update(len(chunk))  # Update the progress bar with the size of the sent chunk
+        progress_bar.update(len(chunk))
 
     # Close the progress bar
     progress_bar.close()
@@ -408,7 +408,7 @@ def receive_blockchain(target_sock: socket.socket, secret: bytes, enc_mode: str,
         if not chunk:
             break
         buffer += chunk
-        progress_bar.update(len(chunk))  # Update the progress bar with the size of the received chunk
+        progress_bar.update(len(chunk))
 
     # Close the progress bar
     progress_bar.close()

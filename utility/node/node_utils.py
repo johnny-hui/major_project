@@ -12,6 +12,7 @@ import time
 from typing import TextIO
 
 from prettytable import PrettyTable
+from tqdm import tqdm
 
 from exceptions.exceptions import (RequestAlreadyExistsError, TransactionNotFoundError, InvalidTokenError,
                                    PeerRefusedBlockError, PeerInvalidBlockchainError, InvalidBlockchainError,
@@ -1562,8 +1563,22 @@ def send_approval_token(peer_socket: socket.socket, token: Token, secret: bytes,
     size = len(encrypted_token).to_bytes(4, byteorder='big')
     peer_socket.sendall(AES_encrypt(data=size, key=secret, mode=mode, iv=iv))
 
-    # Send the encrypted token
-    peer_socket.sendall(encrypted_token)
+    # Initialize the progress bar
+    total_size = len(encrypted_token)
+    progress_bar = tqdm(total=total_size, unit='B', unit_scale=True,
+                        desc=f'Sending Approval Token (IP: {peer_socket.getpeername()[0]})')
+
+    # Send the encrypted token in chunks
+    chunk_size = 1024
+    sent_bytes = 0
+    while sent_bytes < total_size:
+        chunk = encrypted_token[sent_bytes:sent_bytes + chunk_size]
+        peer_socket.sendall(chunk)
+        sent_bytes += len(chunk)
+        progress_bar.update(len(chunk))
+
+    # Close the progress bar
+    progress_bar.close()
 
     # Wait for results
     response = AES_decrypt(data=peer_socket.recv(1024), key=secret, mode=mode, iv=iv).decode()
@@ -1574,7 +1589,7 @@ def send_approval_token(peer_socket: socket.socket, token: Token, secret: bytes,
         raise InvalidTokenError(ip="host")  # => thrown if token that is sent is invalid
 
 
-def  receive_approval_token(peer_socket: socket.socket, secret: bytes, mode: str, iv: bytes = None):
+def receive_approval_token(peer_socket: socket.socket, secret: bytes, mode: str, iv: bytes = None):
     """
     Performs the retrieval and verification of an approval token
     issued by an admin/delegate peer.
@@ -1603,13 +1618,26 @@ def  receive_approval_token(peer_socket: socket.socket, secret: bytes, mode: str
 
     # Receive the length of the serialized data
     data = AES_decrypt(data=peer_socket.recv(BLOCK_SIZE), key=secret, mode=mode, iv=iv)
-    size = int.from_bytes(data, byteorder='big')
+    token_size = int.from_bytes(data, byteorder='big')
+
+    # Initialize the progress bar
+    progress_bar = tqdm(total=token_size, unit='B', unit_scale=True, desc='Receiving blockchain')
 
     # Receive the token data
-    serialized_data = peer_socket.recv(size)
+    buffer = bytearray()
+    while len(buffer) < token_size:
+        chunk_size = min(token_size - len(buffer), 4096)
+        chunk = peer_socket.recv(chunk_size)
+        if not chunk:
+            break
+        buffer += chunk
+        progress_bar.update(len(chunk))
+
+    # Close the progress bar
+    progress_bar.close()
 
     # Decrypt the token data
-    decrypted_data = AES_decrypt(data=serialized_data, key=secret, mode=mode, iv=iv)
+    decrypted_data = AES_decrypt(data=buffer, key=secret, mode=mode, iv=iv)
     token = pickle.loads(decrypted_data)
 
     # Verify the token
@@ -1649,8 +1677,20 @@ def send_peer_dictionary(target_peer: Peer, peer_dict: dict[str, Peer]):
     size = len(encrypted_dict).to_bytes(4, byteorder='big')
     target_peer.socket.sendall(AES_encrypt(data=size, key=target_peer.secret, mode=target_peer.mode, iv=target_peer.iv))
 
-    # Send the encrypted dictionary
-    target_peer.socket.sendall(encrypted_dict)
+    # Initialize progress bar
+    total_size = len(encrypted_dict)
+    progress_bar = tqdm(total=total_size, unit='B', unit_scale=True,
+                        desc=f'Sending peer dictionary (IP: {target_peer.ip})')
+
+    # Send the encrypted peer dict in chunks with progress
+    chunk_size = 4096
+    sent_bytes = 0
+    while sent_bytes < total_size:
+        chunk = encrypted_dict[sent_bytes:sent_bytes + chunk_size]
+        target_peer.socket.sendall(chunk)
+        sent_bytes += len(chunk)
+        progress_bar.update(len(chunk))
+    progress_bar.close()
 
     # Wait for ACK
     target_peer.socket.recv(1024)
@@ -1680,13 +1720,26 @@ def receive_peer_dictionary(peer_socket: socket.socket, secret: bytes, iv: bytes
 
     # Receive the length of the serialized data
     data = AES_decrypt(data=peer_socket.recv(BLOCK_SIZE), key=secret, mode=mode, iv=iv)
-    size = int.from_bytes(data, byteorder='big')
+    peer_dict_size = int.from_bytes(data, byteorder='big')
 
-    # Receive the dictionary data
-    serialized_data = peer_socket.recv(size)
+    # Initialize the progress bar
+    progress_bar = tqdm(total=peer_dict_size, unit='B', unit_scale=True, desc='Receiving peer dictionary')
+
+    # Receive encrypted peer dictionary data
+    buffer = bytearray()
+    while len(buffer) < peer_dict_size:
+        chunk_size = min(peer_dict_size - len(buffer), 4096)
+        chunk = peer_socket.recv(chunk_size)
+        if not chunk:
+            break
+        buffer += chunk
+        progress_bar.update(len(chunk))
+
+    # Close the progress bar
+    progress_bar.close()
 
     # Decrypt the dictionary data
-    decrypted_data = AES_decrypt(data=serialized_data, key=secret, mode=mode, iv=iv)
+    decrypted_data = AES_decrypt(data=buffer, key=secret, mode=mode, iv=iv)
     peer_dict = pickle.loads(decrypted_data)
 
     # Send ACK
