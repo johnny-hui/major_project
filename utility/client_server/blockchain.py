@@ -53,7 +53,7 @@ def exchange_blockchain_index(self: object, peer_sock: socket.socket, secret: by
         # Send own current block index
         current_index = self.blockchain.get_latest_block().index
         peer_sock.send(AES_encrypt(
-            data=len(current_index).to_bytes(4, byteorder='big'),
+            data=current_index.to_bytes(4, byteorder='big'),
             key=secret,
             mode=enc_mode,
             iv=iv
@@ -74,7 +74,7 @@ def exchange_blockchain_index(self: object, peer_sock: socket.socket, secret: by
         # Send own current block index
         current_index = self.blockchain.get_latest_block().index
         peer_sock.send(AES_encrypt(
-            data=len(current_index).to_bytes(4, byteorder='big'),
+            data=current_index.to_bytes(4, byteorder='big'),
             key=secret,
             mode=enc_mode,
             iv=iv
@@ -179,7 +179,10 @@ def send_block(target_sock: socket.socket, input_block: Block,
 
     @return: None
     """
-    print(f"[+] Sending block {input_block.index}...")
+    print(f"[+] Sending block {input_block.index} to {target_sock.getpeername()[0]}...")
+
+    # Set blocking (in case multiprocessing module sets to False)
+    target_sock.setblocking(True)
 
     # Serialize and encrypt the block
     block_bytes = pickle.dumps(input_block)
@@ -211,6 +214,7 @@ def send_block(target_sock: socket.socket, input_block: Block,
     # Wait for a response if required
     if do_wait:
         target_sock.recv(1024)  # Waiting for a response
+        print(f"[+] BLOCK SENT: Block {input_block.index} has been successfully sent and received!")
 
 
 def receive_block(self: object, target_sock: socket.socket, index: int,
@@ -261,7 +265,7 @@ def receive_block(self: object, target_sock: socket.socket, index: int,
         print("[+] Receiving an approval block issued for new peer from admin/delegate...")
 
     # Receive the encrypted block size (4 bytes)
-    encrypted_size = target_sock.recv(1024)  # Adjust buffer size as needed
+    encrypted_size = target_sock.recv(BLOCK_SIZE)  # Adjust buffer size as needed
     block_size = int.from_bytes(AES_decrypt(data=encrypted_size, key=secret, mode=enc_mode, iv=iv), byteorder='big')
 
     # Initialize the progress bar
@@ -296,8 +300,8 @@ def receive_block(self: object, target_sock: socket.socket, index: int,
                 target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=enc_mode, iv=iv))
                 print(f"[+] BLOCK RECEIVED: Successfully received block {index}!")
         else:
-            print(f"[+] BLOCK RECEIVED: Successfully received the approval block!")
             target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=enc_mode, iv=iv))
+            print(f"[+] BLOCK RECEIVED: Successfully received the approval block!")
             return block
 
     except InvalidBlockchainError as error:

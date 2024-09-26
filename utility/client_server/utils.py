@@ -16,6 +16,7 @@ from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsErro
 from models.Block import Block
 from models.Peer import Peer
 from models.Token import Token
+from models.Transaction import Transaction
 from utility.blockchain.utils import save_blockchain_to_file
 from utility.client_server.blockchain import receive_block
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
@@ -286,7 +287,8 @@ def receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: s
         raise socket.timeout(e)
 
 
-def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv: bytes = None):
+def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
+                     iv: bytes = None, own_request: Transaction = None):
     """
     A handler for the peer connecting to the P2P network directly after
     being approved by their target.
@@ -302,6 +304,9 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
 
     @param iv:
         Bytes of the initialization vector (IV) - Optional
+
+    @param own_request:
+        A Transaction object
 
     @return: None
     """
@@ -371,6 +376,9 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
         try:
             print("[+] Target peer is connected to a P2P network; now initializing into the network...")
             target_sock.settimeout(TARGET_TRANSACTION_WAIT_TIME)
+
+            # Send ACK
+            target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, iv=iv, mode=self.mode))
 
             # Sync blockchain with target peer
             synchronize_blockchain(self, target_sock, secret, self.mode, MODE_RECEIVER, iv, do_init=False)
@@ -466,12 +474,20 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes, iv
                                                             secret=secret, iv=iv)
                     if is_delegate:
                         print("[+] PROMOTION: You have been selected to be a 'Delegate' node!")
+                        self.role = ROLE_DELEGATE
+                        time.sleep(1)
+                        synchronize_blockchain(self, target_sock, secret,
+                                               initiators_request=own_request,
+                                               peer_request=request, enc_mode=self.mode,
+                                               mode=MODE_INITIATOR, iv=iv, do_init=True)
                         self.is_promoted = True
                     else:
                         change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
+                        synchronize_blockchain(self, target_sock, secret=secret,
+                                               enc_mode=self.mode, mode=MODE_RECEIVER,
+                                               iv=iv, do_init=True)
 
                 # Synchronize blockchain with target peer
-                synchronize_blockchain(self, target_sock, secret=secret, enc_mode=self.mode, mode=MODE_RECEIVER, iv=iv)
                 save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
 
                 # Perform finishing steps
@@ -656,13 +672,14 @@ def approved_signal_handler(self: object, peer_socket: socket.socket, secret: by
 
         @return: None
         """
+        print(f"[+] Now receiving issued block hash from requesting peer (IP: {peer_ip})...")
         received_block_hash = AES_decrypt(data=peer_socket.recv(1024), key=secret, iv=iv, mode=mode).decode()
         issued_block = get_peer(self.peer_dict, ip=peer_ip).block
         if issued_block.hash != received_block_hash:
             peer_socket.send(AES_encrypt(data=RESPONSE_REJECTED.encode(), key=secret, iv=iv, mode=mode))
             raise PeerInvalidBlockHashError(ip=peer_ip)
         else:
-            print(f"[+] The block issued for {issued_block.ip_addr} has the correct hash!")
+            print(f"[+] VERIFICATION SUCCESSFUL: The block issued for {issued_block.ip_addr} has the correct hash!")
             peer_socket.send(AES_encrypt(data=ACK.encode(), key=secret, iv=iv, mode=mode))
             return None
     # ==============================================================================================

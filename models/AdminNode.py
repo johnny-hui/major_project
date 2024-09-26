@@ -48,7 +48,6 @@ class AdminNode(Node):
 
         @return: None
         """
-
         def broadcast_message():
             """
             Broadcasts a message to all connected peers.

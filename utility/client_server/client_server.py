@@ -315,7 +315,7 @@ def connect_to_P2P_network(self: object):
             response, target_sock = _await_response(self, target_sock, shared_secret,
                                                     self.mode, transaction, session_iv)
             if response:  # => if approved
-                approved_handler(self, target_sock, shared_secret, session_iv)
+                approved_handler(self, target_sock, shared_secret, session_iv, transaction)
     # ===============================================================================================================
     transaction = create_transaction(self)
 
