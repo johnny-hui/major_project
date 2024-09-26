@@ -6,6 +6,9 @@ receive photos from the P2P camera app.
 """
 import os
 import socket
+
+from tqdm import tqdm
+
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.general.constants import BLOCK_SIZE
 from utility.general.utils import create_directory, is_directory_empty, write_to_file
@@ -71,16 +74,23 @@ def receive_photo(peer_sock: socket.socket, secret: bytes, mode: str, iv: bytes 
 
         # a) Receive size of the photo
         data = AES_decrypt(data=peer_sock.recv(BLOCK_SIZE), key=secret, mode=mode, iv=iv)
-        size = int.from_bytes(data, byteorder='big')
-        print(f"[+] Receiving photo of size: {size} bytes...")
+        photo_size = int.from_bytes(data, byteorder='big')
+        print(f"[+] Receiving photo of size: {photo_size} bytes...")
+
+        # Initialize the progress bar
+        progress_bar = tqdm(total=photo_size, unit='B', unit_scale=True, desc='Receiving Photo (from app)')
 
         # b) Receive photo (bitmap) data
         received_data_buffer = bytearray()
-        while len(received_data_buffer) < size:
-            chunk = peer_sock.recv(min(size - len(received_data_buffer), DEFAULT_CHUNK_SIZE))
+        while len(received_data_buffer) < photo_size:
+            chunk = peer_sock.recv(min(photo_size - len(received_data_buffer), DEFAULT_CHUNK_SIZE))
             if not chunk:
                 break
             received_data_buffer += chunk
+            progress_bar.update(len(chunk))
+
+        # Close the progress bar
+        progress_bar.close()
 
         # b) Decrypt the data
         decrypted_data = AES_decrypt(data=received_data_buffer, key=secret, mode=mode, iv=iv)

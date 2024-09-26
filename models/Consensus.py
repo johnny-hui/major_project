@@ -212,7 +212,7 @@ class Consensus:
         # if self.blockchain is not None:
         #     print()
 
-        # Prompt for vote
+        # Prompt for a vote
         vote, timeout = get_vote(VOTE_PROMPT)
 
         # Voter will send their vote

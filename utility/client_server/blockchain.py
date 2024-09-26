@@ -6,7 +6,7 @@ socket communication, and both the Blockchain and Block classes
 """
 import pickle
 import socket
-import tqdm
+from tqdm import tqdm
 from exceptions.exceptions import InvalidBlockError, InvalidBlockchainError, PeerInvalidBlockchainError
 from models.Block import Block
 from models.Blockchain import Blockchain
@@ -197,18 +197,16 @@ def send_block(target_sock: socket.socket, input_block: Block,
 
     # Initialize progress bar
     total_size = len(encrypted_block)
-    progress_bar = tqdm.tqdm(total=total_size, unit='B', unit_scale=True, desc='Sending block')
+    progress_bar = tqdm(total=total_size, unit='B', unit_scale=True, desc='Sending block')
 
     # Send the encrypted block in chunks with progress
+    chunk_size = 1024
     sent_bytes = 0
-    chunk_size = 1024  # Send in 1024 byte chunks
     while sent_bytes < total_size:
         chunk = encrypted_block[sent_bytes:sent_bytes + chunk_size]
         target_sock.sendall(chunk)  # Send each chunk
         sent_bytes += len(chunk)
         progress_bar.update(len(chunk))  # Update the progress bar
-
-    # Close the progress bar
     progress_bar.close()
 
     # Wait for a response if required
@@ -269,7 +267,7 @@ def receive_block(self: object, target_sock: socket.socket, index: int,
     block_size = int.from_bytes(AES_decrypt(data=encrypted_size, key=secret, mode=enc_mode, iv=iv), byteorder='big')
 
     # Initialize the progress bar
-    progress_bar = tqdm.tqdm(total=block_size, unit='B', unit_scale=True, desc='Receiving block')
+    progress_bar = tqdm(total=block_size, unit='B', unit_scale=True, desc='Receiving block')
 
     # Receive the block data
     while len(buffer) < block_size:
@@ -349,7 +347,7 @@ def send_blockchain(self: object, target_sock: socket.socket, secret: bytes, enc
 
     # Initialize the progress bar
     total_size = len(encrypted_blockchain)
-    progress_bar = tqdm.tqdm(total=total_size, unit='B', unit_scale=True, desc='Sending blockchain')
+    progress_bar = tqdm(total=total_size, unit='B', unit_scale=True, desc='Sending blockchain')
 
     # Send the encrypted blockchain in chunks
     chunk_size = 4096  # Adjust chunk size as needed
@@ -401,7 +399,7 @@ def receive_blockchain(target_sock: socket.socket, secret: bytes, enc_mode: str,
     blockchain_size = int.from_bytes(size, byteorder='big')
 
     # Initialize the progress bar
-    progress_bar = tqdm.tqdm(total=blockchain_size, unit='B', unit_scale=True, desc='Receiving blockchain')
+    progress_bar = tqdm(total=blockchain_size, unit='B', unit_scale=True, desc='Receiving blockchain')
 
     # Receive the blockchain data
     while len(buffer) < blockchain_size:

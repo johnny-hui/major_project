@@ -306,7 +306,7 @@ OWN_IP_ERROR_MSG = "[+] CONNECTION ERROR: Cannot connect to yourself! Please try
 CONNECT_PEER_EXISTS_ERROR = ("[+] CONNECTION ERROR: You cannot connect to the provided IP as it already "
                              "belongs to a peer that is requesting a connection to you; please try again.")
 ACCEPT_NEW_PEER_TIMEOUT = 10  # => in seconds
-SEND_REQUEST_MSG = "[+] Sending request to {}..."
+SEND_REQUEST_MSG = "[+] Sending connection request to {}..."
 SEND_REQUEST_SUCCESS = "[+] The transaction (connection request) has been successfully sent and received by ({})!"
 CONNECTION_AWAIT_RESPONSE_MSG = ("[+] AWAITING RESPONSE: Now awaiting consensus and decision from"
                                  " peers... [Time before expiry = {}]")

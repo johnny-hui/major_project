@@ -10,6 +10,7 @@ import secrets
 import socket
 import time
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey, EllipticCurvePrivateKey
+from tqdm import tqdm
 
 from exceptions.exceptions import (RequestAlreadyExistsError, RequestExpiredError,
                                    InvalidSignatureError, InvalidProtocolError)
@@ -273,8 +274,20 @@ def send_request(peer_socket: socket.socket, ip: str, shared_secret: bytes,
         size = len(encrypted_request).to_bytes(4, byteorder='big')
         peer_socket.sendall(AES_encrypt(data=size, key=shared_secret, mode=mode, iv=peer_iv))
 
-        # Send the encrypted request
-        peer_socket.sendall(encrypted_request)
+        # Initialize progress bar
+        total_size = len(encrypted_request)
+        progress_bar = tqdm(total=total_size, unit="B", unit_scale=True,
+                            desc=f"Sending Connection Request (IP: {ip})")
+
+        # Send the encrypted request in chunks
+        chunk_size = 1024
+        sent_bytes = 0
+        while sent_bytes < total_size:
+            chunk = encrypted_request[sent_bytes:sent_bytes + chunk_size]
+            peer_socket.sendall(chunk)
+            sent_bytes += len(chunk)
+            progress_bar.update(len(chunk))
+        progress_bar.close()
 
         # Wait for ACK
         peer_socket.recv(1024)

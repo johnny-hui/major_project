@@ -9,6 +9,9 @@ import pickle
 import socket
 import threading
 import time
+
+from tqdm import tqdm
+
 from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError, InvalidSignatureError,
                                    TransactionNotFoundError, ConsensusInitError, InvalidTokenError,
                                    InvalidBlockchainError, InvalidBlockError, PeerInvalidBlockchainError,
@@ -214,16 +217,22 @@ def receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: s
         buffer = bytearray()
         peer_socket.send(AES_encrypt(data=ACK.encode(), key=shared_secret, mode=mode, iv=peer_iv))  # Send ACK
 
-        # Get the size of transaction
+        # Receive the size of transaction
         data = AES_decrypt(data=peer_socket.recv(BLOCK_SIZE), key=shared_secret, mode=mode, iv=peer_iv)
-        size = int.from_bytes(data, byteorder='big')
+        transaction_size = int.from_bytes(data, byteorder='big')
 
-        while len(buffer) < size:
-            chunk = peer_socket.recv(min(size - len(buffer), 4096))
+        # Initialize the progress bar
+        progress_bar = tqdm(total=transaction_size, unit='B', unit_scale=True,
+                            desc='Receiving Connection Request (Transaction)')
+
+        while len(buffer) < transaction_size:
+            chunk = peer_socket.recv(min(transaction_size - len(buffer), 4096))
             if not chunk:
                 break
             buffer += chunk
+            progress_bar.update(len(chunk))
 
+        progress_bar.close()
         return buffer
 
     def process_request(data: bytearray):
