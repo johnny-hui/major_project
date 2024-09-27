@@ -592,8 +592,8 @@ def create_transaction(self: object):
     @param self:
         A reference to the calling class object (Node)
 
-    @return: (transaction, img_path) or
-        A Transaction object and path of image if no errors; otherwise None
+    @return: transaction or None
+        A Transaction object if no errors; otherwise None
     """
     try:
         img_path = get_img_path()
@@ -602,10 +602,10 @@ def create_transaction(self: object):
                                   last_name=self.last_name, public_key=self.pub_key)
         transaction.set_image(img_bytes)
         transaction.set_role(self.role)
-        return transaction, img_path
+        return transaction
     except (ValueError, FileNotFoundError, IOError) as e:
         print(f"[+] ERROR: An error has occurred while creating Transaction object; please try again... [REASON: {e}]")
-        return None, None
+        return None
 
 
 def sign_transaction(self: object, transaction: Transaction):
@@ -1191,7 +1191,6 @@ def approve_connection_request(self: object):
             self.fd_list.append(pending_peer_sock)
             change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
             delete_transaction(self.pending_transactions, request.ip_addr, peer.transaction_path)
-            os.remove(img_path)
             self.is_connected = True
             print(ESTABLISHED_NETWORK_SUCCESS_MSG.format(pending_peer_sock.getpeername()[0]))
         # =========================================================================================
@@ -1225,9 +1224,9 @@ def approve_connection_request(self: object):
                                                key=peer.secret, mode=peer.mode, iv=peer.iv))
 
             # Create own connection request and submit for consensus
-            own_request, img_path = None, None
+            own_request = None
             while own_request is None:
-                own_request, img_path = create_transaction(self)
+                own_request = create_transaction(self)
 
             # Sign the transaction
             sign_transaction(self, own_request)
@@ -1279,13 +1278,11 @@ def approve_connection_request(self: object):
 
                 # Perform finishing steps
                 perform_finishing_steps()
-                os.remove(img_path)
 
             if final_decision == CONSENSUS_FAILURE:
                 print(REQUEST_REFUSED_MSG)
                 delete_transaction(self.pending_transactions, request.ip_addr, request_path=peer.transaction_path)
                 remove_pending_peer(self, pending_peer_sock, ip=request.ip_addr)
-                os.remove(img_path)
 
         except exceptions as e:
             print(f"[+] APPROVE ERROR: An error has occurred while approving peer! [REASON: {e}]")
@@ -1910,8 +1907,9 @@ def synchronize_blockchain(self: object, target_sock: socket.socket, secret: byt
     to allow the peer to sync with the network blockchain or send the
     entire blockchain.
 
-    @attention Use Case:
-        When two non-connected peers join one another
+    @attention Initiator
+        Initiators are delegates or admins only; thus is authorized
+        to sign init blocks
 
     @attention: Different Scenarios
         1) Target peer does not have a blockchain and must receive one
@@ -2117,9 +2115,11 @@ def synchronize_blockchain(self: object, target_sock: socket.socket, secret: byt
                 print("[+] BLOCKCHAIN REQUESTED: The requesting peer has an existing blockchain!")
                 try:
                     self.blockchain = receive_blockchain(target_sock, secret, enc_mode, iv)
+                    if do_init:
+                        add_init_blocks(mode=MODE_INITIATOR, is_sending=True, response_check=True)
                     print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
                     return None
-                except InvalidBlockchainError as e:
+                except (PeerInvalidBlockchainError, PeerRefusedBlockError, InvalidBlockchainError) as e:
                     raise e
 
             if peer_status == NO_BLOCKCHAIN_SIGNAL:  # start a new blockchain
@@ -2214,12 +2214,12 @@ def synchronize_blockchain(self: object, target_sock: socket.socket, secret: byt
                 target_sock.send(AES_encrypt(data=HAS_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
                 try:
                     print("[+] BLOCKCHAIN REQUESTED: The target peer has no blockchain!")
-                    if do_init:
-                        add_init_blocks(mode=MODE_INITIATOR, is_sending=False, response_check=False)
                     send_blockchain(self, target_sock, secret, enc_mode, iv)
+                    if do_init:
+                        add_init_blocks(mode=MODE_RECEIVER)
                     print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
                     return None
-                except PeerInvalidBlockchainError as e:
+                except (PeerInvalidBlockchainError, InvalidBlockError, InvalidBlockchainError) as e:
                     raise e
 
             else:

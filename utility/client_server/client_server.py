@@ -5,14 +5,12 @@ functionalities and defining protocols to the Node class.
 
 """
 import multiprocessing
-import os
 import pickle
 import secrets
 import socket
 import time
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey, EllipticCurvePrivateKey
 from tqdm import tqdm
-
 from exceptions.exceptions import (RequestAlreadyExistsError, RequestExpiredError,
                                    InvalidSignatureError, InvalidProtocolError)
 from models.Transaction import Transaction
@@ -32,7 +30,6 @@ from utility.general.constants import CBC, MODE_RECEIVER, MODE_INITIATOR, PHOTO_
     PURPOSE_REQUEST_APPROVAL, REQUEST_APPROVAL_SIGNAL
 from utility.general.utils import get_user_command_option, get_target_ip, divide_subnet_search
 from utility.node.node_utils import create_transaction, sign_transaction, peer_exists
-
 
 # CONSTANTS
 ERROR_RESPONSE_MAP = {
@@ -331,7 +328,7 @@ def connect_to_P2P_network(self: object):
             if response:  # => if approved
                 approved_handler(self, target_sock, shared_secret, session_iv, transaction)
     # ===============================================================================================================
-    transaction, img_path = create_transaction(self)
+    transaction = create_transaction(self)
 
     if transaction is not None:
         option = get_user_command_option(opt_range=tuple(range(3)), prompt=CONNECT_METHOD_PROMPT)
@@ -344,7 +341,6 @@ def connect_to_P2P_network(self: object):
             if not peer_exists(self.peer_dict, target_ip, msg=CONNECT_PEER_EXISTS_ERROR):
                 target_socket = _connect_to_target_peer(ip=target_ip)
                 process_transaction_with_peer(target_socket)
-                os.remove(img_path)
 
         if option == 2:
             target_socket, target_ip = _perform_parallel_host_search(self.ip, self.peer_dict)
