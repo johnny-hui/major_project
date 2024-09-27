@@ -497,11 +497,13 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
                         self.is_promoted = True
                     else:
                         change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
-                        synchronize_blockchain(self, target_sock, secret=secret, enc_mode=self.mode,
-                                               mode=MODE_RECEIVER,iv=iv, do_init=True, is_target_approved=False)
+                        synchronize_blockchain(self, target_sock, secret, initiators_request=own_request,
+                                               peer_request=request, enc_mode=self.mode, mode=MODE_RECEIVER,
+                                               iv=iv, do_init=True, is_target_approved=False)
                 else:  # if admin
-                    synchronize_blockchain(self, target_sock, secret=secret, enc_mode=self.mode,
-                                           mode=MODE_RECEIVER, iv=iv, do_init=True, is_target_approved=False)
+                    synchronize_blockchain(self, target_sock, secret, initiators_request=own_request,
+                                           peer_request=request,enc_mode=self.mode, mode=MODE_RECEIVER,
+                                           iv=iv, do_init=True, is_target_approved=False)
 
                 # Synchronize blockchain with target peer
                 save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)

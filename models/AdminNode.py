@@ -38,7 +38,7 @@ class AdminNode(Node):
         super().__init__()
         self.role = ROLE_ADMIN
 
-    def __handle_command(self, command: int, max_menu_value: int):
+    def _handle_command(self, command: int, max_menu_value: int):
         """
         An override function that handles and performs user
         menu command options (as a Delegate).
@@ -67,6 +67,8 @@ class AdminNode(Node):
                                      prompt=BROADCAST_MESSAGE_PROMPT)
 
         def perform_post_action_steps():
+            if not self.is_connected and command == MAX_MENU_ITEM_VALUE:
+                return None
             if command == max_menu_value:
                 return None
             display_menu(role=self.role, is_connected=self.is_connected)

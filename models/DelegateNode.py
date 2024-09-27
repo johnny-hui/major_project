@@ -47,7 +47,7 @@ class DelegateNode(Node):
         self.is_promoted = False
         print(NODE_INIT_SUCCESS_MSG.format(self.role))
 
-    def __handle_command(self, command: int, max_menu_value: int):
+    def _handle_command(self, command: int, max_menu_value: int):
         """
         An override function that handles and performs user
         menu command options (as a Delegate).
@@ -76,6 +76,8 @@ class DelegateNode(Node):
                                      prompt=BROADCAST_MESSAGE_PROMPT)
 
         def perform_post_action_steps():
+            if not self.is_connected and command == MAX_MENU_ITEM_VALUE:
+                return None
             if command == max_menu_value:
                 return None
             display_menu(role=self.role, is_connected=self.is_connected)

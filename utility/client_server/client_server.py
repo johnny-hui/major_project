@@ -5,6 +5,7 @@ functionalities and defining protocols to the Node class.
 
 """
 import multiprocessing
+import os
 import pickle
 import secrets
 import socket
@@ -330,7 +331,7 @@ def connect_to_P2P_network(self: object):
             if response:  # => if approved
                 approved_handler(self, target_sock, shared_secret, session_iv, transaction)
     # ===============================================================================================================
-    transaction = create_transaction(self)
+    transaction, img_path = create_transaction(self)
 
     if transaction is not None:
         option = get_user_command_option(opt_range=tuple(range(3)), prompt=CONNECT_METHOD_PROMPT)
@@ -343,6 +344,7 @@ def connect_to_P2P_network(self: object):
             if not peer_exists(self.peer_dict, target_ip, msg=CONNECT_PEER_EXISTS_ERROR):
                 target_socket = _connect_to_target_peer(ip=target_ip)
                 process_transaction_with_peer(target_socket)
+                os.remove(img_path)
 
         if option == 2:
             target_socket, target_ip = _perform_parallel_host_search(self.ip, self.peer_dict)

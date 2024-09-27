@@ -187,9 +187,9 @@ class Node:
             for fd in readable:
                 if fd == sys.stdin:
                     command = get_user_menu_option(fd, min_menu_value, max_menu_value)
-                    self.__handle_command(command, max_menu_value)
+                    self._handle_command(command, max_menu_value)
 
-    def __handle_command(self, command: int, max_menu_value: int):
+    def _handle_command(self, command: int, max_menu_value: int):
         """
         Handles and performs user menu command options.
 

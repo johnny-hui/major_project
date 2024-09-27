@@ -592,8 +592,8 @@ def create_transaction(self: object):
     @param self:
         A reference to the calling class object (Node)
 
-    @return: transaction or None
-        A Transaction object if no errors; otherwise None
+    @return: (transaction, img_path) or
+        A Transaction object and path of image if no errors; otherwise None
     """
     try:
         img_path = get_img_path()
@@ -602,11 +602,10 @@ def create_transaction(self: object):
                                   last_name=self.last_name, public_key=self.pub_key)
         transaction.set_image(img_bytes)
         transaction.set_role(self.role)
-        os.remove(img_path)
-        return transaction
+        return transaction, img_path
     except (ValueError, FileNotFoundError, IOError) as e:
         print(f"[+] ERROR: An error has occurred while creating Transaction object; please try again... [REASON: {e}]")
-        return None
+        return None, None
 
 
 def sign_transaction(self: object, transaction: Transaction):
@@ -1188,6 +1187,14 @@ def approve_connection_request(self: object):
 
         @return: None
         """
+        def perform_finishing_steps():
+            self.fd_list.append(pending_peer_sock)
+            change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
+            delete_transaction(self.pending_transactions, request.ip_addr, peer.transaction_path)
+            os.remove(img_path)
+            self.is_connected = True
+            print(ESTABLISHED_NETWORK_SUCCESS_MSG.format(pending_peer_sock.getpeername()[0]))
+        # =========================================================================================
         print(f"[+] Now approving request for peer (IP: {request.ip_addr}); please wait...")
         print(APPROVE_NOT_CONNECTED_MSG.format(request.ip_addr))
         exceptions = (socket.error, socket.timeout, OSError, PeerRefusedBlockError,
@@ -1218,9 +1225,9 @@ def approve_connection_request(self: object):
                                                key=peer.secret, mode=peer.mode, iv=peer.iv))
 
             # Create own connection request and submit for consensus
-            own_request = None
+            own_request, img_path = None, None
             while own_request is None:
-                own_request = create_transaction(self)
+                own_request, img_path = create_transaction(self)
 
             # Sign the transaction
             sign_transaction(self, own_request)
@@ -1256,15 +1263,12 @@ def approve_connection_request(self: object):
                         save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
 
                         # Perform finishing steps
-                        self.fd_list.append(pending_peer_sock)
-                        change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
-                        delete_transaction(self.pending_transactions, request.ip_addr, peer.transaction_path)
-                        print(ESTABLISHED_NETWORK_SUCCESS_MSG.format(pending_peer_sock.getpeername()[0]))
-                        self.is_connected = True
+                        perform_finishing_steps()
                         self.is_promoted = True  # => NOTE: This flag that will close Node object
                     else:
                         change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
                         synchronize_blockchain(self, pending_peer_sock, peer.secret,
+                                               initiators_request=own_request, peer_request=request,
                                                enc_mode=peer.mode, mode=MODE_RECEIVER,
                                                iv=peer.iv, do_init=True, is_target_approved=False)
                 else:  # => if admin
@@ -1274,17 +1278,14 @@ def approve_connection_request(self: object):
                                            do_init=True, is_target_approved=False)
 
                 # Perform finishing steps
-                self.fd_list.append(pending_peer_sock)
-                save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
-                change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
-                delete_transaction(self.pending_transactions, request.ip_addr, peer.transaction_path)
-                print(ESTABLISHED_NETWORK_SUCCESS_MSG.format(pending_peer_sock.getpeername()[0]))
-                self.is_connected = True
+                perform_finishing_steps()
+                os.remove(img_path)
 
             if final_decision == CONSENSUS_FAILURE:
                 print(REQUEST_REFUSED_MSG)
                 delete_transaction(self.pending_transactions, request.ip_addr, request_path=peer.transaction_path)
                 remove_pending_peer(self, pending_peer_sock, ip=request.ip_addr)
+                os.remove(img_path)
 
         except exceptions as e:
             print(f"[+] APPROVE ERROR: An error has occurred while approving peer! [REASON: {e}]")
@@ -2030,6 +2031,7 @@ def synchronize_blockchain(self: object, target_sock: socket.socket, secret: byt
                 raise error
     # =================================================================================================
     print(f"[+] Now synchronizing blockchain with (IP: {target_sock.getpeername()[0]})...")
+    target_sock.setblocking(True)
     if mode == MODE_INITIATOR:
 
         # SCENARIO 1: You have a blockchain
@@ -2085,9 +2087,10 @@ def synchronize_blockchain(self: object, target_sock: socket.socket, secret: byt
                             for index in range(own_index + 1, (peer_current_block_idx + 1)):
                                 receive_block(self, target_sock, index, secret, enc_mode, iv)
 
-                            # Once the blockchain is in sync, receive two init blocks and add to blockchain
+                            # Once your blockchain is in sync, add two init blocks to blockchain & send each to target
                             if do_init:
-                                add_init_blocks(mode=MODE_RECEIVER)
+                                add_init_blocks(mode=MODE_INITIATOR)
+
                         print("[+] SYNCHRONIZATION SUCCESSFUL: Blockchain has been successfully synchronized with peer!")
                         return None
                     except (InvalidBlockError, InvalidBlockchainError, PeerInvalidBlockchainError) as error:
@@ -2184,9 +2187,9 @@ def synchronize_blockchain(self: object, target_sock: socket.socket, secret: byt
                             time.sleep(1)  # sleep 1 second to synchronize with the other peer
                             send_multiple_blocks(self, target_sock, secret, enc_mode, own_index, peer_current_block_idx, iv)
 
-                            # Once target peer's blockchain is valid, add init blocks to blockchain & send each to target
+                            # Once the blockchain is in sync, receive two init blocks and add to blockchain
                             if do_init:
-                                add_init_blocks(mode=MODE_INITIATOR, is_sending=True, response_check=True)
+                                add_init_blocks(mode=MODE_RECEIVER)
 
                         print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
                         return None
