@@ -197,7 +197,7 @@ def send_block(target_sock: socket.socket, input_block: Block,
 
     # Initialize progress bar
     total_size = len(encrypted_block)
-    progress_bar = tqdm(total=total_size, unit='B', unit_scale=True, desc='Sending block')
+    progress_bar = tqdm(total=total_size, unit='B', unit_scale=True, desc='[+] Sending block')
 
     # Send the encrypted block in chunks with progress
     chunk_size = 1024
@@ -267,7 +267,7 @@ def receive_block(self: object, target_sock: socket.socket, index: int,
     block_size = int.from_bytes(AES_decrypt(data=encrypted_size, key=secret, mode=enc_mode, iv=iv), byteorder='big')
 
     # Initialize the progress bar
-    progress_bar = tqdm(total=block_size, unit='B', unit_scale=True, desc='Receiving block')
+    progress_bar = tqdm(total=block_size, unit='B', unit_scale=True, desc='[+] Receiving block')
 
     # Receive the block data
     while len(buffer) < block_size:
@@ -347,7 +347,7 @@ def send_blockchain(self: object, target_sock: socket.socket, secret: bytes, enc
 
     # Initialize the progress bar
     total_size = len(encrypted_blockchain)
-    progress_bar = tqdm(total=total_size, unit='B', unit_scale=True, desc='Sending blockchain')
+    progress_bar = tqdm(total=total_size, unit='B', unit_scale=True, desc='[+] Sending blockchain')
 
     # Send the encrypted blockchain in chunks
     chunk_size = 4096
@@ -399,7 +399,7 @@ def receive_blockchain(target_sock: socket.socket, secret: bytes, enc_mode: str,
     blockchain_size = int.from_bytes(size, byteorder='big')
 
     # Initialize the progress bar
-    progress_bar = tqdm(total=blockchain_size, unit='B', unit_scale=True, desc='Receiving blockchain')
+    progress_bar = tqdm(total=blockchain_size, unit='B', unit_scale=True, desc='[+] Receiving blockchain')
 
     # Receive the blockchain data
     while len(buffer) < blockchain_size:

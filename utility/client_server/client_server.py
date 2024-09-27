@@ -277,7 +277,7 @@ def send_request(peer_socket: socket.socket, ip: str, shared_secret: bytes,
         # Initialize progress bar
         total_size = len(encrypted_request)
         progress_bar = tqdm(total=total_size, unit="B", unit_scale=True,
-                            desc=f"Sending Connection Request (IP: {ip})")
+                            desc=f"[+] Sending Connection Request (IP: {ip})")
 
         # Send the encrypted request in chunks
         chunk_size = 1024

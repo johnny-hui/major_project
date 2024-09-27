@@ -75,10 +75,9 @@ def receive_photo(peer_sock: socket.socket, secret: bytes, mode: str, iv: bytes 
         # a) Receive size of the photo
         data = AES_decrypt(data=peer_sock.recv(BLOCK_SIZE), key=secret, mode=mode, iv=iv)
         photo_size = int.from_bytes(data, byteorder='big')
-        print(f"[+] Receiving photo of size: {photo_size} bytes...")
 
         # Initialize the progress bar
-        progress_bar = tqdm(total=photo_size, unit='B', unit_scale=True, desc='Receiving Photo (from app)')
+        progress_bar = tqdm(total=photo_size, unit='B', unit_scale=True, desc='[+] Receiving Photo (from app)')
 
         # b) Receive photo (bitmap) data
         received_data_buffer = bytearray()

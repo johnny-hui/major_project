@@ -1,9 +1,5 @@
 from dataclasses import dataclass
 from datetime import datetime
-
-from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey
-from tinyec.ec import Point
-
 from utility.crypto.ec_keys_utils import load_public_key_from_string, compress_public_key, compress_signature
 from utility.general.constants import FORMAT_DATETIME, TOKEN_TO_STRING
 from utility.node.node_init import get_current_timestamp

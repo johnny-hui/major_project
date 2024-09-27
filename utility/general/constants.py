@@ -492,6 +492,7 @@ FACIAL_RECOGNITION_PROMPT = "Now performing facial recognition scan (using DeepF
 OP_ENCRYPT = "ENCRYPTION"
 OP_DECRYPT = "DECRYPTION"
 SAVE_FILE_DIR = "data/received/{}"
+DEFAULT_PHOTO_DIR = "data/photos/"
 TAMPER_DETECTED_MSG = ("[+] An error has occurred while loading a transaction from the following file: {} "
                        "(REASON: possible tampering or incorrect decryption parameters were present)")
 TIMER_INTERVAL = 30

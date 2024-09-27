@@ -20,7 +20,7 @@ from utility.general.constants import ENTER_IP_PROMPT, INVALID_IP_ERROR, OWN_IP_
     CONN_REQUEST_TABLE_TITLE, CONN_REQUEST_TABLE_FIELD_IP, CONN_REQUEST_TABLE_FIELD_PORT, \
     CONN_REQUEST_TABLE_FIELD_PERSON, CONN_REQUEST_TABLE_FIELD_ROLE, CONN_REQUEST_TABLE_FIELD_SIGNATURE, \
     CONN_REQUEST_TABLE_FIELD_PUB_KEY, CONN_REQUEST_TABLE_FIELD_RECEIVED_BY, CONN_REQUEST_TABLE_FIELD_TIMESTAMP, \
-    MODE_INITIATOR, MODE_RECEIVER, MEMORY_CLEANUP_SUCCESS
+    MODE_INITIATOR, MODE_RECEIVER, MEMORY_CLEANUP_SUCCESS, DEFAULT_PHOTO_DIR
 
 
 def convert_to_datetime(timestamp: str):
@@ -123,6 +123,8 @@ def get_img_path():
     @return: img_path
         A string containing the image path
     """
+    if is_directory_empty(path=DEFAULT_PHOTO_DIR):
+        print(f"[+] WARNING: There are currently no photos in '{DEFAULT_PHOTO_DIR}'; please use P2P photo uploader app!")
     img_path = input("[+] Enter the path of the face photo to be submitted as part of your connection request: ")
     return img_path
 

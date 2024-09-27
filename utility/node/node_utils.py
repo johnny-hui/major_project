@@ -602,6 +602,7 @@ def create_transaction(self: object):
                                   last_name=self.last_name, public_key=self.pub_key)
         transaction.set_image(img_bytes)
         transaction.set_role(self.role)
+        os.remove(img_path)
         return transaction
     except (ValueError, FileNotFoundError, IOError) as e:
         print(f"[+] ERROR: An error has occurred while creating Transaction object; please try again... [REASON: {e}]")
@@ -1564,7 +1565,7 @@ def send_approval_token(peer_socket: socket.socket, token: Token, secret: bytes,
     # Initialize the progress bar
     total_size = len(encrypted_token)
     progress_bar = tqdm(total=total_size, unit='B', unit_scale=True,
-                        desc=f'Sending Approval Token (IP: {peer_socket.getpeername()[0]})')
+                        desc=f'[+] Sending Approval Token (IP: {peer_socket.getpeername()[0]})')
 
     # Send the encrypted token in chunks
     chunk_size = 1024
@@ -1619,7 +1620,7 @@ def receive_approval_token(peer_socket: socket.socket, secret: bytes, mode: str,
     token_size = int.from_bytes(data, byteorder='big')
 
     # Initialize the progress bar
-    progress_bar = tqdm(total=token_size, unit='B', unit_scale=True, desc='Receiving blockchain')
+    progress_bar = tqdm(total=token_size, unit='B', unit_scale=True, desc='[+] Receiving approval token')
 
     # Receive the token data
     buffer = bytearray()
@@ -1678,7 +1679,7 @@ def send_peer_dictionary(target_peer: Peer, peer_dict: dict[str, Peer]):
     # Initialize progress bar
     total_size = len(encrypted_dict)
     progress_bar = tqdm(total=total_size, unit='B', unit_scale=True,
-                        desc=f'Sending peer dictionary (IP: {target_peer.ip})')
+                        desc=f'[+] Sending peer dictionary (IP: {target_peer.ip})')
 
     # Send the encrypted peer dict in chunks with progress
     chunk_size = 4096
@@ -1721,7 +1722,7 @@ def receive_peer_dictionary(peer_socket: socket.socket, secret: bytes, iv: bytes
     peer_dict_size = int.from_bytes(data, byteorder='big')
 
     # Initialize the progress bar
-    progress_bar = tqdm(total=peer_dict_size, unit='B', unit_scale=True, desc='Receiving peer dictionary')
+    progress_bar = tqdm(total=peer_dict_size, unit='B', unit_scale=True, desc='[+] Receiving peer dictionary')
 
     # Receive encrypted peer dictionary data
     buffer = bytearray()
