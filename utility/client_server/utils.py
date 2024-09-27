@@ -164,6 +164,9 @@ def receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: s
     A helper function that handles the receiving, decrypting, and
     validation of a requesting peer's Transaction (connection request).
 
+    Additionally, takes the information from the request and saves information
+    into a Peer object.
+
     @attention Use Case 1:
         Invoked when requesting peer wants to connect
         to the target Node and sends an encrypted Transaction
@@ -494,9 +497,11 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
                         self.is_promoted = True
                     else:
                         change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
-                        synchronize_blockchain(self, target_sock, secret=secret,
-                                               enc_mode=self.mode, mode=MODE_RECEIVER,
-                                               iv=iv, do_init=True, is_target_approved=False)
+                        synchronize_blockchain(self, target_sock, secret=secret, enc_mode=self.mode,
+                                               mode=MODE_RECEIVER,iv=iv, do_init=True, is_target_approved=False)
+                else:  # if admin
+                    synchronize_blockchain(self, target_sock, secret=secret, enc_mode=self.mode,
+                                           mode=MODE_RECEIVER, iv=iv, do_init=True, is_target_approved=False)
 
                 # Synchronize blockchain with target peer
                 save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)

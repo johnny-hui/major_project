@@ -49,6 +49,7 @@ class Node:
         """
         A constructor for the Node class object.
         """
+        print("=" * 100)
         print(NODE_INIT_MSG)
         self.first_name, self.last_name, self.mode, self.ip = parse_arguments()
         self.blockchain = None
@@ -65,10 +66,7 @@ class Node:
         self.is_connected = False
         self.is_promoted = False
         self.terminate = False
-        load_transactions_from_file(self)
-        load_blockchain_from_file(self)
-        print(f"[+] Application Timestamp: {self.app_timestamp}")
-        print(NODE_INIT_SUCCESS_MSG.format(self.role))
+        self.__load_initial_data()
 
     def start(self):
         """
@@ -87,6 +85,8 @@ class Node:
             thread.daemon = True
             thread.start()
         # =========================================================================================
+        self.__print_role_message()
+        self.__print_app_timestamp()
         self.__start_user_menu_thread()
         self.__start_monitor_pending_peers_thread()
         self.__start_monitor_peers_with_approved_tokens_thread()
@@ -117,7 +117,7 @@ class Node:
             ROLE_DELEGATE: (DELEGATE_MIN_MENU_ITEM_VALUE, DELEGATE_MAX_MENU_ITEM_VALUE),
             ROLE_ADMIN: (ADMIN_MIN_MENU_ITEM_VALUE, ADMIN_MAX_MENU_ITEM_VALUE)
         }
-        thread = threading.Thread(target=self._menu,
+        thread = threading.Thread(target=self.__menu,
                                   args=(role_menu_values.get(self.role)),
                                   name=USER_INPUT_THREAD_NAME)
         thread.daemon = True
@@ -155,7 +155,7 @@ class Node:
         thread.start()
         print(MONITOR_APPROVAL_TOKENS_START_MSG)
 
-    def _menu(self, min_menu_value: int, max_menu_value: int):
+    def __menu(self, min_menu_value: int, max_menu_value: int):
         """
         Displays the menu and handles user input
         using stdin and select().
@@ -187,9 +187,9 @@ class Node:
             for fd in readable:
                 if fd == sys.stdin:
                     command = get_user_menu_option(fd, min_menu_value, max_menu_value)
-                    self._handle_command(command, max_menu_value)
+                    self.__handle_command(command, max_menu_value)
 
-    def _handle_command(self, command: int, max_menu_value: int):
+    def __handle_command(self, command: int, max_menu_value: int):
         """
         Handles and performs user menu command options.
 
@@ -239,3 +239,32 @@ class Node:
         if action:
             action()
             perform_post_action_steps()
+
+    def __load_initial_data(self):
+        """
+        Loads transactions and blockchain data from files.
+        @return: None
+        """
+        load_transactions_from_file(self)
+        load_blockchain_from_file(self)
+
+    def __print_role_message(self):
+        """
+        Prints a message based on the node's role.
+        @return: None
+        """
+        role_message = NODE_INIT_SUCCESS_MSG.format(self.role)
+        print(role_message)
+
+    def __print_app_timestamp(self):
+        """
+        Prints the timestamp of when the application has started.
+
+        @attention Use Case:
+            The app's timestamp is used to resolve a stalemate when two
+            peers that are not yet connected to a network connect with
+            each other, determining who gets to become the DelegateNode.
+
+        @return:
+        """
+        print(f"[+] Application Timestamp: {self.app_timestamp}")

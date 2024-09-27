@@ -1238,11 +1238,11 @@ def approve_connection_request(self: object):
 
             # Evaluate and handle the decision
             if final_decision == CONSENSUS_SUCCESS:
+                from utility.blockchain.utils import save_blockchain_to_file
                 print(APPROVED_PEER_MSG.format(request.ip_addr))
 
                 # Compare application timestamp and determine who gets delegate (if not admin)
                 if self.role == ROLE_PEER and request.role == ROLE_PEER:
-                    from utility.blockchain.utils import save_blockchain_to_file
                     is_delegate = determine_delegate_status(pending_peer_sock, self.app_timestamp,
                                                             mode=MODE_INITIATOR, enc_mode=peer.mode,
                                                             secret=peer.secret, iv=peer.iv)
@@ -1267,14 +1267,19 @@ def approve_connection_request(self: object):
                         synchronize_blockchain(self, pending_peer_sock, peer.secret,
                                                enc_mode=peer.mode, mode=MODE_RECEIVER,
                                                iv=peer.iv, do_init=True, is_target_approved=False)
-                        save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
+                else:  # => if admin
+                    synchronize_blockchain(self, pending_peer_sock, peer.secret,
+                                           initiators_request=own_request, peer_request=request,
+                                           enc_mode=peer.mode, mode=MODE_INITIATOR, iv=peer.iv,
+                                           do_init=True, is_target_approved=False)
 
-                        # Perform finishing steps
-                        self.fd_list.append(pending_peer_sock)
-                        change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
-                        delete_transaction(self.pending_transactions, request.ip_addr, peer.transaction_path)
-                        print(ESTABLISHED_NETWORK_SUCCESS_MSG.format(pending_peer_sock.getpeername()[0]))
-                        self.is_connected = True
+                # Perform finishing steps
+                self.fd_list.append(pending_peer_sock)
+                save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
+                change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
+                delete_transaction(self.pending_transactions, request.ip_addr, peer.transaction_path)
+                print(ESTABLISHED_NETWORK_SUCCESS_MSG.format(pending_peer_sock.getpeername()[0]))
+                self.is_connected = True
 
             if final_decision == CONSENSUS_FAILURE:
                 print(REQUEST_REFUSED_MSG)

@@ -35,19 +35,19 @@ class DelegateNode(Node):
     """
     def __init__(self, original_data: list):
         """
-        A constructor for the DelegateNode class object.
+        An overrided constructor for the DelegateNode class object.
 
         @param original_data:
             A list of the original class attributes from
             Node class before promotion
         """
         print(NODE_INIT_MSG)
-        self._set_attributes_from_old_node(original_data)
+        self.__set_attributes_from_old_node(original_data)
         self.role = ROLE_DELEGATE
         self.is_promoted = False
         print(NODE_INIT_SUCCESS_MSG.format(self.role))
 
-    def _handle_command(self, command: int, max_menu_value: int):
+    def __handle_command(self, command: int, max_menu_value: int):
         """
         An override function that handles and performs user
         menu command options (as a Delegate).
@@ -114,6 +114,6 @@ class DelegateNode(Node):
             action()
             perform_post_action_steps()
 
-    def _set_attributes_from_old_node(self, original_data: list):
+    def __set_attributes_from_old_node(self, original_data: list):
         for attr_name, value in original_data:
             setattr(self, attr_name, value)

@@ -123,6 +123,7 @@ def get_img_path():
     @return: img_path
         A string containing the image path
     """
+    create_directory(path=DEFAULT_PHOTO_DIR)
     if is_directory_empty(path=DEFAULT_PHOTO_DIR):
         print(f"[+] WARNING: There are currently no photos in '{DEFAULT_PHOTO_DIR}'; please use P2P photo uploader app!")
     img_path = input("[+] Enter the path of the face photo to be submitted as part of your connection request: ")

@@ -1,7 +1,8 @@
 from models.Node import Node
 from utility.blockchain.utils import view_blockchain
 from utility.client_server.client_server import connect_to_P2P_network
-from utility.general.constants import ROLE_ADMIN, INPUT_PROMPT, STATUS_APPROVED, BROADCAST_MESSAGE_PROMPT
+from utility.general.constants import ROLE_ADMIN, INPUT_PROMPT, STATUS_APPROVED, BROADCAST_MESSAGE_PROMPT, \
+    MAX_MENU_ITEM_VALUE
 from utility.general.utils import start_parallel_operation
 from utility.node.admin_utils import promote_peer, kick_peer
 from utility.node.delegate_utils import initiate_consensus
@@ -37,7 +38,7 @@ class AdminNode(Node):
         super().__init__()
         self.role = ROLE_ADMIN
 
-    def _handle_command(self, command: int, max_menu_value: int):
+    def __handle_command(self, command: int, max_menu_value: int):
         """
         An override function that handles and performs user
         menu command options (as a Delegate).
@@ -81,7 +82,6 @@ class AdminNode(Node):
             5: lambda: view_pending_connection_requests(self),
             6: lambda: view_current_peers(self),
             7: lambda: close_application(self)
-
         }
         actions_when_connected = {
             1: lambda: send_message_to_specific_peer(self),
