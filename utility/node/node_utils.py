@@ -21,7 +21,7 @@ from models.Peer import Peer
 from models.Token import Token
 from models.Transaction import Transaction
 from utility.client_server.blockchain import send_block, receive_block, send_blockchain, receive_blockchain, \
-    exchange_blockchain_index, compare_latest_hash
+    exchange_blockchain_index, compare_latest_hash, send_multiple_blocks
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import hash_data
 from utility.crypto.token_utils import verify_token
@@ -1191,7 +1191,8 @@ def approve_connection_request(self: object):
         print(f"[+] Now approving request for peer (IP: {request.ip_addr}); please wait...")
         print(APPROVE_NOT_CONNECTED_MSG.format(request.ip_addr))
         exceptions = (socket.error, socket.timeout, OSError, PeerRefusedBlockError,
-                      PeerInvalidBlockchainError, InvalidBlockchainError)
+                      PeerInvalidBlockchainError, InvalidBlockchainError, InvalidBlockError,
+                      PeerRefusedBlockError)
 
         try:
             if pending_peer_sock is None:  # Attempt reconnection
@@ -1249,9 +1250,9 @@ def approve_connection_request(self: object):
                         print("[+] PROMOTION: You have been promoted to 'Delegate' node!")
                         self.role = ROLE_DELEGATE
                         synchronize_blockchain(self, pending_peer_sock, peer.secret,
-                                               initiators_request=own_request,
-                                               peer_request=request, enc_mode=peer.mode,
-                                               mode=MODE_INITIATOR, iv=peer.iv, do_init=True)
+                                               initiators_request=own_request, peer_request=request,
+                                               enc_mode=peer.mode, mode=MODE_INITIATOR, iv=peer.iv,
+                                               do_init=True, is_target_approved=False)
                         save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
 
                         # Perform finishing steps
@@ -1265,7 +1266,7 @@ def approve_connection_request(self: object):
                         change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
                         synchronize_blockchain(self, pending_peer_sock, peer.secret,
                                                enc_mode=peer.mode, mode=MODE_RECEIVER,
-                                               iv=peer.iv, do_init=True)
+                                               iv=peer.iv, do_init=True, is_target_approved=False)
                         save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
 
                         # Perform finishing steps
@@ -1838,7 +1839,7 @@ def perform_responsible_peer_tasks(self: object, request: Transaction, consensus
         # Sync your blockchain with the pending peer
         synchronize_blockchain(self, pending_peer.socket, pending_peer.secret,
                                pending_peer.mode, MODE_INITIATOR, pending_peer.iv,
-                               do_init=False)
+                               do_init=False, is_target_approved=True)
 
         # Wait for ACK
         pending_peer.socket.recv(1024)
@@ -1893,9 +1894,10 @@ def perform_responsible_peer_tasks(self: object, request: Transaction, consensus
         delete_transaction(self.pending_transactions, request.ip_addr, pending_peer.transaction_path)
 
 
-def synchronize_blockchain(self: object, peer_sock: socket.socket, secret: bytes, enc_mode: str, mode: str,
-                           iv: bytes = None, initiators_request: Transaction = None, peer_request: Transaction = None,
-                           do_init: bool = True):
+def synchronize_blockchain(self: object, target_sock: socket.socket, secret: bytes, enc_mode: str,
+                           mode: str, iv: bytes = None, initiators_request: Transaction = None,
+                           peer_request: Transaction = None, do_init: bool = True,
+                           is_target_approved: bool = False):
     """
     Synchronizes the blockchain by exchanging blockchain info with the
     target peer to determine whether individual blocks should be sent
@@ -1915,7 +1917,7 @@ def synchronize_blockchain(self: object, peer_sock: socket.socket, secret: bytes
     @param self:
         A reference to the calling class object (Node, AdminNode, DelegateNode)
 
-    @param peer_sock:
+    @param target_sock:
         A socket object
 
     @param secret:
@@ -1940,6 +1942,11 @@ def synchronize_blockchain(self: object, peer_sock: socket.socket, secret: bytes
         A boolean flag to turn on the creation of init blocks for two
         non-connected peers that create a network together
         (default = True)
+
+    @param is_target_approved:
+        A boolean to determine if the target is approved (connected)
+        in their own network (only affects who is responsible for
+        sending blocks to sync the blockchain between two peers)
 
     @return: None
     """
@@ -1998,10 +2005,10 @@ def synchronize_blockchain(self: object, peer_sock: socket.socket, secret: bytes
                 self.blockchain.add_block(init_block)
 
                 if is_sending:
-                    send_block(peer_sock, self.blockchain.get_latest_block(), secret, enc_mode, iv)
+                    send_block(target_sock, self.blockchain.get_latest_block(), secret, enc_mode, iv)
 
                 if response_check:
-                    response = AES_decrypt(data=peer_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
+                    response = AES_decrypt(data=target_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
                     if response == ACK:
                         print(f"[+] BLOCK RECEIVED: Block {init_block.index} has been successfully received!")
                     elif response == ERROR_BLOCK:
@@ -2013,47 +2020,32 @@ def synchronize_blockchain(self: object, peer_sock: socket.socket, secret: bytes
             print("[+] INITIALIZATION BLOCKS: Now receiving two initialization blocks from target peer...")
             try:
                 for i in range(2):
-                    receive_block(self, peer_sock, self.blockchain.get_latest_block().index + 1, secret, enc_mode, iv)
+                    receive_block(self, target_sock, self.blockchain.get_latest_block().index + 1, secret, enc_mode, iv)
             except (InvalidBlockError, InvalidBlockchainError) as error:
                 raise error
     # =================================================================================================
-    print(f"[+] Now synchronizing blockchain with (IP: {peer_sock.getpeername()[0]})...")
+    print(f"[+] Now synchronizing blockchain with (IP: {target_sock.getpeername()[0]})...")
     if mode == MODE_INITIATOR:
 
         # SCENARIO 1: You have a blockchain
         if self.blockchain:
             print("[+] BLOCKCHAIN FOUND: An existing blockchain is found in your system!")
-            peer_sock.send(AES_encrypt(data=HAS_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
-            peer_status = AES_decrypt(data=peer_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
+            target_sock.send(AES_encrypt(data=HAS_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
+            peer_status = AES_decrypt(data=target_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
 
             if peer_status == HAS_BLOCKCHAIN_SIGNAL:  # => A) Both have an existing blockchain
                 print("[+] The requesting peer has an existing blockchain, now determining how many blocks to send...")
 
                 # Exchange blockchain current index
                 own_index = self.blockchain.get_latest_block().index
-                peer_current_block_idx = exchange_blockchain_index(self, peer_sock, secret,
+                peer_current_block_idx = exchange_blockchain_index(self, target_sock, secret,
                                                                    enc_mode, iv, mode=MODE_INITIATOR)
 
                 # a) Compare block index (requesting peer is behind in blocks)
                 if own_index > peer_current_block_idx:
                     print(f"[+] Peer is missing {own_index - peer_current_block_idx} blocks; now sending...")
                     try:
-                        for i in range(peer_current_block_idx + 1, (own_index + 1)):
-                            block = self.blockchain.get_specific_block(i)
-                            send_block(peer_sock, block, secret, enc_mode, iv)
-
-                            # Await response before sending the next block
-                            response = AES_decrypt(data=peer_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
-
-                            if response == ACK:
-                                print(f"[+] BLOCK SUCCESSFULLY RECEIVED: Block {i} has been successfully received!")
-                                continue
-
-                            if response == ERROR_BLOCK:  # => error in sent block (close connection)
-                                raise PeerRefusedBlockError(block)
-
-                            if response == ERROR_BLOCKCHAIN:  # => peer has an invalid blockchain (close connection)
-                                raise PeerInvalidBlockchainError
+                        send_multiple_blocks(self, target_sock, secret, enc_mode, own_index, peer_current_block_idx, iv)
 
                         # Once target peer's blockchain is valid, add init blocks to blockchain & send each to target
                         if do_init:
@@ -2071,23 +2063,37 @@ def synchronize_blockchain(self: object, peer_sock: socket.socket, secret: bytes
                         if do_init:
                             add_init_blocks(mode=MODE_INITIATOR, is_sending=True, response_check=True)
                         else:
-                            compare_latest_hash(self, peer_sock, secret, enc_mode, iv, mode=MODE_INITIATOR)
+                            compare_latest_hash(self, target_sock, secret, enc_mode, iv, mode=MODE_INITIATOR)
                         print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
                         return None
                     except (PeerRefusedBlockError, PeerInvalidBlockchainError) as err:
                         raise err
 
-                # c) Compare block index (requesting peer has the more blocks == invalid blockchain)
+                # c) Compare block index (requesting peer has the more blocks)
                 else:
-                    print("[+] SYNCHRONIZATION FAILED: The requesting peer has a blockchain that belongs to another network!")
-                    raise PeerInvalidBlockchainError
+                    try:
+                        if is_target_approved:
+                            print("[+] BLOCKCHAIN REQUESTED: The requesting peer has a blockchain from another network!")
+                            send_blockchain(self, target_sock, secret, enc_mode, iv)
+                        else:
+                            print(f"[+] You are missing {peer_current_block_idx - own_index} blocks; now receiving...")
+                            for index in range(own_index + 1, (peer_current_block_idx + 1)):
+                                receive_block(self, target_sock, index, secret, enc_mode, iv)
+
+                            # Once the blockchain is in sync, receive two init blocks and add to blockchain
+                            if do_init:
+                                add_init_blocks(mode=MODE_RECEIVER)
+                        print("[+] SYNCHRONIZATION SUCCESSFUL: Blockchain has been successfully synchronized with peer!")
+                        return None
+                    except (InvalidBlockError, InvalidBlockchainError, PeerInvalidBlockchainError) as error:
+                        raise error  # => closes connection
 
             if peer_status == NO_BLOCKCHAIN_SIGNAL:     # => B) Requesting peer has no blockchain
                 try:
                     print("[+] BLOCKCHAIN REQUESTED: The requesting peer has no blockchain!")
                     if do_init:
                         add_init_blocks(mode=MODE_INITIATOR, is_sending=False, response_check=False)
-                    send_blockchain(self, peer_sock, secret, enc_mode, iv)
+                    send_blockchain(self, target_sock, secret, enc_mode, iv)
                     print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
                     return None
                 except PeerInvalidBlockchainError as e:
@@ -2096,13 +2102,13 @@ def synchronize_blockchain(self: object, peer_sock: socket.socket, secret: bytes
         # SCENARIO 2: You have no blockchain
         else:
             print("[+] MISSING BLOCKCHAIN: No blockchain was detected in your current system!")
-            peer_sock.send(AES_encrypt(data=NO_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
-            peer_status = AES_decrypt(data=peer_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
+            target_sock.send(AES_encrypt(data=NO_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
+            peer_status = AES_decrypt(data=target_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
 
             if peer_status == HAS_BLOCKCHAIN_SIGNAL:  # receive blockchain from the other peer
                 print("[+] BLOCKCHAIN REQUESTED: The requesting peer has an existing blockchain!")
                 try:
-                    self.blockchain = receive_blockchain(peer_sock, secret, enc_mode, iv)
+                    self.blockchain = receive_blockchain(target_sock, secret, enc_mode, iv)
                     print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
                     return None
                 except InvalidBlockchainError as e:
@@ -2113,7 +2119,7 @@ def synchronize_blockchain(self: object, peer_sock: socket.socket, secret: bytes
                 try:
                     self.blockchain = Blockchain()
                     add_init_blocks(mode=MODE_INITIATOR, is_sending=False, response_check=False)
-                    send_blockchain(self, peer_sock, secret, enc_mode, iv)
+                    send_blockchain(self, target_sock, secret, enc_mode, iv)
                     print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
                     return None
                 except PeerInvalidBlockchainError as e:
@@ -2121,25 +2127,25 @@ def synchronize_blockchain(self: object, peer_sock: socket.socket, secret: bytes
 
     if mode == MODE_RECEIVER:
         # Wait for target peer's blockchain status
-        peer_status = AES_decrypt(data=peer_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
+        peer_status = AES_decrypt(data=target_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
 
         if peer_status == HAS_BLOCKCHAIN_SIGNAL:
             print("[+] The target peer has an existing blockchain, now determining how many blocks to receive...")
 
             # SCENARIO 1: You and the target peer have a blockchain
             if self.blockchain:  # => If you have a blockchain already, exchange block index
-                peer_sock.send(AES_encrypt(data=HAS_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
+                target_sock.send(AES_encrypt(data=HAS_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
 
                 # Exchange blockchain current index
                 own_index = self.blockchain.get_latest_block().index
-                peer_current_block_idx = exchange_blockchain_index(self, peer_sock, secret, enc_mode, iv, mode=MODE_RECEIVER)
+                peer_current_block_idx = exchange_blockchain_index(self, target_sock, secret, enc_mode, iv, mode=MODE_RECEIVER)
 
                 # a) Compare block index (target peer has more blocks -> receive blocks to catch up)
                 if peer_current_block_idx > own_index:
                     print(f"[+] You are missing {peer_current_block_idx - own_index} blocks; now receiving...")
                     try:
                         for index in range(own_index + 1, (peer_current_block_idx + 1)):
-                            receive_block(self, peer_sock, index, secret, enc_mode, iv)
+                            receive_block(self, target_sock, index, secret, enc_mode, iv)
 
                         # Once the blockchain is in sync, receive two init blocks and add to blockchain
                         if do_init:
@@ -2157,48 +2163,62 @@ def synchronize_blockchain(self: object, peer_sock: socket.socket, secret: bytes
                         if do_init:
                             add_init_blocks(mode=MODE_RECEIVER)
                         else:
-                            compare_latest_hash(self, peer_sock, secret, enc_mode, iv, mode=MODE_RECEIVER)
+                            compare_latest_hash(self, target_sock, secret, enc_mode, iv, mode=MODE_RECEIVER)
                         print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
                         return None
                     except (InvalidBlockError, InvalidBlockchainError) as error:  # => closes connection
                         raise error
 
-                else:  # If you have more blocks than target peer, then close connection
-                    print("[+] SYNCHRONIZATION FAILED: You have a blockchain that belongs to another network!")
-                    raise InvalidBlockchainError(reason="You have a blockchain that belongs to another network!")
+                else:  # If you have more blocks than target peer, then send remaining blocks and await response
+                    try:
+                        if is_target_approved:
+                            print("[+] BLOCKCHAIN REQUESTED: You have a blockchain belonging from another P2P network!")
+                            self.blockchain = receive_blockchain(target_sock, secret, enc_mode, iv)
+                        else:
+                            print(f"[+] Peer is missing {own_index - peer_current_block_idx} blocks; now sending...")
+                            time.sleep(1)  # sleep 1 second to synchronize with the other peer
+                            send_multiple_blocks(self, target_sock, secret, enc_mode, own_index, peer_current_block_idx, iv)
+
+                            # Once target peer's blockchain is valid, add init blocks to blockchain & send each to target
+                            if do_init:
+                                add_init_blocks(mode=MODE_INITIATOR, is_sending=True, response_check=True)
+
+                        print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
+                        return None
+                    except (PeerRefusedBlockError, PeerInvalidBlockchainError) as error:
+                        raise error
 
             # SCENARIO 2: Target peer has a blockchain and you do not
             else:
                 print("[+] MISSING BLOCKCHAIN: No blockchain was detected in your current system!")
-                peer_sock.send(AES_encrypt(data=NO_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
+                target_sock.send(AES_encrypt(data=NO_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
                 try:
                     print("[+] BLOCKCHAIN REQUESTED: You have requested for the target peer's blockchain!")
-                    self.blockchain = receive_blockchain(peer_sock, secret, enc_mode, iv)
+                    self.blockchain = receive_blockchain(target_sock, secret, enc_mode, iv)
                     print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
                     return None
                 except InvalidBlockchainError as error:
                     raise error
 
-        if peer_status == NO_BLOCKCHAIN_SIGNAL:
-            if self.blockchain:
+        if peer_status == NO_BLOCKCHAIN_SIGNAL:  # => if target peer has no blockchain
+            if self.blockchain:  # you have blockchain
                 print("[+] BLOCKCHAIN FOUND: An existing blockchain is found in your system!")
-                peer_sock.send(AES_encrypt(data=HAS_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
+                target_sock.send(AES_encrypt(data=HAS_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
                 try:
                     print("[+] BLOCKCHAIN REQUESTED: The target peer has no blockchain!")
                     if do_init:
                         add_init_blocks(mode=MODE_INITIATOR, is_sending=False, response_check=False)
-                    send_blockchain(self, peer_sock, secret, enc_mode, iv)
-                    print(
-                        "[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
+                    send_blockchain(self, target_sock, secret, enc_mode, iv)
+                    print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
                     return None
                 except PeerInvalidBlockchainError as e:
                     raise e
 
             else:
-                peer_sock.send(AES_encrypt(data=NO_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
+                target_sock.send(AES_encrypt(data=NO_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
                 print("[+] The target peer also has no blockchain; now waiting for a new blockchain initialization...")
                 try:
-                    self.blockchain = receive_blockchain(peer_sock, secret, enc_mode, iv)
+                    self.blockchain = receive_blockchain(target_sock, secret, enc_mode, iv)
                     print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
                     return None
                 except InvalidBlockchainError as e:

@@ -7,7 +7,8 @@ socket communication, and both the Blockchain and Block classes
 import pickle
 import socket
 from tqdm import tqdm
-from exceptions.exceptions import InvalidBlockError, InvalidBlockchainError, PeerInvalidBlockchainError
+from exceptions.exceptions import InvalidBlockError, InvalidBlockchainError, PeerInvalidBlockchainError, \
+    PeerRefusedBlockError
 from models.Block import Block
 from models.Blockchain import Blockchain
 from utility.crypto.aes_utils import AES_encrypt, AES_decrypt
@@ -151,6 +152,61 @@ def compare_latest_hash(self: object, peer_sock: socket.socket, secret: bytes, e
         else:
             print("[+] BLOCKCHAIN COMPATIBLE: Your blockchain is valid!")
             return None
+
+
+def send_multiple_blocks(self: object, target_sock: socket.socket, secret: bytes,
+                         mode: str, own_block_index: int, peer_block_index: int, iv: bytes = None):
+    """
+    Sends multiple blocks specified by indexes to the intended target.
+
+    @raise PeerRefusedBlockError:
+        Raised if the sent block contains an invalid signature
+        when being verified on the receiving side
+
+    @raise PeerInvalidBlockchainError:
+        Raised if the sent block results in an error
+        in the Blockchain when the receiving side
+        verifies after adding the block
+
+    @param self:
+        A reference to the calling class object (Node, AdminNode, DelegateNode)
+
+    @param target_sock:
+        A socket object
+
+    @param secret:
+        Bytes containing the shared secret
+
+    @param mode:
+        The encryption mode (CBC or ECB)
+
+    @param own_block_index:
+        An integer for the calling class's current block index
+
+    @param peer_block_index:
+        An integer for the target peer's current block index
+
+    @param iv:
+        Bytes of the initialization factor IV (optional)
+
+    @return: None
+    """
+    for i in range( peer_block_index + 1, (own_block_index + 1)):
+        block = self.blockchain.get_specific_block(i)
+        send_block(target_sock, block, secret, mode, iv)
+
+        # Await response before sending the next block
+        response = AES_decrypt(data=target_sock.recv(1024), key=secret, mode=mode, iv=iv).decode()
+
+        if response == ACK:
+            print(f"[+] BLOCK SUCCESSFULLY RECEIVED: Block {i} has been successfully received!")
+            continue
+
+        if response == ERROR_BLOCK:  # => error in sent block (close connection)
+            raise PeerRefusedBlockError(block)
+
+        if response == ERROR_BLOCKCHAIN:  # => peer has an invalid blockchain (close connection)
+            raise PeerInvalidBlockchainError
 
 
 def send_block(target_sock: socket.socket, input_block: Block,

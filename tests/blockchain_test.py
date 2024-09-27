@@ -3,16 +3,15 @@ Description:
 This Python file tests the Blockchain class.
 
 """
-import pickle
 import time
 import unittest
+
 from models.Block import Block
 from models.Blockchain import Blockchain
 from utility.blockchain.utils import save_blockchain_to_file, load_blockchain_from_file
 from utility.crypto.ec_keys_utils import generate_keys
 from utility.general.constants import ROLE_ADMIN, GENESIS_INDEX, DEFAULT_BLOCKCHAIN_DIR
 from utility.general.utils import is_directory_empty, load_image
-
 
 # INIT CONSTANTS
 FIRST_NAMES = [None, "Teresa", "Bob", "Eric"]
@@ -228,7 +227,7 @@ class TestBlockchain(unittest.TestCase):
                 ip=IP_ADDRESSES[i],
                 public_key=pub_key
             )
-            img = load_image(path="../data/photos/photo_1.png")
+            img = load_image(path="data/photos/photo_1.png")
             new_block.set_image(img)
             self.blockchain.add_block(new_block, signers_ip, signers_role, pvt_key, is_signing=True)
         self.assertEqual(self.blockchain.is_valid(), True)

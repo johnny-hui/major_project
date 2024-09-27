@@ -390,7 +390,8 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
             target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, iv=iv, mode=self.mode))
 
             # Sync blockchain with target peer
-            synchronize_blockchain(self, target_sock, secret, self.mode, MODE_RECEIVER, iv, do_init=False)
+            synchronize_blockchain(self, target_sock, secret, self.mode, MODE_RECEIVER,
+                                   iv, do_init=False, is_target_approved=True)
 
             # Receive approval token, block, and peer dictionary from target peer
             token = receive_approval_token(target_sock, secret, self.mode, iv)
@@ -488,13 +489,14 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
                         synchronize_blockchain(self, target_sock, secret,
                                                initiators_request=own_request,
                                                peer_request=request, enc_mode=self.mode,
-                                               mode=MODE_INITIATOR, iv=iv, do_init=True)
+                                               mode=MODE_INITIATOR, iv=iv, do_init=True,
+                                               is_target_approved=False)
                         self.is_promoted = True
                     else:
                         change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
                         synchronize_blockchain(self, target_sock, secret=secret,
                                                enc_mode=self.mode, mode=MODE_RECEIVER,
-                                               iv=iv, do_init=True)
+                                               iv=iv, do_init=True, is_target_approved=False)
 
                 # Synchronize blockchain with target peer
                 save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
