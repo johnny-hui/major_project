@@ -1255,26 +1255,35 @@ def approve_connection_request(self: object):
                     if is_delegate:
                         print("[+] PROMOTION: You have been promoted to 'Delegate' node!")
                         self.role = ROLE_DELEGATE
-                        synchronize_blockchain(self, pending_peer_sock, peer.secret,
-                                               initiators_request=own_request, peer_request=request,
-                                               enc_mode=peer.mode, mode=MODE_INITIATOR, iv=peer.iv,
-                                               do_init=True, is_target_approved=False)
+                        synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
+                                               peer_request=request, enc_mode=peer.mode, mode=MODE_INITIATOR,
+                                               iv=peer.iv, do_init=True, is_target_approved=False)
                         save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
 
                         # Perform finishing steps
                         perform_finishing_steps()
                         self.is_promoted = True  # => NOTE: This flag that will close Node object
+                        return None
                     else:
                         change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
-                        synchronize_blockchain(self, pending_peer_sock, peer.secret,
-                                               initiators_request=own_request, peer_request=request,
-                                               enc_mode=peer.mode, mode=MODE_RECEIVER,
+                        synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
+                                               peer_request=request, enc_mode=peer.mode, mode=MODE_RECEIVER,
                                                iv=peer.iv, do_init=True, is_target_approved=False)
-                else:  # => if admin
-                    synchronize_blockchain(self, pending_peer_sock, peer.secret,
-                                           initiators_request=own_request, peer_request=request,
-                                           enc_mode=peer.mode, mode=MODE_INITIATOR, iv=peer.iv,
-                                           do_init=True, is_target_approved=False)
+
+                elif request.role == ROLE_ADMIN and self.role == ROLE_PEER:
+                    synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
+                                           peer_request=request, enc_mode=peer.mode, mode=MODE_RECEIVER,
+                                           iv=peer.iv, do_init=True, is_target_approved=False)
+
+                elif request.role == ROLE_PEER and self.role == ROLE_ADMIN:
+                    synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
+                                           peer_request=request, enc_mode=peer.mode, mode=MODE_INITIATOR,
+                                           iv=peer.iv, do_init=True, is_target_approved=False)
+
+                elif request.role == ROLE_ADMIN and self.role == ROLE_ADMIN:
+                    synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
+                                           peer_request=request, enc_mode=peer.mode, mode=MODE_INITIATOR,
+                                           iv=peer.iv, do_init=True, is_target_approved=False)
 
                 # Perform finishing steps
                 perform_finishing_steps()

@@ -35,7 +35,8 @@ from utility.general.constants import (APPLICATION_PORT, FIND_HOST_TIMEOUT,
                                        TARGET_PEER_APPROVED_MSG, MODE_RECEIVER, JOIN_NETWORK_SUCCESS_MSG,
                                        ROLE_PEER, ROLE_DELEGATE, TARGET_NOT_CONNECTED_MSG,
                                        CONNECT_PEERS_AFTER_APPROVAL_MSG, MODE_INITIATOR, APPROVED_SIGNAL,
-                                       CONN_REJECTED_INVALID_TOKEN_MSG, CONNECTION_SUCCESSFUL_MSG, RESPONSE_REJECTED)
+                                       CONN_REJECTED_INVALID_TOKEN_MSG, CONNECTION_SUCCESSFUL_MSG, RESPONSE_REJECTED,
+                                       ROLE_ADMIN)
 from utility.general.utils import timer, determine_delegate_status, start_parallel_operation
 from utility.node.node_utils import (peer_exists, add_new_transaction, save_transaction_to_file,
                                      save_pending_peer_info, remove_pending_peer, delete_transaction,
@@ -445,6 +446,13 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
         is not connected to a P2P network.
         @return: None
         """
+        def perform_finishing_steps():
+            self.fd_list.append(target_sock)  # fd_list == approved list
+            change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
+            delete_transaction(self.pending_transactions, request.ip_addr, file_path)
+            self.is_connected = True
+            print(JOIN_NETWORK_SUCCESS_MSG.format(target_sock.getpeername()[0]))
+        # =========================================================================================
         try:
             # Set a 5-minute timeout while waiting for target peer's Transaction object
             print(TARGET_NOT_CONNECTED_MSG)
@@ -489,18 +497,30 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
                         print("[+] PROMOTION: You have been selected to be a 'Delegate' node!")
                         self.role = ROLE_DELEGATE
                         time.sleep(1)
-                        synchronize_blockchain(self, target_sock, secret,
-                                               initiators_request=own_request,
-                                               peer_request=request, enc_mode=self.mode,
-                                               mode=MODE_INITIATOR, iv=iv, do_init=True,
-                                               is_target_approved=False)
+                        synchronize_blockchain(self, target_sock, secret, initiators_request=own_request,
+                                               peer_request=request, enc_mode=self.mode, mode=MODE_INITIATOR,
+                                               iv=iv, do_init=True, is_target_approved=False)
+                        perform_finishing_steps()
                         self.is_promoted = True
+                        return None
                     else:
                         change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
                         synchronize_blockchain(self, target_sock, secret, initiators_request=own_request,
                                                peer_request=request, enc_mode=self.mode, mode=MODE_RECEIVER,
                                                iv=iv, do_init=True, is_target_approved=False)
-                else:  # if admin
+
+                elif request.role == ROLE_ADMIN and self.role == ROLE_PEER:  # if admin
+                    synchronize_blockchain(self, target_sock, secret, initiators_request=own_request,
+                                           peer_request=request,enc_mode=self.mode, mode=MODE_RECEIVER,
+                                           iv=iv, do_init=True, is_target_approved=False)
+
+                elif request.role == ROLE_PEER and self.role == ROLE_ADMIN:
+                    time.sleep(1)
+                    synchronize_blockchain(self, target_sock, secret, initiators_request=own_request,
+                                           peer_request=request, enc_mode=self.mode, mode=MODE_INITIATOR,
+                                           iv=iv, do_init=True,is_target_approved=False)
+
+                elif request.role == ROLE_ADMIN and self.role == ROLE_ADMIN:
                     synchronize_blockchain(self, target_sock, secret, initiators_request=own_request,
                                            peer_request=request,enc_mode=self.mode, mode=MODE_RECEIVER,
                                            iv=iv, do_init=True, is_target_approved=False)
@@ -509,11 +529,7 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
                 save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
 
                 # Perform finishing steps
-                self.fd_list.append(target_sock)  # fd_list == approved list
-                change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
-                delete_transaction(self.pending_transactions, request.ip_addr, file_path)
-                self.is_connected = True
-                print(JOIN_NETWORK_SUCCESS_MSG.format(target_sock.getpeername()[0]))
+                perform_finishing_steps()
 
             if vote == VOTE_NO:
                 print("[+] You have declined the target peer's identity (in their request); returning to main menu...")
