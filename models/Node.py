@@ -95,6 +95,12 @@ class Node:
             if self.terminate is True:
                 break
 
+            # Monitor changes for 'is_connected' status
+            if len(self.fd_list) == 1:
+                self.is_connected = False
+            else:
+                self.is_connected = True
+
             readable, _, _ = select.select(self.fd_list, [], [], 1)
 
             for sock in readable:

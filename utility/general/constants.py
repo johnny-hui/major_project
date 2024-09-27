@@ -215,7 +215,8 @@ SAVE_GRAPH_DIR = "data/graphs/{}"
 
 
 # SEND MESSAGE CONSTANTS
-SELECT_PEER_SEND_MSG_PROMPT = "\n[+] Select a specific peer to send a message to (enter a number from {} to {}): "
+SELECT_PEER_SEND_MSG_PROMPT = ("\n[+] Select a specific peer to send a message to (enter a number from {} to {}; "
+                               "or enter 0 to quit): ")
 
 
 # TRANSFER FILE CONSTANTS
@@ -450,12 +451,15 @@ BROADCAST_MESSAGE_PROMPT = "[+] Now broadcasting your message to all connected p
 
 
 # PROMOTE PEER CONSTANTS
-PROMOTE_PEER_PROMPT = "\n[+] Select a specific peer to promote to delegate (enter a number from {} to {}): "
+PROMOTE_PEER_PROMPT = ("\n[+] Select a specific peer to promote to delegate (enter a number from {} to {}; "
+                       "or enter 0 to quit): ")
 PROMOTE_PEER_SEND_SIGNAL_MSG = "[+] Now sending a promotion signal to all connected peers..."
 
 
 # KICK PEER CONSTANTS
-KICK_PEER_PROMPT = "[+] Now sending a signal to all connected peers to remove the kicked peer..."
+KICK_PEER_PROMPT = ("\n[+] Select a specific peer to kick from the network (enter a number from {} to {}; "
+                    "or enter 0 to quit): ")
+KICK_PEER_SIGNAL_PROMPT = "[+] Now sending a signal to all connected peers to remove the kicked peer..."
 
 
 # BLOCK CONSTANTS

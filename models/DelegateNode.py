@@ -2,7 +2,7 @@ from models.Node import Node
 from utility.blockchain.utils import view_blockchain
 from utility.client_server.client_server import connect_to_P2P_network
 from utility.general.constants import (ROLE_DELEGATE, INPUT_PROMPT, NODE_INIT_SUCCESS_MSG,
-                                       NODE_INIT_MSG, STATUS_APPROVED, BROADCAST_MESSAGE_PROMPT)
+                                       NODE_INIT_MSG, STATUS_APPROVED, BROADCAST_MESSAGE_PROMPT, MAX_MENU_ITEM_VALUE)
 from utility.general.utils import (start_parallel_operation)
 from utility.node.delegate_utils import initiate_consensus
 from utility.node.node_utils import (close_application, display_menu, approve_connection_request,

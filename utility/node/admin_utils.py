@@ -5,13 +5,12 @@ This Python file provides utility functions for the AdminNode class.
 """
 import socket
 import time
-
 from models.Block import Block
 from utility.crypto.aes_utils import AES_encrypt
 from utility.general.constants import (PROMOTE_PEER_PROMPT, ROLE_PEER, PROMOTION_SIGNAL,
                                        UPDATE_NEW_PROMOTED_PEER_SIGNAL, STATUS_APPROVED,
                                        PROMOTE_PEER_SEND_SIGNAL_MSG, ROLE_DELEGATE, REMOVE_PEER_SIGNAL,
-                                       KICK_PEER_PROMPT)
+                                       KICK_PEER_SIGNAL_PROMPT, KICK_PEER_PROMPT)
 from utility.general.utils import start_parallel_operation
 from utility.node.node_utils import get_specific_peer_prompt, remove_approved_peer
 
@@ -23,10 +22,13 @@ def kick_peer(self: object):
 
     # Prompt user to select a peer to kick (exclude admins)
     while True:
-        kicked_peer = get_specific_peer_prompt(self, prompt=PROMOTE_PEER_PROMPT)
-        if kicked_peer.role in (ROLE_PEER, ROLE_DELEGATE) and kicked_peer.status == STATUS_APPROVED:
-            break
-        print("[+] KICK PEER ERROR: You cannot kick another admin peer (or pending peers); please try again!")
+        kicked_peer = get_specific_peer_prompt(self, prompt=KICK_PEER_PROMPT)
+        if kicked_peer:
+            if kicked_peer.role in (ROLE_PEER, ROLE_DELEGATE) and kicked_peer.status == STATUS_APPROVED:
+                break
+            print("[+] KICK PEER ERROR: You cannot kick another admin peer (or pending peers); please try again!")
+        else:
+            return None
 
     # Close the socket connection and clear the information belonging to kicked peer
     remove_approved_peer(self, peer_to_remove=kicked_peer)
@@ -38,23 +40,24 @@ def kick_peer(self: object):
             self.fd_list.remove(peer.socket)                                    # => to prevent select() interference
             args_list.append((kicked_peer.ip, peer.socket, peer.secret, peer.mode, peer.iv))
 
-    # Wait 1.2 seconds for select() in the main thread to see the changes
-    time.sleep(1.2)
+    # Send a kick peer signal to every peer regarding the kicked peer
+    if len(args_list) != 0:
+        time.sleep(1.2)     # => wait 1.2 seconds for select() in the main thread to see the changes
 
-    # Send a kick peer signal to every peer
-    start_parallel_operation(task=_send_remove_peer_signal,
-                             task_args=args_list,
-                             num_processes=len(args_list),
-                             prompt=KICK_PEER_PROMPT)
+        # Send a kick peer signal to every peer
+        start_parallel_operation(task=_send_remove_peer_signal,
+                                 task_args=args_list,
+                                 num_processes=len(args_list),
+                                 prompt=KICK_PEER_SIGNAL_PROMPT)
 
-    # Re-add the sockets back to fd_list after processing
-    for _, sock, _, _, _ in args_list:
-        sock.setblocking(True)
-        self.fd_list.append(sock)
+        # Re-add the sockets back to fd_list after processing
+        for _, sock, _, _, _ in args_list:
+            sock.setblocking(True)
+            self.fd_list.append(sock)
 
-    # Clear temp list from memory
-    del args_list
-    print(f"[+] PROMOTION COMPLETE: The selected peer (IP: {kicked_peer.ip}) has been successfully promoted!")
+        # Clear temp list from memory
+        del args_list
+        print(f"[+] PROMOTION COMPLETE: The selected peer (IP: {kicked_peer.ip}) has been successfully promoted!")
 
 
 def promote_peer(self: object):
@@ -73,15 +76,21 @@ def promote_peer(self: object):
     # Prompt user to select a peer to promote (exclude delegates or admins)
     while True:
         promoted_peer = get_specific_peer_prompt(self, prompt=PROMOTE_PEER_PROMPT)
-        if promoted_peer.role == ROLE_PEER and promoted_peer.status == STATUS_APPROVED:
-            break
-        print("[+] PROMOTE PEER ERROR: You cannot promote a delegate, admin (or any pending peers); please try again!")
+        if promoted_peer:
+            if promoted_peer.role == ROLE_PEER and promoted_peer.status == STATUS_APPROVED:
+                break
+            print("[+] PROMOTE ERROR: You cannot promote a delegate or admin (or any pending peers); please try again!")
+        else:
+            return None
 
     # Send Promotion Signal to Target Peer
     promoted_peer.socket.send(AES_encrypt(data=PROMOTION_SIGNAL.encode(),
                                           key=promoted_peer.secret,
                                           mode=promoted_peer.mode,
                                           iv=promoted_peer.iv))
+
+    # Update the promoted peer's role
+    promoted_peer.role = ROLE_DELEGATE
 
     # Get approved peer objects (excluding the promoted peer) and prepare arg_list for multiprocessing
     args_list = []
@@ -91,23 +100,22 @@ def promote_peer(self: object):
                 self.fd_list.remove(peer.socket)
             args_list.append((promoted_peer.ip, peer.socket, peer.secret, peer.mode, peer.iv))
 
-    # Wait 1.2 seconds for select() in the main thread to see the changes
-    time.sleep(1.2)
-
     # Send an Update signal to every peer regarding promotion (excluding promoted peer)
-    start_parallel_operation(task=_send_update_delegate_signal,
-                             task_args=args_list,
-                             num_processes=len(args_list),
-                             prompt=PROMOTE_PEER_SEND_SIGNAL_MSG)
+    if len(args_list) != 0:
+        time.sleep(1.2)         #=> wait 1.2 seconds for select() in the main thread to see the changes
+        start_parallel_operation(task=_send_update_delegate_signal,
+                                 task_args=args_list,
+                                 num_processes=len(args_list),
+                                 prompt=PROMOTE_PEER_SEND_SIGNAL_MSG)
 
-    # Re-add the sockets back to fd_list after processing
-    for _, sock, _, _, _ in args_list:
-        sock.setblocking(True)
-        self.fd_list.append(sock)
+        # Re-add the sockets back to fd_list after processing
+        for _, sock, _, _, _ in args_list:
+            sock.setblocking(True)
+            self.fd_list.append(sock)
 
-    # Clear temp list from memory
-    del args_list
-    print(f"[+] PROMOTION COMPLETE: The selected peer (IP: {promoted_peer.ip}) has been successfully promoted!")
+        # Clear temp list from memory
+        del args_list
+        print(f"[+] PROMOTION COMPLETE: The selected peer (IP: {promoted_peer.ip}) has been successfully promoted!")
 
 
 def _send_update_delegate_signal(promoted_ip: str, peer_sock: socket.socket,

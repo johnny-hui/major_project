@@ -202,7 +202,7 @@ def remove_approved_peer(self: object, peer_to_remove: Peer):
     @return: None
     """
     del self.peer_dict[peer_to_remove.ip]
-    self.fd_list.remove(peer_to_remove)
+    self.fd_list.remove(peer_to_remove.socket)
     time.sleep(1.2)
     peer_to_remove.socket.close()
 
@@ -231,9 +231,14 @@ def get_specific_peer_prompt(self: object, prompt: str) -> Peer | None:
                 # Prompt user selection for a specific client
                 client_index = int(input(prompt.format(1, len(self.peer_dict))))
 
+                if client_index == 0:  # quit
+                    return None
+
                 while client_index not in range(1, (len(self.peer_dict) + 1)):
-                    print("[+] ERROR: Invalid selection range; please enter again.")
+                    print("[+] ERROR: Invalid selection range; please enter again...")
                     client_index = int(input(prompt.format(1, len(self.peer_dict))))
+                    if client_index == 0:
+                        return None
 
                 # Get information of the client (from dictionary)
                 _, peer = list(self.peer_dict.items())[client_index - 1]
@@ -858,9 +863,12 @@ def send_message_to_specific_peer(self: object):
     """
     while True:
         peer = get_specific_peer_prompt(self, prompt=SELECT_PEER_SEND_MSG_PROMPT)
-        if peer.status != STATUS_PENDING:
-            break
-        print("[+] SEND MESSAGE ERROR: You cannot send message to a pending peer; please try again!")
+        if peer:
+            if peer.status != STATUS_PENDING:
+                break
+            print("[+] SEND MESSAGE ERROR: You cannot send message to a pending peer; please try again!")
+        else:
+            return None
 
     message = input(f"[+] Enter a message to send to ({peer.ip}): ")
     send_message(peer.socket, peer.secret, peer.iv, peer.mode, message)
@@ -1189,6 +1197,7 @@ def approve_connection_request(self: object):
         """
         def perform_finishing_steps():
             self.fd_list.append(pending_peer_sock)
+            save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
             change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
             delete_transaction(self.pending_transactions, request.ip_addr, peer.transaction_path)
             self.is_connected = True
@@ -1258,7 +1267,6 @@ def approve_connection_request(self: object):
                         synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
                                                peer_request=request, enc_mode=peer.mode, mode=MODE_INITIATOR,
                                                iv=peer.iv, do_init=True, is_target_approved=False)
-                        save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
 
                         # Perform finishing steps
                         perform_finishing_steps()
