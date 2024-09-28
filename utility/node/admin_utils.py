@@ -57,7 +57,13 @@ def kick_peer(self: object):
 
         # Clear temp list from memory
         del args_list
-        print(f"[+] PROMOTION COMPLETE: The selected peer (IP: {kicked_peer.ip}) has been successfully promoted!")
+        print(f"[+] OPERATION COMPLETE: The selected peer (IP: {kicked_peer.ip}) has been successfully kicked!")
+
+    # Update 'is_connected' status
+    if len(self.fd_list) == 1:
+        self.is_connected = False
+    else:
+        self.is_connected = True
 
 
 def promote_peer(self: object):

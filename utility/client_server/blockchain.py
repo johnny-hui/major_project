@@ -143,7 +143,7 @@ def compare_latest_hash(self: object, peer_sock: socket.socket, secret: bytes, e
 
         # Send own current block index
         latest_block_hash = self.blockchain.get_latest_block().hash
-        peer_sock.send(AES_encrypt(data=latest_block_hash, key=secret, mode=enc_mode, iv=iv))
+        peer_sock.send(AES_encrypt(data=latest_block_hash.encode(), key=secret, mode=enc_mode, iv=iv))
 
         # Compare the hashes
         if peer_latest_block_hash != latest_block_hash:

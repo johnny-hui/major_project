@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from socket import socket
-
 from models.Block import Block
 from models.Token import Token
 

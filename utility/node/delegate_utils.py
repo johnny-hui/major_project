@@ -121,7 +121,8 @@ def initiate_consensus(self: object):
                     # Create and sign a new block
                     new_block = Block(ip=request.ip_addr, first_name=request.first_name,
                                       last_name=request.last_name, public_key=self.pub_key)
-                    sign_block(self, new_block,
+                    new_block.set_image(request.image)
+                    sign_block(self, new_block=new_block,
                                new_index=self.blockchain.get_latest_block().index + 1,
                                previous_hash=self.blockchain.get_latest_block().hash)
 

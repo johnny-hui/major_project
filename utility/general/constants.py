@@ -389,6 +389,7 @@ ESTABLISHED_NETWORK_SUCCESS_MSG = ("[+] P2P NETWORK ESTABLISHED: You have succes
                                    "with new peer (IP: {})!")
 ADMIN_DELEGATE_TABLE_TITLE = "Current Admins & Delegates"
 SELECT_ADMIN_DELEGATE_PROMPT = "[+] Please select an admin or delegate above (Enter a value of 1 to {}): "
+APPROVE_PEER_CONTINUE_PROMPT = "[+] Do you still want to continue? (Enter 1 to continue or 0 to quit):"
 
 
 # CONSENSUS CONSTANTS
@@ -489,7 +490,7 @@ SEND_BLOCK_MULTIPROCESS_MSG = ("[+] Now issuing an approval block for the approv
 
 
 # FACIAL RECOGNITION CONSTANTS (DEEPFACE)
-FACIAL_RECOGNITION_PROMPT = "Now performing facial recognition scan (using DeepFace module)..."
+FACIAL_RECOGNITION_PROMPT = "[+] Now performing facial recognition scan (using DeepFace module)..."
 
 
 # OTHER CONSTANTS

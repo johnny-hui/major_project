@@ -25,6 +25,7 @@ from utility.client_server.blockchain import send_block, receive_block, send_blo
 from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
 from utility.crypto.ec_keys_utils import hash_data
 from utility.crypto.token_utils import verify_token
+from utility.deepface.utils import perform_facial_recognition_on_peer
 from utility.general.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD_DESC, MENU_OPTIONS_CONNECTED,
                                        MENU_OPTIONS, PEER_TABLE_TITLE, PEER_TABLE_FIELD_PERSON, PEER_TABLE_FIELD_IP,
                                        PEER_TABLE_FIELD_CIPHER_MODE, PEER_TABLE_FIELD_SECRET, PEER_TABLE_FIELD_IV,
@@ -46,7 +47,7 @@ from utility.general.constants import (MENU_TITLE, MENU_FIELD_OPTION, MENU_FIELD
                                        CONSENSUS_PEER_WIN_MSG, CONSENSUS_PEER_LOSE_MSG, REQ_BUFFER_TIME_INITIAL,
                                        MONITOR_APPROVAL_TOKENS_INTERVAL, SELECT_PEER_SEND_MSG_PROMPT,
                                        UPDATE_NEW_PROMOTED_PEER_SIGNAL, HAS_BLOCKCHAIN_SIGNAL, NO_BLOCKCHAIN_SIGNAL,
-                                       MODE_RECEIVER, ERROR_BLOCK, ERROR_BLOCKCHAIN)
+                                       MODE_RECEIVER, ERROR_BLOCK, ERROR_BLOCKCHAIN, APPROVE_PEER_CONTINUE_PROMPT)
 from utility.general.utils import create_directory, is_directory_empty, write_to_file, get_img_path, load_image, \
     get_user_command_option, delete_file, create_transaction_table, determine_delegate_status
 from utility.node.node_init import get_current_timestamp
@@ -1221,83 +1222,97 @@ def approve_connection_request(self: object):
                 self.fd_pending.remove(pending_peer_sock)
                 time.sleep(1)
 
-            # Send APPROVED signal to pending peer
-            pending_peer_sock.send(AES_encrypt(data=RESPONSE_APPROVED.encode(), key=peer.secret,
-                                               mode=peer.mode, iv=peer.iv))
+            # Perform facial recognition on each block photo of the requesting peer against the request photo
+            if self.blockchain:
+                perform_facial_recognition_on_peer(self.blockchain, request=request)
+            else:
+                print("[+] WARNING: You have no blockchain to perform facial recognition on the requesting peer!")
 
-            # Wait for ACK (for synchronization)
-            pending_peer_sock.recv(1024)
+            # Prompt user if they want to continue
+            command = get_user_command_option(opt_range=tuple(range(2)), prompt=APPROVE_PEER_CONTINUE_PROMPT)
 
-            # Send Status - [Not Connected]
-            pending_peer_sock.send(AES_encrypt(data=STATUS_NOT_CONNECTED.encode(),
-                                               key=peer.secret, mode=peer.mode, iv=peer.iv))
+            if command == 1:
+                # Send APPROVED signal to pending peer
+                pending_peer_sock.send(AES_encrypt(data=RESPONSE_APPROVED.encode(), key=peer.secret,
+                                                   mode=peer.mode, iv=peer.iv))
 
-            # Create own connection request and submit for consensus
-            own_request = None
-            while own_request is None:
-                own_request = create_transaction(self)
+                # Wait for ACK (for synchronization)
+                pending_peer_sock.recv(1024)
 
-            # Sign the transaction
-            sign_transaction(self, own_request)
+                # Send Status - [Not Connected]
+                pending_peer_sock.send(AES_encrypt(data=STATUS_NOT_CONNECTED.encode(),
+                                                   key=peer.secret, mode=peer.mode, iv=peer.iv))
 
-            # Process data for Consensus (add pending peer socket)
-            temp_list = [pending_peer_sock]
+                # Create own connection request and submit for consensus
+                own_request = None
+                while own_request is None:
+                    own_request = create_transaction(self)
 
-            # Initiate Consensus and Wait for Pending Peer's Vote
-            from models.Consensus import Consensus
-            consensus = Consensus(request=own_request, mode=MODE_INITIATOR,
-                                  sock_list=temp_list, peer_dict=self.peer_dict,
-                                  is_connected=False, event=self.consensus_event,
-                                  blockchain=self.blockchain)
-            final_decision = consensus.start()
+                # Sign the transaction
+                sign_transaction(self, own_request)
 
-            # Evaluate and handle the decision
-            if final_decision == CONSENSUS_SUCCESS:
-                from utility.blockchain.utils import save_blockchain_to_file
-                print(APPROVED_PEER_MSG.format(request.ip_addr))
+                # Process data for Consensus (add pending peer socket)
+                temp_list = [pending_peer_sock]
 
-                # Compare application timestamp and determine who gets delegate (if not admin)
-                if self.role == ROLE_PEER and request.role == ROLE_PEER:
-                    is_delegate = determine_delegate_status(pending_peer_sock, self.app_timestamp,
-                                                            mode=MODE_INITIATOR, enc_mode=peer.mode,
-                                                            secret=peer.secret, iv=peer.iv)
-                    if is_delegate:
-                        print("[+] PROMOTION: You have been promoted to 'Delegate' node!")
-                        self.role = ROLE_DELEGATE
-                        synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
-                                               peer_request=request, enc_mode=peer.mode, mode=MODE_INITIATOR,
-                                               iv=peer.iv, do_init=True, is_target_approved=False)
+                # Initiate Consensus and Wait for Pending Peer's Vote
+                from models.Consensus import Consensus
+                consensus = Consensus(request=own_request, mode=MODE_INITIATOR,
+                                      sock_list=temp_list, peer_dict=self.peer_dict,
+                                      is_connected=False, event=self.consensus_event,
+                                      blockchain=self.blockchain)
+                final_decision = consensus.start()
 
-                        # Perform finishing steps
-                        perform_finishing_steps()
-                        self.is_promoted = True  # => NOTE: This flag that will close Node object
-                        return None
-                    else:
-                        change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
+                # Evaluate and handle the decision
+                if final_decision == CONSENSUS_SUCCESS:
+                    from utility.blockchain.utils import save_blockchain_to_file
+                    print(APPROVED_PEER_MSG.format(request.ip_addr))
+
+                    # Compare application timestamp and determine who gets delegate (if not admin)
+                    if self.role == ROLE_PEER and request.role == ROLE_PEER:
+                        is_delegate = determine_delegate_status(pending_peer_sock, self.app_timestamp,
+                                                                mode=MODE_INITIATOR, enc_mode=peer.mode,
+                                                                secret=peer.secret, iv=peer.iv)
+                        if is_delegate:
+                            print("[+] PROMOTION: You have been promoted to 'Delegate' node!")
+                            self.role = ROLE_DELEGATE
+                            synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
+                                                   peer_request=request, enc_mode=peer.mode, mode=MODE_INITIATOR,
+                                                   iv=peer.iv, do_init=True, is_target_approved=False)
+
+                            # Perform finishing steps
+                            perform_finishing_steps()
+                            self.is_promoted = True  # => NOTE: This flag that will close Node object
+                            return None
+                        else:
+                            change_peer_role(self.peer_dict, ip=request.ip_addr, role=ROLE_DELEGATE)
+                            synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
+                                                   peer_request=request, enc_mode=peer.mode, mode=MODE_RECEIVER,
+                                                   iv=peer.iv, do_init=True, is_target_approved=False)
+
+                    elif request.role == ROLE_ADMIN and self.role == ROLE_PEER:
                         synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
                                                peer_request=request, enc_mode=peer.mode, mode=MODE_RECEIVER,
                                                iv=peer.iv, do_init=True, is_target_approved=False)
 
-                elif request.role == ROLE_ADMIN and self.role == ROLE_PEER:
-                    synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
-                                           peer_request=request, enc_mode=peer.mode, mode=MODE_RECEIVER,
-                                           iv=peer.iv, do_init=True, is_target_approved=False)
+                    elif request.role == ROLE_PEER and self.role == ROLE_ADMIN:
+                        synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
+                                               peer_request=request, enc_mode=peer.mode, mode=MODE_INITIATOR,
+                                               iv=peer.iv, do_init=True, is_target_approved=False)
 
-                elif request.role == ROLE_PEER and self.role == ROLE_ADMIN:
-                    synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
-                                           peer_request=request, enc_mode=peer.mode, mode=MODE_INITIATOR,
-                                           iv=peer.iv, do_init=True, is_target_approved=False)
+                    elif request.role == ROLE_ADMIN and self.role == ROLE_ADMIN:
+                        synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
+                                               peer_request=request, enc_mode=peer.mode, mode=MODE_INITIATOR,
+                                               iv=peer.iv, do_init=True, is_target_approved=False)
 
-                elif request.role == ROLE_ADMIN and self.role == ROLE_ADMIN:
-                    synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
-                                           peer_request=request, enc_mode=peer.mode, mode=MODE_INITIATOR,
-                                           iv=peer.iv, do_init=True, is_target_approved=False)
+                    # Perform finishing steps
+                    perform_finishing_steps()
 
-                # Perform finishing steps
-                perform_finishing_steps()
-
-            if final_decision == CONSENSUS_FAILURE:
-                print(REQUEST_REFUSED_MSG)
+                if final_decision == CONSENSUS_FAILURE:
+                    print(REQUEST_REFUSED_MSG)
+                    delete_transaction(self.pending_transactions, request.ip_addr, request_path=peer.transaction_path)
+                    remove_pending_peer(self, pending_peer_sock, ip=request.ip_addr)
+            else:
+                pending_peer_sock.send(AES_encrypt(data=RESPONSE_REJECTED.encode(), key=peer.secret, mode=peer.mode, iv=peer.iv))
                 delete_transaction(self.pending_transactions, request.ip_addr, request_path=peer.transaction_path)
                 remove_pending_peer(self, pending_peer_sock, ip=request.ip_addr)
 
@@ -2104,7 +2119,7 @@ def synchronize_blockchain(self: object, target_sock: socket.socket, secret: byt
 
                             # Once your blockchain is in sync, add two init blocks to blockchain & send each to target
                             if do_init:
-                                add_init_blocks(mode=MODE_INITIATOR)
+                                add_init_blocks(mode=MODE_INITIATOR, is_sending=True, response_check=True)
 
                         print("[+] SYNCHRONIZATION SUCCESSFUL: Blockchain has been successfully synchronized with peer!")
                         return None

@@ -2,7 +2,6 @@ import select
 import socket
 import sys
 import threading
-
 from models.Blockchain import Blockchain
 from models.Transaction import Transaction
 from utility.client_server.client_server import send_request
@@ -19,7 +18,7 @@ from utility.general.constants import (VOTE_YES, VOTE_NO, CONSENSUS_SUCCESS, CON
                                        GET_PEER_VOTE_START_MSG, SEND_REQ_PEER_START_MSG, PURPOSE_VOTER_GET_PEER_INFO,
                                        CONSENSUS_INIT_SUCCESS_MSG, CONSENSUS_INIT_MSG, PURPOSE_SEND_FINAL_DECISION,
                                        SEND_FINAL_DECISION_START_MSG)
-from utility.general.utils import create_transaction_table, start_parallel_operation
+from utility.general.utils import create_transaction_table, start_parallel_operation, set_blocking_all_sockets
 
 
 class Consensus:
@@ -41,11 +40,9 @@ class Consensus:
         final_decision - A string indicating consensus status; holds two values (CONSENSUS_FAILURE, CONSENSUS_SUCCESS)
         consensus_event - An threading Event object that is used to communicate with other threads
     """
-    def __init__(self,
-                 request: Transaction,
-                 is_connected: bool,
-                 mode: str, peer_dict: dict,
-                 event: threading.Event,
+    def __init__(self, request: Transaction,
+                 is_connected: bool, mode: str,
+                 peer_dict: dict, event: threading.Event,
                  peer_socket: socket.socket = None,
                  sock_list: list[socket.socket] = None,
                  blockchain: Blockchain = None):
@@ -89,6 +86,7 @@ class Consensus:
         self.sock_list = sock_list               # => socket list
         self.final_decision = CONSENSUS_FAILURE  # => default value
         self.consensus_event = event
+        self.__set_blocking_sockets()
         print(CONSENSUS_INIT_SUCCESS_MSG)
 
     def start(self):
@@ -340,3 +338,14 @@ class Consensus:
                                      task_args=peer_info_list,
                                      num_processes=len(self.sock_list),
                                      prompt=SEND_FINAL_DECISION_START_MSG)
+
+
+    def __set_blocking_sockets(self):
+        """
+        Sets all sockets to blocking mode.
+        @return: None
+        """
+        if self.sock_list:
+            set_blocking_all_sockets(self.sock_list)
+        else:
+            self.peer_socket.setblocking(True)
