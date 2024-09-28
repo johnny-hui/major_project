@@ -227,7 +227,7 @@ def receive_request_handler(self: object, peer_socket: socket.socket, peer_ip: s
 
         # Initialize the progress bar
         progress_bar = tqdm(total=transaction_size, unit='B', unit_scale=True,
-                            desc='Receiving Connection Request (Transaction)')
+                            desc='[+] Receiving Connection Request (Transaction)')
 
         while len(buffer) < transaction_size:
             chunk = peer_socket.recv(min(transaction_size - len(buffer), 4096))
