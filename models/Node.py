@@ -1,22 +1,30 @@
+import multiprocessing
 import select
 import socket
 import sys
 import threading
+from app.api.APIServer import WebSocket
 from models.Peer import Peer
 from utility.blockchain.utils import load_blockchain_from_file, view_blockchain
 from utility.client_server.client_server import accept_new_peer_handler, connect_to_P2P_network
 from utility.crypto.ec_keys_utils import generate_keys
-from utility.general.constants import (NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_THREAD_NAME, USER_INPUT_START_MSG,
+from utility.general.constants import (NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USER_INPUT_THREAD_NAME,
+                                       USER_INPUT_START_MSG,
                                        INPUT_PROMPT, MIN_MENU_ITEM_VALUE, MAX_MENU_ITEM_VALUE, ROLE_PEER,
                                        MONITOR_PENDING_PEERS_THREAD_NAME, MONITOR_PENDING_PEERS_START_MSG,
-                                       APPLICATION_PORT, ACCEPT_PEER_HANDLER_THREAD_NAME, PEER_ACTIVITY_HANDLER_THREAD_NAME,
+                                       APPLICATION_PORT, ACCEPT_PEER_HANDLER_THREAD_NAME,
+                                       PEER_ACTIVITY_HANDLER_THREAD_NAME,
                                        ROLE_DELEGATE, DELEGATE_MIN_MENU_ITEM_VALUE, DELEGATE_MAX_MENU_ITEM_VALUE,
                                        ROLE_ADMIN, ADMIN_MAX_MENU_ITEM_VALUE, ADMIN_MIN_MENU_ITEM_VALUE, FORMAT_STRING,
-                                       MONITOR_APPROVAL_TOKENS_START_MSG, MONITOR_APPROVAL_TOKENS_THREAD_NAME)
+                                       MONITOR_APPROVAL_TOKENS_START_MSG, MONITOR_APPROVAL_TOKENS_THREAD_NAME,
+                                       WEBSOCKET_THREAD_NAME)
+from utility.node.node_api import monitor_websocket_events
 from utility.node.node_init import parse_arguments, initialize_socket, get_current_timestamp
 from utility.node.node_utils import (display_menu, view_current_peers, close_application, get_user_menu_option,
-                                     monitor_pending_peers, load_transactions_from_file, view_pending_connection_requests,
-                                     approve_connection_request, revoke_connection_request, approved_peer_activity_handler,
+                                     monitor_pending_peers, load_transactions_from_file,
+                                     view_pending_connection_requests,
+                                     approve_connection_request, revoke_connection_request,
+                                     approved_peer_activity_handler,
                                      monitor_peer_approval_token_expiry, send_message_to_specific_peer)
 
 
@@ -44,6 +52,7 @@ class Node:
         is_connected - A boolean flag indicating whether the Node is connected
         is_promoted - A boolean flag indicating whether the Node is promoted to DelegateNode
         terminate - A boolean flag that determines if the server should terminate
+        app_flag = A boolean flag that determines if the Node should be initialized to run an API server
     """
     def __init__(self):
         """
@@ -51,7 +60,7 @@ class Node:
         """
         print("=" * 100)
         print(NODE_INIT_MSG)
-        self.first_name, self.last_name, self.mode, self.ip = parse_arguments()
+        self.first_name, self.last_name, self.mode, self.ip, self.app_flag = parse_arguments()
         self.blockchain = None
         self.port = APPLICATION_PORT
         self.role = ROLE_PEER
@@ -63,9 +72,10 @@ class Node:
         self.pending_transactions = []
         self.app_timestamp = get_current_timestamp(FORMAT_STRING)
         self.consensus_event = threading.Event()
-        self.is_connected = False
-        self.is_promoted = False
-        self.terminate = False
+        self.is_connected, self.is_promoted, self.terminate = False, False, False
+        if self.app_flag:
+            self.queue = multiprocessing.Queue()
+            self.socketIO = WebSocket(self.queue, self.ip, self.first_name, self.last_name, self.role)
         self.__load_initial_data()
 
     def start(self):
@@ -87,9 +97,12 @@ class Node:
         # =========================================================================================
         self.__print_role_message()
         self.__print_app_timestamp()
-        self.__start_user_menu_thread()
         self.__start_monitor_pending_peers_thread()
         self.__start_monitor_peers_with_approved_tokens_thread()
+        self.__start_user_menu_thread()
+
+        # Starts websocket (for front-end app)
+        self.__start_websocket() if self.app_flag else None
 
         while not self.is_promoted:
             if self.terminate is True:
@@ -154,6 +167,26 @@ class Node:
         thread.daemon = True
         thread.start()
         print(MONITOR_APPROVAL_TOKENS_START_MSG)
+
+    def __start_websocket(self):
+        """
+        Starts a thread that monitors the API server for any requests
+        from the front-end React application and handles them
+        appropriately.
+
+        @attention: Note
+            This is similar to the user menu, but user commands are
+            executed using API requests from the front-end app
+
+        @return: None
+        """
+        self.socketIO.start()
+        thread = threading.Thread(target=monitor_websocket_events,
+                                  args=(self, self.queue),
+                                  name=WEBSOCKET_THREAD_NAME)
+        thread.daemon = True
+        thread.start()
+        print("[+] A websocket thread has been started to monitor front-end UI events!")
 
     def __menu(self, min_menu_value: int, max_menu_value: int):
         """

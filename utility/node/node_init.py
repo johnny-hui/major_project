@@ -22,14 +22,15 @@ def parse_arguments():
     """
     Parse the command line for arguments.
 
-    @return first_name, last_name, mode, src_ip:
+    @return first_name, last_name, mode, src_ip, app_flag:
         Strings containing the first & last name, encryption mode,
-        IP address of the host
+        IP address of the host, and a boolean to initialize Node
+        for the front-end React app
     """
     # Initialize variables
-    first_name, last_name, mode, src_ip = "", "", "", ""
+    first_name, last_name, mode, src_ip, app_flag = "", "", "", "", False
     arguments = sys.argv[1:]
-    opts, user_list_args = getopt.getopt(arguments, 'f:l:m:s:')
+    opts, user_list_args = getopt.getopt(arguments, 'f:l:m:s:a:')
     pattern = re.compile("^[a-zA-Z]+$")  # For string validation
 
     if len(opts) == 0:
@@ -61,6 +62,15 @@ def parse_arguments():
             except ValueError as e:
                 sys.exit(INVALID_SRC_IP_ARG_ERROR.format(e))
 
+        if opt == '-a':  # To initialize Node for front-end UI app
+            if argument.lower() == 'true':
+                app_flag = True
+            elif argument.lower() == 'false':
+                app_flag = False
+            else:
+                sys.exit("[+] INIT ERROR: An invalid flag was provided! (enter either "
+                         "'True' or 'False' for -a option)")
+
     # Check if parameters are provided
     if len(first_name) == 0:
         sys.exit("[+] INIT ERROR: A first name was not provided! (-f option)")
@@ -71,7 +81,7 @@ def parse_arguments():
     if len(src_ip) == 0:
         sys.exit("[+] INIT ERROR: A source IP was not provided! (-s option)")
 
-    return first_name, last_name, mode, src_ip
+    return first_name, last_name, mode, src_ip, app_flag
 
 
 def initialize_socket(ip: str, port: int):

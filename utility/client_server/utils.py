@@ -614,7 +614,7 @@ def _connect_to_peer_after_approved(pvt_key: bytes, pub_key: bytes, target_peer:
         deserialized_pvt_key = deserialize_private_key(pvt_key_bytes=pvt_key)
         deserialized_pub_key = deserialize_public_key(pub_key_bytes=pub_key)
 
-        # Connect to peer
+        # ConnectToNetwork to peer
         target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         target_sock.settimeout(FIND_HOST_TIMEOUT)         # => 3-second timeout
         target_sock.connect((target_peer.ip, APPLICATION_PORT))

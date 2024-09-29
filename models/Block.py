@@ -176,6 +176,30 @@ class Block:
         genesis_block.set_hash()
         return genesis_block
 
+    def to_dict(self):
+        hashed_pub_key = None
+        hashed_signature = None
+
+        if self.index != GENESIS_INDEX:
+            pub_key = load_public_key_from_string(self.pub_key)
+            hashed_pub_key = compress_public_key(pub_key)
+            hashed_signature = compress_signature(self.signature)
+
+        return {
+            'index': self.index,
+            'ip_addr': self.ip_addr,
+            'first_name': self.first_name,
+            'last_name': self.last_name,
+            'image': b64encode(self.image).decode() if self.image else None,
+            'timestamp': self.timestamp,
+            'pub_key': hashed_pub_key,
+            'previous_hash': self.previous_hash,
+            'hash': self.hash,
+            'signers_ip': self.signers_ip,
+            'signers_role': self.signers_role,
+            'signature': hashed_signature
+        }
+
     def __str__(self):
         """
         Returns the string representation of the Transaction object.

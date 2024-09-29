@@ -35,7 +35,7 @@ if __name__ == '__main__':
 
     print(obj)
 
-    # Connect to Client: Key Exchange Simulation and Generation of Secret
+    # ConnectToNetwork to Client: Key Exchange Simulation and Generation of Secret
     shared_key = generate_shared_secret()
     iv = secrets.token_bytes(BLOCK_SIZE)
 

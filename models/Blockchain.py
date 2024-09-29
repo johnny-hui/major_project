@@ -1,3 +1,5 @@
+import json
+
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 from exceptions.exceptions import InvalidBlockchainError
 from models.Block import Block
@@ -150,6 +152,9 @@ class Blockchain:
         except InvalidBlockchainError as msg:
             print(msg)
             return False
+
+    def to_json(self):
+        return json.dumps([block.to_dict() for block in self.chain], indent=4)
 
     def __str__(self):
         """
