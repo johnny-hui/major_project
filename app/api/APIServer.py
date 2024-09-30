@@ -51,7 +51,7 @@ class WebSocket(Process):
         Overrides the run() function from Process class.
         """
 
-        # Define APIs
+        # Define events
         @self.socketio.on('connect')
         def handle_onConnect():
             # Send event to Node class using Queues

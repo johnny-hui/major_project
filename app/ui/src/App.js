@@ -1,18 +1,20 @@
 // src/App.js
 
 import React from 'react';
-import {Grid} from '@mui/material';
-import {Outlet} from "react-router-dom";
+import {Container} from '@mui/material';
+import {Outlet, useLocation} from "react-router-dom";
 import Layout from "./components/Layout/Layout";
-
+import './App.css';
 
 const App = () => {
+    const location = useLocation()
+
     return (
-        <Grid container sx={{backgroundColor: '#151515'}}>
-            <Layout>
+        <Container sx={{backgroundColor: '#151515', height: "100vh"}} maxWidth={false}>
+            <Layout location={location}>
                <Outlet/>
             </Layout>
-        </Grid>
+        </Container>
     );
 };
 

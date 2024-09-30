@@ -2,19 +2,59 @@ import {navbarStyles} from "../NavBar/styles";
 
 
 export const LayoutStyles = {
+    root: {
+        display: 'flex',
+    },
     appBar: {
-        height: 150,
         width: `calc(100% - ${navbarStyles.drawer.width}px)`,
         marginLeft: navbarStyles.drawer.width,
+        backgroundColor: '#151515',
+    },
+    appBarTopContent: {
+        display: 'flex',
+        height: 150,
+        flexDirection: 'row',
+        justifyContent: 'center'
+    },
+    appBarRightGrid: {
+        display: 'flex', flexDirection: 'row', justifyContent: 'flex-end'
+    },
+    appBarAvatarBox: {
+        mr: 6
+    },
+    avatar: {
+        height: 56,
+        width: 56,
+        mr: 3
+    },
+    avatarName: {
+        color: '#ECECEC',
+        fontWeight: 'bold',
+        fontSize: "16px",
+        fontFamily: "Montserrat, sans-serif;"
+    },
+    avatarRole: {
+        color: '#949494',
+        fontFamily: "Montserrat, sans-serif;",
+        fontSize: "13px"
+    },
+    avatarIP: {
+        color: '#949494',
+        fontFamily: "Montserrat, sans-serif;",
+        fontSize: "13px"
     },
     page: {
         marginTop: '150px',
         width: '100%'
     },
-    root: {
-        display: 'flex',
+    layoutTitle: {
+        color: '#ECECEC',
+        fontWeight: 'bold',
+        fontFamily: "Montserrat, sans-serif;"
     },
-    active: {
-        background: '#f4f4f4'
-    },
+    layoutDescription: {
+        color: '#949494',
+        fontFamily: "Montserrat, sans-serif;",
+        fontSize: "18px"
+    }
 }

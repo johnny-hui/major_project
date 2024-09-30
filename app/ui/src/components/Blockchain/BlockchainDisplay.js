@@ -2,6 +2,7 @@ import React, {useEffect, useState} from 'react';
 import {io} from 'socket.io-client';
 import {Alert, Container, Snackbar, Typography} from '@mui/material';
 import Block from "../Block/Block";
+import {BlockchainDisplayStyles} from "./styles";
 
 const socket = io('http://127.0.0.1:5000'); // Adjust the port if necessary
 
@@ -29,7 +30,7 @@ const BlockchainDisplay = () => {
     }, []);
 
     return (
-        <Container>
+        <Container sx={BlockchainDisplayStyles.root} maxWidth={false}>
             <Snackbar
                 open={open}
                 autoHideDuration={6000}
@@ -46,7 +47,7 @@ const BlockchainDisplay = () => {
                     {message}
                 </Alert>
             </Snackbar>
-            <Typography variant="h4">Blockchain</Typography>
+            <Typography sx={BlockchainDisplayStyles.title} variant="h4">Blockchain (Connection History)</Typography>
             {blockchain.map((block) => (
                 <Block block={block}/>
             ))}

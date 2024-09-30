@@ -6,25 +6,25 @@ import RequestPageIcon from '@mui/icons-material/RequestPage';
 export const mainNavbarItems = [
     {
         id: 0,
-        icon: <BarChartIcon />,
+        icon: <BarChartIcon color="primary"/>,
         label: 'Overview',
         route: 'overview',
     },
     {
         id: 1,
-        icon: <RequestPageIcon />,
+        icon: <RequestPageIcon color="secondary"/>,
         label: 'Connection Requests',
         route: 'requests',
     },
     {
         id: 2,
-        icon: <WidgetsIcon />,
+        icon: <WidgetsIcon sx={{color: "#ED7100"}}/>,
         label: 'Blockchain Demo',
         route: 'demo',
     },
     {
         id: 3,
-        icon: <ConnectWithoutContactIcon />,
+        icon: <ConnectWithoutContactIcon color="success"/>,
         label: 'Connect to a P2P Network',
         route: 'connect',
     },

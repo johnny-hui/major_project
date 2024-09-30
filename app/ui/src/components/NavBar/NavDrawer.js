@@ -7,11 +7,13 @@ import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import InboxIcon from '@mui/icons-material/MoveToInbox';
-import MailIcon from '@mui/icons-material/Mail';
+import CloudOffTwoToneIcon from '@mui/icons-material/CloudOffTwoTone';
 import {mainNavbarItems} from "./const";
 import {navbarStyles} from "./styles";
 import {useNavigate} from "react-router-dom";
+import logo from "../../logos/app_logo_no_bg.png"
+import {Grid, Typography} from "@mui/material";
+
 
 const NavDrawer = () => {
     const navigate = useNavigate();
@@ -22,10 +24,22 @@ const NavDrawer = () => {
         variant="permanent"
         anchor="left"
       >
-            <Toolbar sx={navbarStyles.toolbar}/>
-            <Divider sx={navbarStyles.divider} />
-            <List>
-              {mainNavbarItems.map((item, index) => (
+            <Toolbar sx={navbarStyles.logoBar}>
+                <Grid container>
+                    <Grid item xs={4}>
+                        <img style={{width: 80, height: 80}} src={logo} alt="P2P Logo"/>
+                    </Grid>
+                    <Grid sx={navbarStyles.containerTextP2P} item xs={4}>
+                        <Typography sx={navbarStyles.P2P}>P2P</Typography>
+                    </Grid>
+                    <Grid sx={navbarStyles.containerTextApp} item xs={4}>
+                        <Typography sx={navbarStyles.App} variant="h3">App</Typography>
+                    </Grid>
+                </Grid>
+            </Toolbar>
+          <Divider sx={navbarStyles.divider}/>
+          <List>
+              {mainNavbarItems.map((item) => (
                 <ListItem
                     button
                     key={item.id}
@@ -33,9 +47,7 @@ const NavDrawer = () => {
                     disablePadding
                 >
                   <ListItemButton>
-                    <ListItemIcon
-                        sx={navbarStyles.icons}
-                    >
+                    <ListItemIcon sx={navbarStyles.icons}>
                       {item.icon}
                     </ListItemIcon>
                     <ListItemText
@@ -47,13 +59,13 @@ const NavDrawer = () => {
             </List>
             <Divider sx={navbarStyles.divider} />
             <List>
-              {['All mail', 'Trash', 'Spam'].map((text, index) => (
+              {['Disconnect'].map((text) => (
                 <ListItem key={text} disablePadding>
                   <ListItemButton>
-                    <ListItemIcon>
-                      {index % 2 === 0 ? <InboxIcon /> : <MailIcon />}
+                    <ListItemIcon sx={navbarStyles.iconsBottom}>
+                      <CloudOffTwoToneIcon/>
                     </ListItemIcon>
-                    <ListItemText primary={text} />
+                    <ListItemText sx={navbarStyles.textBottom} primary={text} />
                   </ListItemButton>
                 </ListItem>
               ))}
