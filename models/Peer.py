@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, asdict
 from socket import socket
 from models.Block import Block
 from models.Token import Token
@@ -21,3 +22,6 @@ class Peer:
     iv: bytes = None
     token: Token = None
     block: Block = None
+
+    def to_json(self):
+        return json.dumps(asdict(self), indent=4)

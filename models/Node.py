@@ -120,6 +120,8 @@ class Node:
                                                   handler=approved_peer_activity_handler,
                                                   thread_name=PEER_ACTIVITY_HANDLER_THREAD_NAME)
 
+        self.socketIO.terminate()
+
     def __start_user_menu_thread(self):
         """
         Starts a thread for handling user input for the menu.

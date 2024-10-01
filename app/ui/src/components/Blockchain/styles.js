@@ -12,5 +12,10 @@ export const BlockchainDisplayStyles = {
         color: '#ECECEC',
         fontWeight: 'bold',
         fontFamily: "Montserrat, sans-serif;"
+    },
+    carousel: {
+        padding: 3,
+        marginTop: 0,
+        height: "100%",
     }
 }

@@ -12,7 +12,7 @@ export const OverviewStyles = {
             fontFamily: "Montserrat, sans-serif;"
         },
         backgroundColor: '#1B1B1B',
-        height: 310,
+        height: 330,
         display: 'block',
         borderRadius: 5,
         padding: 3
@@ -25,7 +25,7 @@ export const OverviewStyles = {
         },
         display: 'block',
         backgroundColor: '#1B1B1B',
-        height: 310,
+        height: 330,
         borderRadius: 5,
         padding: 3
     }

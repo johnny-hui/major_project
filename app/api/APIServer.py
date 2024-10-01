@@ -8,6 +8,7 @@ from flask_socketio import SocketIO
 LOCAL_HOST = "127.0.0.1"
 LOCAL_PORT = 5000
 EVENT_ONCONNECT = "onConnect"
+EVENT_BLOCKCHAIN_REQUEST = "blockchainRequest"
 
 class WebSocket(Process):
     """
@@ -50,22 +51,38 @@ class WebSocket(Process):
         """
         Overrides the run() function from Process class.
         """
-
         # Define events
         @self.socketio.on('connect')
         def handle_onConnect():
-            # Send event to Node class using Queues
-            self.queue.put(EVENT_ONCONNECT)
+            try:
+                # Send event to Node class using Queues
+                self.queue.put(EVENT_ONCONNECT)
 
-            # Wait for response from Node class
-            response = self.queue.get()
+                # Wait for response from Node class
+                response = self.queue.get()
 
-            # Handle response
-            if response:
-                blockchain = pickle.loads(response)
-                self.socketio.emit('blockchain_data', blockchain.to_json())
-            else:
-                self.socketio.emit('blockchain_data', "None")
+                # Handle response
+                if response:
+                    user = pickle.loads(response)
+                    self.socketio.emit('init_data', user.to_json())
+                else:
+                    self.socketio.emit('init_data', "None")
+            except TypeError:
+                pass
+
+        @self.socketio.on('request_blockchain_data')
+        def handle_blockchainRequest():
+            try:
+                self.queue.put(EVENT_BLOCKCHAIN_REQUEST)
+                response = self.queue.get()
+                if response:
+                    blockchain = pickle.loads(response)
+                    self.socketio.emit('blockchain_data', blockchain.to_json())
+                else:
+                    self.socketio.emit('blockchain_data', "None")
+            except TypeError:
+                pass
+
 
         print("[+] WebsocketIO has started; now listening for front-end requests...")
         self.socketio.run(self.app, host=LOCAL_HOST, port=LOCAL_PORT, allow_unsafe_werkzeug=True)

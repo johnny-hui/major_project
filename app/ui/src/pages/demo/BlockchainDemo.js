@@ -1,5 +1,4 @@
 import React, {Component} from 'react';
-import {Typography} from "@mui/material";
 
 class BlockchainDemo extends Component {
     render() {

@@ -4,7 +4,7 @@ import NavDrawer from "../NavBar/NavDrawer";
 import React from "react";
 import {LayoutStyles} from "./styles";
 
-export default function Layout({ children, location }) {
+export default function Layout({ children, location, profileData }) {
     return (
         <Container sx={LayoutStyles.root} maxWidth={false}>
             <AppBar
@@ -18,7 +18,7 @@ export default function Layout({ children, location }) {
                             {location.pathname === '/overview' && (
                               <Box sx={{ml: 6}}>
                                 <Typography sx={LayoutStyles.layoutTitle} variant="h3">
-                                  Welcome back, Bob
+                                    Welcome back, {profileData ? profileData.first_name : 'Guest'}
                                 </Typography>
                               </Box>
                             )}
@@ -27,13 +27,13 @@ export default function Layout({ children, location }) {
                             <Avatar sx={LayoutStyles.avatar} />
                             <Box sx={LayoutStyles.appBarAvatarBox}>
                                 <Typography sx={LayoutStyles.avatarName}>
-                                    Bob Ross
+                                  {profileData ? `${profileData.first_name} ${profileData.last_name}` : 'Guest'}
                                 </Typography>
                                 <Typography sx={LayoutStyles.avatarRole}>
-                                    Role: Admin
+                                    Role: {profileData ? `${profileData.role}` : 'ADMIN'}
                                 </Typography>
                                 <Typography sx={LayoutStyles.avatarIP}>
-                                    127.0.0.1
+                                    IP: {profileData ? `${profileData.ip}` : "127.0.0.1"}
                                 </Typography>
                             </Box>
                         </Grid>

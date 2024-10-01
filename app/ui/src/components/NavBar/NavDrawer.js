@@ -8,7 +8,7 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import CloudOffTwoToneIcon from '@mui/icons-material/CloudOffTwoTone';
-import {mainNavbarItems} from "./const";
+import {mainNavbarItems} from "./constants";
 import {navbarStyles} from "./styles";
 import {useNavigate} from "react-router-dom";
 import logo from "../../logos/app_logo_no_bg.png"

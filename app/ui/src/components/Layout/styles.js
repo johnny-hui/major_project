@@ -14,7 +14,7 @@ export const LayoutStyles = {
         display: 'flex',
         height: 150,
         flexDirection: 'row',
-        justifyContent: 'center'
+        justifyContent: 'center',
     },
     appBarRightGrid: {
         display: 'flex', flexDirection: 'row', justifyContent: 'flex-end'
@@ -44,8 +44,8 @@ export const LayoutStyles = {
         fontSize: "13px"
     },
     page: {
-        marginTop: '150px',
-        width: '100%'
+        marginTop: '125px',
+        width: '100%',
     },
     layoutTitle: {
         color: '#ECECEC',
