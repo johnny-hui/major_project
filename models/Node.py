@@ -3,7 +3,7 @@ import select
 import socket
 import sys
 import threading
-from app.api.APIServer import WebSocket
+from app.api.WebSocket import WebSocket
 from models.Peer import Peer
 from utility.blockchain.utils import load_blockchain_from_file, view_blockchain
 from utility.client_server.client_server import accept_new_peer_handler, connect_to_P2P_network
@@ -18,7 +18,7 @@ from utility.general.constants import (NODE_INIT_MSG, NODE_INIT_SUCCESS_MSG, USE
                                        ROLE_ADMIN, ADMIN_MAX_MENU_ITEM_VALUE, ADMIN_MIN_MENU_ITEM_VALUE, FORMAT_STRING,
                                        MONITOR_APPROVAL_TOKENS_START_MSG, MONITOR_APPROVAL_TOKENS_THREAD_NAME,
                                        WEBSOCKET_THREAD_NAME)
-from utility.node.node_api import monitor_websocket_events
+from utility.node.node_api import websocket_interface
 from utility.node.node_init import parse_arguments, initialize_socket, get_current_timestamp
 from utility.node.node_utils import (display_menu, view_current_peers, close_application, get_user_menu_option,
                                      monitor_pending_peers, load_transactions_from_file,
@@ -52,6 +52,9 @@ class Node:
         is_connected - A boolean flag indicating whether the Node is connected
         is_promoted - A boolean flag indicating whether the Node is promoted to DelegateNode
         terminate - A boolean flag that determines if the server should terminate
+        front_queue - A queue used for inter-process communication with the Websocket process
+        back_queue - A queue used for inter-process communication with the Websocket process
+        socketIO - A Websocket process
         app_flag = A boolean flag that determines if the Node should be initialized to run an API server
     """
     def __init__(self):
@@ -74,8 +77,10 @@ class Node:
         self.consensus_event = threading.Event()
         self.is_connected, self.is_promoted, self.terminate = False, False, False
         if self.app_flag:
-            self.queue = multiprocessing.Queue()
-            self.socketIO = WebSocket(self.queue, self.ip, self.first_name, self.last_name, self.role)
+            self.front_queue = multiprocessing.Queue()
+            self.back_queue = multiprocessing.Queue()
+            self.socketIO = WebSocket(self.front_queue, self.back_queue, self.ip,
+                                      self.first_name, self.last_name, self.role)
         self.__load_initial_data()
 
     def start(self):
@@ -102,7 +107,8 @@ class Node:
         self.__start_user_menu_thread()
 
         # Starts websocket (for front-end app)
-        self.__start_websocket() if self.app_flag else None
+        if self.app_flag and not self.role == ROLE_DELEGATE:
+            self.__start_websocket()
 
         while not self.is_promoted:
             if self.terminate is True:
@@ -120,7 +126,8 @@ class Node:
                                                   handler=approved_peer_activity_handler,
                                                   thread_name=PEER_ACTIVITY_HANDLER_THREAD_NAME)
 
-        self.socketIO.terminate()
+        if self.app_flag and not self.role == ROLE_DELEGATE:
+            self.socketIO.terminate()
 
     def __start_user_menu_thread(self):
         """
@@ -172,9 +179,9 @@ class Node:
 
     def __start_websocket(self):
         """
-        Starts a thread that monitors the API server for any requests
-        from the front-end React application and handles them
-        appropriately.
+        Starts a thread that starts a Websocket API server and
+        provides an interface for the Node class to communicate
+        with the front-end application.
 
         @attention: Note
             This is similar to the user menu, but user commands are
@@ -183,8 +190,8 @@ class Node:
         @return: None
         """
         self.socketIO.start()
-        thread = threading.Thread(target=monitor_websocket_events,
-                                  args=(self, self.queue),
+        thread = threading.Thread(target=websocket_interface,
+                                  args=(self,),
                                   name=WEBSOCKET_THREAD_NAME)
         thread.daemon = True
         thread.start()

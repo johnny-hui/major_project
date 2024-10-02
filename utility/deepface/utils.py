@@ -14,8 +14,7 @@ import os
 from deepface import DeepFace
 from models.Blockchain import Blockchain
 from models.Transaction import Transaction
-from utility.general.constants import FACIAL_RECOGNITION_PROMPT
-from utility.general.utils import create_temp_file_from_bytes, start_parallel_operation
+from utility.general.utils import create_temp_file_from_bytes
 
 
 def verify_image(ref_img_path: str, img_bytes: bytes):
@@ -58,12 +57,17 @@ def perform_facial_recognition_on_peer(blockchain: Blockchain, request: Transact
         if block_list is not None:  # => If blocks present from requesting peer
             reference_image_path = create_temp_file_from_bytes(data=request.image)  # to be compared against block images
 
-            # Run Facial Recognition (DeepFace) in parallel (using multiple CPU cores)
-            args_list = [(reference_image_path, block.image) for block in block_list]
-            results = start_parallel_operation(task=verify_image,
-                                               task_args=args_list,
-                                               num_processes=len(block_list),
-                                               prompt=FACIAL_RECOGNITION_PROMPT)
+            # Run Deepface (one block at a time)
+            results = []
+            for block in block_list:
+                results.append(verify_image(reference_image_path, block.image))
+
+            # # Run Facial Recognition (DeepFace) in parallel (using multiple CPU cores)
+            # args_list = [(reference_image_path, block.image) for block in block_list]
+            # results = start_parallel_operation(task=verify_image,
+            #                                    task_args=args_list,
+            #                                    num_processes=len(block_list),
+            #                                    prompt=FACIAL_RECOGNITION_PROMPT)
 
             # Calculate the accuracy
             correct_matches = sum(results)

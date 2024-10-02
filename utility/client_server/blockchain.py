@@ -6,7 +6,10 @@ socket communication, and both the Blockchain and Block classes
 """
 import pickle
 import socket
+
 from tqdm import tqdm
+
+from app.api.utility import EVENT_NODE_SEND_BLOCKCHAIN, EVENT_NODE_ADD_BLOCK
 from exceptions.exceptions import InvalidBlockError, InvalidBlockchainError, PeerInvalidBlockchainError, \
     PeerRefusedBlockError
 from models.Block import Block
@@ -14,6 +17,7 @@ from models.Blockchain import Blockchain
 from utility.crypto.aes_utils import AES_encrypt, AES_decrypt
 from utility.crypto.ec_keys_utils import deserialize_public_key, hash_data, verify_signature
 from utility.general.constants import BLOCK_SIZE, ERROR_BLOCK, ACK, ERROR_BLOCKCHAIN, MODE_INITIATOR, MODE_RECEIVER
+from utility.node.node_api import send_event_to_websocket
 
 
 def exchange_blockchain_index(self: object, peer_sock: socket.socket, secret: bytes, enc_mode: str, iv, mode: str):
@@ -351,6 +355,9 @@ def receive_block(self: object, target_sock: socket.socket, index: int,
         if do_add:
             self.blockchain.add_block(block)
             if self.blockchain.is_valid():
+                send_event_to_websocket(queue=self.back_queue,
+                                        event=EVENT_NODE_ADD_BLOCK,
+                                        data=pickle.dumps(block))
                 target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=enc_mode, iv=iv))
                 print(f"[+] BLOCK RECEIVED: Successfully received block {index}!")
         else:
@@ -426,12 +433,16 @@ def send_blockchain(self: object, target_sock: socket.socket, secret: bytes, enc
         raise PeerInvalidBlockchainError
 
 
-def receive_blockchain(target_sock: socket.socket, secret: bytes, enc_mode: str, iv: bytes = None) -> Blockchain:
+def receive_blockchain(self: object, target_sock: socket.socket,
+                       secret: bytes, enc_mode: str, iv: bytes = None) -> Blockchain:
     """
     Receives and validates the blockchain from a target peer.
 
     @raise InvalidBlockchainError:
         Raised if the blockchain is invalid
+
+    @param self:
+        A reference to the calling class object (Node, AdminNode, DelegateNode)
 
     @param target_sock:
         A Socket object
@@ -481,6 +492,9 @@ def receive_blockchain(target_sock: socket.socket, secret: bytes, enc_mode: str,
         if verify_signature(signature, generated_hash.encode(), signers_pub_key):
             blockchain = pickle.loads(original_data)
             if blockchain.is_valid():
+                send_event_to_websocket(queue=self.back_queue,
+                                        event=EVENT_NODE_SEND_BLOCKCHAIN,
+                                        data=pickle.dumps(self.blockchain))
                 target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=enc_mode, iv=iv))
                 print(f"[+] Successfully received blockchain from IP ({target_sock.getpeername()[0]})!")
                 return blockchain

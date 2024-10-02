@@ -1,14 +1,5 @@
-import {
-    Box,
-    Button,
-    Card,
-    CardActionArea,
-    CardActions,
-    CardContent,
-    CardMedia,
-    Collapse,
-    Typography
-} from "@mui/material";
+import { Box, Button, Card, CardActionArea, CardActions,
+    CardContent, CardMedia, Collapse, Typography } from "@mui/material";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {useState} from "react";
 import defaultAvatar from "../../images/default_avatar.png"

@@ -4,6 +4,7 @@ This python file contains utility functions used by the larger
 functions in client_server.py
 
 """
+import json
 import multiprocessing
 import pickle
 import socket
@@ -428,6 +429,7 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
             # Perform finishing touches
             self.blockchain.add_block(new_block=block)
             if self.blockchain.is_valid():
+                self.socketio.emit('add_block', json.dumps(block.to_dict()))
                 save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
             self.fd_list.append(target_sock)
             self.is_connected = True
@@ -726,8 +728,10 @@ def approved_signal_handler(self: object, peer_socket: socket.socket, secret: by
         validate_issued_block_hash(peer_ip=ip)
 
         # Add block to blockchain and validate the entirety of the blockchain
-        self.blockchain.add_block(new_block=get_peer(self.peer_dict, ip).block)
+        new_block = get_peer(self.peer_dict, ip).block
+        self.blockchain.add_block(new_block=new_block)
         if self.blockchain.is_valid():
+            self.socketio.emit('add_block', json.dumps(new_block.to_dict()))
             save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
 
         # Update peer info
