@@ -13,6 +13,7 @@ import time
 
 from tqdm import tqdm
 
+from app.api.utility import EVENT_NODE_ADD_APPROVED_PEER, EVENT_NODE_REMOVE_PENDING_PEER, EVENT_NODE_ADD_BLOCK
 from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError, InvalidSignatureError,
                                    TransactionNotFoundError, ConsensusInitError, InvalidTokenError,
                                    InvalidBlockchainError, InvalidBlockError, PeerInvalidBlockchainError,
@@ -39,6 +40,7 @@ from utility.general.constants import (APPLICATION_PORT, FIND_HOST_TIMEOUT,
                                        CONN_REJECTED_INVALID_TOKEN_MSG, CONNECTION_SUCCESSFUL_MSG, RESPONSE_REJECTED,
                                        ROLE_ADMIN)
 from utility.general.utils import timer, determine_delegate_status, start_parallel_operation
+from utility.node.node_api import send_event_to_websocket
 from utility.node.node_utils import (peer_exists, add_new_transaction, save_transaction_to_file,
                                      save_pending_peer_info, remove_pending_peer, delete_transaction,
                                      change_peer_status, change_peer_role, receive_approval_token,
@@ -429,7 +431,9 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
             # Perform finishing touches
             self.blockchain.add_block(new_block=block)
             if self.blockchain.is_valid():
-                self.socketio.emit('add_block', json.dumps(block.to_dict()))
+                send_event_to_websocket(queue=self.back_queue,
+                                        event=EVENT_NODE_ADD_BLOCK,
+                                        data=pickle.dumps(block)) if self.app_flag else None
                 save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
             self.fd_list.append(target_sock)
             self.is_connected = True
@@ -692,6 +696,7 @@ def approved_signal_handler(self: object, peer_socket: socket.socket, secret: by
         peer.mode = mode
         peer.token = None
         peer.block = None
+        send_event_to_websocket(self.back_queue, event=EVENT_NODE_REMOVE_PENDING_PEER, data=ip) if self.app_flag else None
         print(f"[+] Information for peer (IP: {peer.ip}) has been updated!")
 
     def validate_issued_block_hash(peer_ip: str):
@@ -731,12 +736,21 @@ def approved_signal_handler(self: object, peer_socket: socket.socket, secret: by
         new_block = get_peer(self.peer_dict, ip).block
         self.blockchain.add_block(new_block=new_block)
         if self.blockchain.is_valid():
-            self.socketIO.emit('add_block', json.dumps(new_block.to_dict()))
+            send_event_to_websocket(queue=self.back_queue,
+                                    event=EVENT_NODE_ADD_BLOCK,
+                                    data=pickle.dumps(new_block)) if self.app_flag else None
             save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
 
         # Update peer info
         update_peer_info(get_peer(self.peer_dict, ip))
         self.fd_list.append(peer_socket)
+
+        # Notify front-end application
+        if self.app_flag:
+            approved_peer = get_peer(self.peer_dict, ip).to_dict()
+            send_event_to_websocket(queue=self.back_queue,
+                                    event=EVENT_NODE_ADD_APPROVED_PEER,
+                                    data=pickle.dumps(approved_peer))
         print(f"[+] NEW PEER CONNECTION: A new peer has been successfully verified and approved (IP: {ip}))!")
     except (InvalidTokenError, PeerInvalidBlockHashError) as msg:
         print(msg)

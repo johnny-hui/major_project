@@ -1,6 +1,7 @@
 absl-py==2.1.0
 astunparse==1.6.3
 beautifulsoup4==4.12.3
+bidict==0.23.1
 blinker==1.8.2
 certifi==2024.8.30
 cffi==1.17.1
@@ -12,12 +13,14 @@ filelock==3.16.1
 fire==0.6.0
 Flask==3.0.3
 Flask-Cors==5.0.0
+Flask-SocketIO==5.4.1
 flatbuffers==24.3.25
 gast==0.6.0
 gdown==5.2.0
 google-pasta==0.2.0
 grpcio==1.66.1
 gunicorn==23.0.0
+h11==0.14.0
 h5py==3.12.1
 idna==3.10
 itsdangerous==2.2.0
@@ -47,10 +50,14 @@ Pygments==2.18.0
 pyOpenSSL==24.2.1
 PySocks==1.7.1
 python-dateutil==2.9.0.post0
+python-engineio==4.9.1
+python-socketio==5.11.4
 pytz==2024.2
 requests==2.32.3
 retina-face==0.0.17
 rich==13.8.1
+setuptools==75.1.0
+simple-websocket==1.0.0
 six==1.16.0
 soupsieve==2.6
 tensorboard==2.17.1
@@ -65,4 +72,6 @@ tzdata==2024.2
 urllib3==2.2.3
 wcwidth==0.2.13
 Werkzeug==3.0.4
+wheel==0.44.0
 wrapt==1.16.0
+wsproto==1.2.0

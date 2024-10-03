@@ -55,6 +55,17 @@ def monitor_node_events(self: object):
                     self.socketio.emit('add_block', "None")
 
             # Listen for New Pending Peer Event
+            elif event == EVENT_NODE_ADD_APPROVED_PEER:
+                response = self.back_queue.get()
+                approved_peer = pickle.loads(response)
+                self.socketio.emit('new_approved_peer', approved_peer)
+
+            # Listen for Remove Pending Peer Event
+            elif event == EVENT_NODE_REMOVE_APPROVED_PEER:
+                ip_to_remove = self.back_queue.get()
+                self.socketio.emit('remove_approved_peer', ip_to_remove)
+
+            # Listen for New Pending Peer Event
             elif event == EVENT_NODE_ADD_PENDING_PEER:
                 response = self.back_queue.get()
                 pending_peer = pickle.loads(response)

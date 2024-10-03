@@ -13,7 +13,7 @@ from typing import TextIO
 from prettytable import PrettyTable
 from tqdm import tqdm
 from app.api.utility import EVENT_NODE_ADD_BLOCK, EVENT_NODE_SEND_BLOCKCHAIN, EVENT_NODE_ADD_PENDING_PEER, \
-    EVENT_NODE_REMOVE_PENDING_PEER
+    EVENT_NODE_REMOVE_PENDING_PEER, EVENT_NODE_ADD_APPROVED_PEER, EVENT_NODE_REMOVE_APPROVED_PEER
 from exceptions.exceptions import (RequestAlreadyExistsError, TransactionNotFoundError, InvalidTokenError,
                                    PeerRefusedBlockError, PeerInvalidBlockchainError, InvalidBlockchainError,
                                    InvalidBlockError)
@@ -206,6 +206,8 @@ def remove_approved_peer(self: object, peer_to_remove: Peer):
 
     @return: None
     """
+    if self.app_flag:
+        send_event_to_websocket(self.back_queue, event=EVENT_NODE_REMOVE_APPROVED_PEER, data=peer_to_remove.ip)
     del self.peer_dict[peer_to_remove.ip]
     self.fd_list.remove(peer_to_remove.socket)
     time.sleep(1.2)
@@ -1239,10 +1241,17 @@ def approve_connection_request(self: object):
         """
         def perform_finishing_steps():
             self.fd_list.append(pending_peer_sock)
+            send_event_to_websocket(self.back_queue, event=EVENT_NODE_REMOVE_PENDING_PEER,
+                                    data=request.ip_addr) if self.app_flag else None
             save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
             change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
             delete_transaction(self.pending_transactions, request.ip_addr, peer.transaction_path)
             self.is_connected = True
+            if self.app_flag:
+                approved_peer = get_peer(self.peer_dict, request.ip_addr).to_dict()
+                send_event_to_websocket(queue=self.back_queue,
+                                        event=EVENT_NODE_ADD_APPROVED_PEER,
+                                        data=pickle.dumps(approved_peer))
             print(ESTABLISHED_NETWORK_SUCCESS_MSG.format(pending_peer_sock.getpeername()[0]))
         # =========================================================================================
         print(f"[+] Now approving request for peer (IP: {request.ip_addr}); please wait...")
@@ -1415,6 +1424,8 @@ def approved_peer_activity_handler(self: object, peer_sock: socket.socket):
         del peer_dict[peer_ip]
         if len(peer_dict) == 0:
             self.is_connected = False
+        if self.app_flag:
+            send_event_to_websocket(self.back_queue, event=EVENT_NODE_REMOVE_APPROVED_PEER, data=peer_ip)
         print(f"[+] Connection closed by peer (IP: {peer_ip})!")
 
     def signal_handler(signal: str):
@@ -1943,6 +1954,7 @@ def perform_responsible_peer_tasks(self: object, request: Transaction, consensus
             pending_peer.status = STATUS_APPROVED
             pending_peer.token, pending_peer.block = None, None
             self.fd_list.append(pending_peer.socket)
+            send_event_to_websocket(self.back_queue, event=EVENT_NODE_REMOVE_PENDING_PEER, data=pending_peer.ip) if self.app_flag else None
             print(f"[+] APPROVE SUCCESS: The requesting peer (IP: {request.ip_addr}) has successfully joined the network!")
             print('=' * 160)
 
@@ -1951,6 +1963,12 @@ def perform_responsible_peer_tasks(self: object, request: Transaction, consensus
             if self.blockchain.is_valid():
                 from utility.blockchain.utils import save_blockchain_to_file
                 save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
+
+            # Notify front-end application
+            if self.app_flag:
+                send_event_to_websocket(queue=self.back_queue,
+                                        event=EVENT_NODE_ADD_APPROVED_PEER,
+                                        data=pickle.dumps(pending_peer))
 
             # Delete the requesting peer's transaction object
             delete_transaction(self.pending_transactions, request.ip_addr, pending_peer.transaction_path)
@@ -2191,7 +2209,7 @@ def synchronize_blockchain(self: object, target_sock: socket.socket, secret: byt
             if peer_status == HAS_BLOCKCHAIN_SIGNAL:  # receive blockchain from the other peer
                 print("[+] BLOCKCHAIN REQUESTED: The requesting peer has an existing blockchain!")
                 try:
-                    self.blockchain = receive_blockchain(self, target_sock, secret, enc_mode, iv)
+                    receive_blockchain(self, target_sock, secret, enc_mode, iv)
                     if do_init:
                         add_init_blocks(mode=MODE_INITIATOR, is_sending=True, response_check=True)
                     print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
@@ -2262,7 +2280,7 @@ def synchronize_blockchain(self: object, target_sock: socket.socket, secret: byt
                     try:
                         if is_target_approved:
                             print("[+] BLOCKCHAIN REQUESTED: You have a blockchain belonging from another P2P network!")
-                            self.blockchain = receive_blockchain(self, target_sock, secret, enc_mode, iv)
+                            receive_blockchain(self, target_sock, secret, enc_mode, iv)
                         else:
                             print(f"[+] Peer is missing {own_index - peer_current_block_idx} blocks; now sending...")
                             time.sleep(1)  # sleep 1 second to synchronize with the other peer
@@ -2283,7 +2301,7 @@ def synchronize_blockchain(self: object, target_sock: socket.socket, secret: byt
                 target_sock.send(AES_encrypt(data=NO_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
                 try:
                     print("[+] BLOCKCHAIN REQUESTED: You have requested for the target peer's blockchain!")
-                    self.blockchain = receive_blockchain(self, target_sock, secret, enc_mode, iv)
+                    receive_blockchain(self, target_sock, secret, enc_mode, iv)
                     print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
                     return None
                 except InvalidBlockchainError as error:
@@ -2307,7 +2325,7 @@ def synchronize_blockchain(self: object, target_sock: socket.socket, secret: byt
                 target_sock.send(AES_encrypt(data=NO_BLOCKCHAIN_SIGNAL.encode(), key=secret, mode=enc_mode, iv=iv))
                 print("[+] The target peer also has no blockchain; now waiting for a new blockchain initialization...")
                 try:
-                    self.blockchain = receive_blockchain(self, target_sock, secret, enc_mode, iv)
+                    receive_blockchain(self, target_sock, secret, enc_mode, iv)
                     print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")
                     return None
                 except InvalidBlockchainError as e:

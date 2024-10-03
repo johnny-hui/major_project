@@ -20,6 +20,7 @@ const Overview = () => {
 
     useEffect(() => {
         if (!socket) return;
+        document.title = 'P2P App | Overview';
 
         // a) Request overview data upon component mount
         socket.emit('request_blockchain_data')
@@ -41,10 +42,18 @@ const Overview = () => {
             }
         });
 
-        socket.on('new_current_peer', (data) => {  // => EVENT: receive a new current peer
-            setCurrentPeers(data);
+        socket.on('new_approved_peer', (newPeer) => {  // => EVENT: receive a new approved peer
+            setCurrentPeers(prevPeers => [...prevPeers, newPeer]);
             setAlertTitle("SUCCESS")
-            setMessage("A new peer has joined the network!")
+            setMessage(`A new peer has successfully joined the network (${newPeer.ip})`)
+            setSeverity("success")
+            setOpen(true)
+        });
+
+        socket.on('remove_approved_peer', (ip) => {  // => EVENT: remove an approved peer
+            setCurrentPeers(prevPeers => prevPeers.filter(peer => peer.ip !== ip));
+            setAlertTitle("SUCCESS")
+            setMessage(`The following connected peer has been removed! (IP: ${ip})`)
             setSeverity("success")
             setOpen(true)
         });
@@ -100,7 +109,9 @@ const Overview = () => {
             socket.off('blockchain_data');
             socket.off('add_block');
             socket.off('new_pending_peer');
-            socket.off('new_current_peer');
+            socket.off('remove_pending_peer');
+            socket.off('new_approved_peer');
+            socket.off('remove_approved_peer');
         };
     }, [socket]);
 

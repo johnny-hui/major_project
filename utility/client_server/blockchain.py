@@ -434,7 +434,7 @@ def send_blockchain(self: object, target_sock: socket.socket, secret: bytes, enc
 
 
 def receive_blockchain(self: object, target_sock: socket.socket,
-                       secret: bytes, enc_mode: str, iv: bytes = None) -> Blockchain:
+                       secret: bytes, enc_mode: str, iv: bytes = None) -> None:
     """
     Receives and validates the blockchain from a target peer.
 
@@ -492,12 +492,12 @@ def receive_blockchain(self: object, target_sock: socket.socket,
         if verify_signature(signature, generated_hash.encode(), signers_pub_key):
             blockchain = pickle.loads(original_data)
             if blockchain.is_valid():
+                self.blockchain = blockchain
                 send_event_to_websocket(queue=self.back_queue,
                                         event=EVENT_NODE_SEND_BLOCKCHAIN,
                                         data=pickle.dumps(self.blockchain)) if self.app_flag else None
                 target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=enc_mode, iv=iv))
                 print(f"[+] Successfully received blockchain from IP ({target_sock.getpeername()[0]})!")
-                return blockchain
     except InvalidBlockchainError as error:
         target_sock.send(AES_encrypt(data=ERROR_BLOCKCHAIN.encode(), key=secret, mode=enc_mode, iv=iv))
         raise error
