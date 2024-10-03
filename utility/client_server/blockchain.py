@@ -357,7 +357,7 @@ def receive_block(self: object, target_sock: socket.socket, index: int,
             if self.blockchain.is_valid():
                 send_event_to_websocket(queue=self.back_queue,
                                         event=EVENT_NODE_ADD_BLOCK,
-                                        data=pickle.dumps(block))
+                                        data=pickle.dumps(block)) if self.app_flag else None
                 target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=enc_mode, iv=iv))
                 print(f"[+] BLOCK RECEIVED: Successfully received block {index}!")
         else:
@@ -494,7 +494,7 @@ def receive_blockchain(self: object, target_sock: socket.socket,
             if blockchain.is_valid():
                 send_event_to_websocket(queue=self.back_queue,
                                         event=EVENT_NODE_SEND_BLOCKCHAIN,
-                                        data=pickle.dumps(self.blockchain))
+                                        data=pickle.dumps(self.blockchain)) if self.app_flag else None
                 target_sock.send(AES_encrypt(data=ACK.encode(), key=secret, mode=enc_mode, iv=iv))
                 print(f"[+] Successfully received blockchain from IP ({target_sock.getpeername()[0]})!")
                 return blockchain

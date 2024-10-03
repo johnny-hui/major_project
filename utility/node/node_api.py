@@ -2,7 +2,7 @@
 Description:
 This python file is responsible for providing a websocket interface
 to the Node and all of its children classes to enable them to
-communicate with the front-end application.
+communicate with the WebSocket process.
 
 """
 import pickle
@@ -48,7 +48,6 @@ def websocket_interface(self: object):
                 else:
                     self.front_queue.put(None)
                     print("[+] OPERATION COMPLETED: Data has been successfully sent!")
-
 
 def send_event_to_websocket(queue: Queue, event: str, data: bytes):
     """

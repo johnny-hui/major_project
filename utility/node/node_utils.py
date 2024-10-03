@@ -10,11 +10,9 @@ import socket
 import threading
 import time
 from typing import TextIO
-
 from prettytable import PrettyTable
 from tqdm import tqdm
-
-from app.api.utility import EVENT_NODE_ADD_BLOCK, EVENT_NODE_SEND_BLOCKCHAIN
+from app.api.utility import EVENT_NODE_ADD_BLOCK, EVENT_NODE_SEND_BLOCKCHAIN, EVENT_NODE_ADD_PENDING_PEER
 from exceptions.exceptions import (RequestAlreadyExistsError, TransactionNotFoundError, InvalidTokenError,
                                    PeerRefusedBlockError, PeerInvalidBlockchainError, InvalidBlockchainError,
                                    InvalidBlockError)
@@ -279,6 +277,38 @@ def get_info_admins_and_delegates(self: object):
     return admin_delegate_list
 
 
+def get_approved_peers(self: object) -> list[Peer]:
+    """
+    Returns all approved peer objects.
+
+    @param self:
+        A reference to the calling class object (Node, DelegateNode, AdminNode)
+
+    @return: list[Peers]
+    """
+    approved_peers = []
+    for peer in self.peer_dict.values():
+        if peer.status == STATUS_APPROVED:
+            approved_peers.append(peer)
+    return approved_peers
+
+
+def get_pending_peers(self: object) -> list[Peer]:
+    """
+    Returns all pending peer objects.
+
+    @param self:
+        A reference to the calling class object (Node, DelegateNode, AdminNode)
+
+    @return: list[Peers]
+    """
+    pending_peers = []
+    for peer in self.peer_dict.values():
+        if peer.status == STATUS_PENDING:
+            pending_peers.append(peer)
+    return pending_peers
+
+
 def select_admin_or_delegate_menu(admin_delegate_list: list[Peer]):
     """
     Prompts the user to select an admin or delegate from a list
@@ -487,6 +517,11 @@ def save_pending_peer_info(self: object, peer_socket: socket.socket, peer_ip: st
     self.peer_dict[peer_ip] = Peer(ip=peer_ip, first_name=first_name, last_name=last_name, role=role,
                                    secret=shared_secret, iv=peer_iv, status=STATUS_PENDING, mode=mode,
                                    transaction_path=file_path, socket=peer_socket)
+    if self.app_flag:
+        peer_dict = self.peer_dict[peer_ip].to_dict()
+        send_event_to_websocket(queue=self.back_queue,
+                                event=EVENT_NODE_ADD_PENDING_PEER,
+                                data=pickle.dumps(peer_dict))
 
 
 def change_peer_role(peer_dict: dict[str, Peer], ip: str, role: str):
@@ -2043,7 +2078,10 @@ def synchronize_blockchain(self: object, target_sock: socket.socket, secret: byt
                            new_index=self.blockchain.get_latest_block().index + 1,
                            previous_hash=self.blockchain.get_latest_block().hash)
                 self.blockchain.add_block(init_block)
-                send_event_to_websocket(queue=self.back_queue, event=EVENT_NODE_ADD_BLOCK, data=pickle.dumps(init_block))
+                if self.app_flag:
+                    send_event_to_websocket(queue=self.back_queue,
+                                            event=EVENT_NODE_ADD_BLOCK,
+                                            data=pickle.dumps(init_block))
 
                 if is_sending:
                     send_block(target_sock, self.blockchain.get_latest_block(), secret, enc_mode, iv)
@@ -2163,9 +2201,10 @@ def synchronize_blockchain(self: object, target_sock: socket.socket, secret: byt
                 print("[+] The requesting peer also has no blockchain; now creating a new blockchain for the network...")
                 try:
                     self.blockchain = Blockchain()
-                    send_event_to_websocket(queue=self.back_queue,
-                                            event=EVENT_NODE_SEND_BLOCKCHAIN,
-                                            data=pickle.dumps(self.blockchain))
+                    if self.app_flag:
+                        send_event_to_websocket(queue=self.back_queue,
+                                                event=EVENT_NODE_SEND_BLOCKCHAIN,
+                                                data=pickle.dumps(self.blockchain))
                     add_init_blocks(mode=MODE_INITIATOR, is_sending=False, response_check=False)
                     send_blockchain(self, target_sock, secret, enc_mode, iv)
                     print("[+] SYNCHRONIZATION SUCCESSFUL: Your blockchain has been successfully synchronized with peer!")

@@ -12,12 +12,19 @@ from queue import Empty
 # EVENT CONSTANTS
 EVENT_NODE_SEND_BLOCKCHAIN = "sendBlockchain"
 EVENT_NODE_ADD_BLOCK = "addBlock"
+EVENT_NODE_ADD_PENDING_PEER = "addPendingPeer"
+EVENT_NODE_ADD_APPROVED_PEER = "addApprovedPeer"
+EVENT_NODE_REMOVE_PENDING_PEER = "remPendingPeer"
+EVENT_NODE_REMOVE_APPROVED_PEER = "remApprovedPeer"
 
 
 def monitor_node_events(self: object):
     """
     Monitors and handles events generated from the Node class and
     propagates any data over to front-end application (via. websockets).
+
+    @attention Usage:
+        This function is used only by the WebSocket class
 
     @param self:
         A reference to the calling class object (WebSocket)
@@ -45,6 +52,12 @@ def monitor_node_events(self: object):
                     self.socketio.emit('add_block', json.dumps(block.to_dict()))
                 else:
                     self.socketio.emit('add_block', "None")
+
+            # Listen for New Pending Peer Event
+            elif event == EVENT_NODE_ADD_PENDING_PEER:
+                response = self.back_queue.get()
+                pending_peer = pickle.loads(response)
+                self.socketio.emit('new_pending_peer', pending_peer)
 
         except Empty:
             time.sleep(0.1)

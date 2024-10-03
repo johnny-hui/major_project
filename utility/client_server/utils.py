@@ -731,7 +731,7 @@ def approved_signal_handler(self: object, peer_socket: socket.socket, secret: by
         new_block = get_peer(self.peer_dict, ip).block
         self.blockchain.add_block(new_block=new_block)
         if self.blockchain.is_valid():
-            self.socketio.emit('add_block', json.dumps(new_block.to_dict()))
+            self.socketIO.emit('add_block', json.dumps(new_block.to_dict()))
             save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
 
         # Update peer info

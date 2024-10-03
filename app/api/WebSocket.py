@@ -1,17 +1,19 @@
+import json
 import logging
 import pickle
 import threading
 from multiprocessing import Process, Queue
-from flask import Flask
+from flask import Flask, jsonify
 from flask_socketio import SocketIO
-
 from app.api.utility import monitor_node_events
+
 
 # CONSTANTS
 LOCAL_HOST = "127.0.0.1"
 LOCAL_PORT = 5000
 EVENT_ONCONNECT = "onConnect"
 EVENT_BLOCKCHAIN_REQUEST = "blockchainRequest"
+EVENT_CURRENT_PEERS_REQUEST = "currentPeers"
 
 
 class WebSocket(Process):
@@ -83,7 +85,21 @@ class WebSocket(Process):
                     blockchain = pickle.loads(response)
                     self.socketio.emit('blockchain_data', blockchain.to_json())
                 else:
-                    self.socketio.emit('blockchain_data', "None")
+                    self.socketio.emit('blockchain_data', jsonify(None))
+            except TypeError:
+                pass
+
+        @self.socketio.on('request_current_peers')
+        def handle_currentPeersRequest():
+            try:
+                self.front_queue.put(EVENT_CURRENT_PEERS_REQUEST)
+                response = self.front_queue.get()
+                if response:
+                    current_peers = pickle.loads(response)
+                    current_peers_json = json.dumps([peer.to_dict() for peer in current_peers], indent=4)
+                    self.socketio.emit('current_peers', current_peers_json)
+                else:
+                    self.socketio.emit('current_peers', jsonify(None))
             except TypeError:
                 pass
 

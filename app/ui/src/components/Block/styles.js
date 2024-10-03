@@ -47,8 +47,8 @@ export const blockStyles = {
         },
     },
     blockPicture: {
-        borderTopLeftRadius: '16px',
-        borderTopRightRadius: '16px'
+        borderTopLeftRadius: '6px',
+        borderTopRightRadius: '6px'
     },
     blockTitle: {
         color: '#949494', fontFamily: "Montserrat, sans-serif;",

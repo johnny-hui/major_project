@@ -17,5 +17,5 @@ export const BlockchainDisplayStyles = {
         padding: 3,
         marginTop: 0,
         height: "100%",
-    }
+    },
 }

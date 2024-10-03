@@ -5,7 +5,6 @@ This Python file tests the Blockchain class.
 """
 import time
 import unittest
-
 from models.Block import Block
 from models.Blockchain import Blockchain
 from utility.blockchain.utils import save_blockchain_to_file, load_blockchain_from_file
