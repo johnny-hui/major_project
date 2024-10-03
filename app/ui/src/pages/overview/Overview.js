@@ -42,17 +42,25 @@ const Overview = () => {
         });
 
         socket.on('new_current_peer', (data) => {  // => EVENT: receive a new current peer
-            setBlockchain(chunkArray(JSON.parse(data), 4));
+            setCurrentPeers(data);
             setAlertTitle("SUCCESS")
             setMessage("A new peer has joined the network!")
             setSeverity("success")
             setOpen(true)
         });
 
-        socket.on('new_pending_peer', (data) => {  // => EVENT: receive a new pending peer
-            setPendingPeers(data);
+        socket.on('new_pending_peer', (newPeer) => {  // => EVENT: receive a new pending peer
+            setPendingPeers(prevPeers => [...prevPeers, newPeer]);
             setAlertTitle("SUCCESS")
             setMessage("A new pending peer has been added!")
+            setSeverity("success")
+            setOpen(true)
+        });
+
+        socket.on('remove_pending_peer', (ip) => {  // => EVENT: remove a new pending peer
+            setPendingPeers(prevPeers => prevPeers.filter(peer => peer.ip !== ip));
+            setAlertTitle("SUCCESS")
+            setMessage(`The following pending peer has been removed! (IP: ${ip})`)
             setSeverity("success")
             setOpen(true)
         });

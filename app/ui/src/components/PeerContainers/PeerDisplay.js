@@ -26,28 +26,10 @@ const StyledTableCell = styled(TableCell)(() => ({
   },
 }));
 
-function createData(name, calories, fat, carbs, protein) {
-  return { name, calories, fat, carbs, protein };
-}
-
 const PeerDisplay = ( {peerList} ) => {
-    const rows = [
-      createData('Frozen yoghurt', 159, 6.0, 24, 4.0),
-      createData('Ice cream sandwich', 237, 9.0, 37, 4.3),
-      createData('Eclair', 262, 16.0, 24, 6.0),
-      createData('Cupcake', 305, 3.7, 67, 4.3),
-      createData('Gingerbread', 356, 16.0, 49, 3.9),
-    ];
-
     return (
         <TableContainer
-            sx={{
-                ...PeerDisplayStyles.currentPeerContainer.root,
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                height: '100%', // Make sure it takes the full height of the parent
-            }}
+            sx={peerList.length === 0 ? PeerDisplayStyles.peerContainer.noData : PeerDisplayStyles.peerContainer.root}
             component={Paper}
         >
             {peerList.length === 0 ? (
@@ -55,26 +37,34 @@ const PeerDisplay = ( {peerList} ) => {
                     No data available
                 </Typography>
             ) : (
-                <Table stickyHeader sx={{ minWidth: 650 }} aria-label="customized table">
-                    <TableHead sx={PeerDisplayStyles.currentPeerContainer.tableHead}>
+                <Table stickyHeader aria-label="customized table">
+                    <TableHead sx={PeerDisplayStyles.peerContainer.tableHead}>
                         <TableRow>
-                            <StyledTableCell>Dessert (100g serving)</StyledTableCell>
-                            <StyledTableCell align="right">Calories</StyledTableCell>
-                            <StyledTableCell align="right">Fat&nbsp;(g)</StyledTableCell>
-                            <StyledTableCell align="right">Carbs&nbsp;(g)</StyledTableCell>
-                            <StyledTableCell align="right">Protein&nbsp;(g)</StyledTableCell>
+                            <StyledTableCell>IP</StyledTableCell>
+                            <StyledTableCell>First Name</StyledTableCell>
+                            <StyledTableCell>Last Name</StyledTableCell>
+                            <StyledTableCell>Role</StyledTableCell>
+                            <StyledTableCell>Status</StyledTableCell>
+                            <StyledTableCell>Secret</StyledTableCell>
+                            <StyledTableCell>Initialization Factor (IV)</StyledTableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {rows.map((row) => (
-                            <TableRow sx={PeerDisplayStyles.currentPeerContainer.tableRow} key={row.name}>
-                                <StyledTableCell component="th" scope="row">
-                                    {row.name}
+                        {peerList.map((peer) => (
+                            <TableRow sx={PeerDisplayStyles.peerContainer.tableRow} key={peer.ip}>
+                                <StyledTableCell>
+                                    {peer.ip}
                                 </StyledTableCell>
-                                <StyledTableCell align="right">{row.calories}</StyledTableCell>
-                                <StyledTableCell align="right">{row.fat}</StyledTableCell>
-                                <StyledTableCell align="right">{row.carbs}</StyledTableCell>
-                                <StyledTableCell align="right">{row.protein}</StyledTableCell>
+                                <StyledTableCell>{peer.first_name}</StyledTableCell>
+                                <StyledTableCell>{peer.last_name}</StyledTableCell>
+                                <StyledTableCell>{peer.role}</StyledTableCell>
+                                <StyledTableCell>{peer.status}</StyledTableCell>
+                                <StyledTableCell sx={PeerDisplayStyles.peerContainer.tableCell}>
+                                    {peer.secret}
+                                </StyledTableCell>
+                                <StyledTableCell sx={PeerDisplayStyles.peerContainer.tableCell}>
+                                    {peer.iv}
+                                </StyledTableCell>
                             </TableRow>
                         ))}
                     </TableBody>

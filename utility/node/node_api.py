@@ -49,10 +49,10 @@ def websocket_interface(self: object):
                     self.front_queue.put(None)
                     print("[+] OPERATION COMPLETED: Data has been successfully sent!")
 
-def send_event_to_websocket(queue: Queue, event: str, data: bytes):
+def send_event_to_websocket(queue: Queue, event: str, data: bytes | str) -> None:
     """
-    Sends an event to invoke the Websocket API server to handle and propagate
-    event data to the front-end application.
+    Sends an event to invoke the Websocket API server to handle and
+    propagate event data to the front-end application.
 
     @param queue:
         A multiprocessing.Queue() object (used for IPC)
@@ -61,7 +61,7 @@ def send_event_to_websocket(queue: Queue, event: str, data: bytes):
         A string for the event
 
     @param data:
-        Event data (bytes)
+        Event data (bytes or String)
 
     @return: None
     """

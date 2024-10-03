@@ -1,6 +1,25 @@
 export const PeerDisplayStyles = {
-    currentPeerContainer: {
+    peerContainer: {
         root: {
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-start',
+            height: '100%',
+            maxHeight: 260,
+            marginTop: 3,
+            '&::-webkit-scrollbar': {
+              display: 'none',  // => hide scroll bar
+            },
+            scrollbarWidth: 'none',
+            borderRadius: '6px',
+            boxShadow: '0 3px 10px rgba(0, 0, 0, 0.1)',
+            backgroundColor: '#151515',
+        },
+        noData: {
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: '100%', // Make sure it takes the full height of the parent
             maxHeight: 260,
             marginTop: 3,
             '&::-webkit-scrollbar': {
@@ -27,5 +46,11 @@ export const PeerDisplayStyles = {
                 backgroundColor: '#151515',
             },
         },
+        tableCell: {
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          maxWidth: '150px',
+        }
     },
 }

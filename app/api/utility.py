@@ -24,7 +24,8 @@ def monitor_node_events(self: object):
     propagates any data over to front-end application (via. websockets).
 
     @attention Usage:
-        This function is used only by the WebSocket class
+        This function is used only by the WebSocket class to
+        monitor Node events
 
     @param self:
         A reference to the calling class object (WebSocket)
@@ -58,6 +59,11 @@ def monitor_node_events(self: object):
                 response = self.back_queue.get()
                 pending_peer = pickle.loads(response)
                 self.socketio.emit('new_pending_peer', pending_peer)
+
+            # Listen for Remove Pending Peer Event
+            elif event == EVENT_NODE_REMOVE_PENDING_PEER:
+                ip_to_remove = self.back_queue.get()
+                self.socketio.emit('remove_pending_peer', ip_to_remove)
 
         except Empty:
             time.sleep(0.1)

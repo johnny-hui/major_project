@@ -12,7 +12,8 @@ import time
 from typing import TextIO
 from prettytable import PrettyTable
 from tqdm import tqdm
-from app.api.utility import EVENT_NODE_ADD_BLOCK, EVENT_NODE_SEND_BLOCKCHAIN, EVENT_NODE_ADD_PENDING_PEER
+from app.api.utility import EVENT_NODE_ADD_BLOCK, EVENT_NODE_SEND_BLOCKCHAIN, EVENT_NODE_ADD_PENDING_PEER, \
+    EVENT_NODE_REMOVE_PENDING_PEER
 from exceptions.exceptions import (RequestAlreadyExistsError, TransactionNotFoundError, InvalidTokenError,
                                    PeerRefusedBlockError, PeerInvalidBlockchainError, InvalidBlockchainError,
                                    InvalidBlockError)
@@ -189,6 +190,7 @@ def remove_pending_peer(self: object, peer_sock: socket.socket, ip: str):
     finally:
         delete_transaction(self.pending_transactions, ip=ip, request_path=file_path)
         peer_sock.close()
+        send_event_to_websocket(self.back_queue, event=EVENT_NODE_REMOVE_PENDING_PEER, data=ip) if self.app_flag else None
         print(f"[+] REMOVE PENDING PEER: Pending peer (IP: {ip}) has been successfully removed!")
 
 
