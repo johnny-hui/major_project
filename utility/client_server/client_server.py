@@ -323,8 +323,8 @@ def connect_to_P2P_network(self: object):
                                                                     encryption=self.mode)
             sign_transaction(self, transaction)
             send_request(target_sock, target_ip, shared_secret, self.mode, PURPOSE_REQUEST, transaction, session_iv)
-            response, target_sock = _await_response(self, target_sock, shared_secret,
-                                                    self.mode, transaction, session_iv)
+            response, target_sock = _await_response(self, target_sock, shared_secret, self.mode, transaction, session_iv)
+
             if response:  # => if approved
                 approved_handler(self, target_sock, shared_secret, session_iv, transaction)
     # ===============================================================================================================

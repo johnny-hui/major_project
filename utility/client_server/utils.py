@@ -4,15 +4,12 @@ This python file contains utility functions used by the larger
 functions in client_server.py
 
 """
-import json
 import multiprocessing
 import pickle
 import socket
 import threading
 import time
-
 from tqdm import tqdm
-
 from app.api.utility import EVENT_NODE_ADD_APPROVED_PEER, EVENT_NODE_REMOVE_PENDING_PEER, EVENT_NODE_ADD_BLOCK
 from exceptions.exceptions import (RequestExpiredError, RequestAlreadyExistsError, InvalidSignatureError,
                                    TransactionNotFoundError, ConsensusInitError, InvalidTokenError,
@@ -38,7 +35,7 @@ from utility.general.constants import (APPLICATION_PORT, FIND_HOST_TIMEOUT,
                                        ROLE_PEER, ROLE_DELEGATE, TARGET_NOT_CONNECTED_MSG,
                                        CONNECT_PEERS_AFTER_APPROVAL_MSG, MODE_INITIATOR, APPROVED_SIGNAL,
                                        CONN_REJECTED_INVALID_TOKEN_MSG, CONNECTION_SUCCESSFUL_MSG, RESPONSE_REJECTED,
-                                       ROLE_ADMIN)
+                                       ROLE_ADMIN, STATUS_PENDING)
 from utility.general.utils import timer, determine_delegate_status, start_parallel_operation
 from utility.node.node_api import send_event_to_websocket
 from utility.node.node_utils import (peer_exists, add_new_transaction, save_transaction_to_file,
@@ -407,7 +404,6 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
 
             # Update info from new_peer_dict into own peer dictionary
             update_peer_dict(self.peer_dict, new_peer_dict)
-            del new_peer_dict
 
             # Update target peer's information to own dictionary
             target_peer = get_peer(self.peer_dict, ip=target_sock.getpeername()[0])
@@ -437,6 +433,7 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
                 save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
             self.fd_list.append(target_sock)
             self.is_connected = True
+            del new_peer_dict
             print(CONNECTION_SUCCESSFUL_MSG)
 
         except (socket.error, ConnectionResetError, BrokenPipeError, socket.timeout,
@@ -457,6 +454,11 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
             change_peer_status(self.peer_dict, ip=request.ip_addr, status=STATUS_APPROVED)
             delete_transaction(self.pending_transactions, request.ip_addr, file_path)
             self.is_connected = True
+            if self.app_flag:
+                approved_peer = get_peer(self.peer_dict, request.ip_addr).to_dict()
+                send_event_to_websocket(queue=self.back_queue,
+                                        event=EVENT_NODE_ADD_APPROVED_PEER,
+                                        data=pickle.dumps(approved_peer))
             print(JOIN_NETWORK_SUCCESS_MSG.format(target_sock.getpeername()[0]))
         # =========================================================================================
         try:
@@ -472,15 +474,17 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
             target_sock.recv(1024)
 
             # Receive target request
-            request, file_path = receive_request_handler(self, target_sock,
-                                                         target_sock.getpeername()[0],
-                                                         secret, self.mode, iv)
+            request, file_path = receive_request_handler(self, target_sock, target_sock.getpeername()[0],
+                                                         secret, self.mode, iv, save_info=False,
+                                                         save_file=False, set_stamp=False)
             stop_event.set()
 
-            # Remove target socket from pending list (prevent select-related errors)
-            if target_sock in self.fd_pending:
-                self.fd_pending.remove(target_sock)
-                time.sleep(1)
+            # Add target to peer dict
+            self.peer_dict[request.ip_addr] = Peer(ip=request.ip_addr, first_name=request.first_name,
+                                                   last_name=request.last_name, role=request.role,
+                                                   secret=secret, iv=iv, status=STATUS_PENDING,
+                                                   mode=self.mode, transaction_path=file_path,
+                                                   socket=target_sock)
 
             # Start Consensus (a trust vote on verifying target peer)
             from models.Consensus import Consensus
@@ -527,6 +531,28 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
                                            iv=iv, do_init=True,is_target_approved=False)
 
                 elif request.role == ROLE_ADMIN and self.role == ROLE_ADMIN:
+                    synchronize_blockchain(self, target_sock, secret, initiators_request=own_request,
+                                           peer_request=request,enc_mode=self.mode, mode=MODE_RECEIVER,
+                                           iv=iv, do_init=True, is_target_approved=False)
+
+                elif request.role == ROLE_DELEGATE and self.role == ROLE_PEER:
+                    synchronize_blockchain(self, target_sock, secret, initiators_request=own_request,
+                                           peer_request=request,enc_mode=self.mode, mode=MODE_RECEIVER,
+                                           iv=iv, do_init=True, is_target_approved=False)
+
+                elif request.role == ROLE_PEER and self.role == ROLE_DELEGATE:
+                    time.sleep(1)
+                    synchronize_blockchain(self, target_sock, secret, initiators_request=own_request,
+                                           peer_request=request, enc_mode=self.mode, mode=MODE_INITIATOR,
+                                           iv=iv, do_init=True,is_target_approved=False)
+
+                elif request.role == ROLE_DELEGATE and self.role == ROLE_ADMIN:
+                    time.sleep(1)
+                    synchronize_blockchain(self, target_sock, secret, initiators_request=own_request,
+                                           peer_request=request, enc_mode=self.mode, mode=MODE_INITIATOR,
+                                           iv=iv, do_init=True,is_target_approved=False)
+
+                elif request.role == ROLE_ADMIN and self.role == ROLE_DELEGATE:
                     synchronize_blockchain(self, target_sock, secret, initiators_request=own_request,
                                            peer_request=request,enc_mode=self.mode, mode=MODE_RECEIVER,
                                            iv=iv, do_init=True, is_target_approved=False)

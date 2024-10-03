@@ -484,9 +484,9 @@ def remove_all_approved_peers(peer_dict: dict[str, Peer]):
 
     @return: None
     """
-    for ip, peer in peer_dict.items():
-        if peer.status == STATUS_APPROVED:
-            del peer_dict[ip]
+    keys_to_remove = [ip for ip, peer in peer_dict.items() if peer.status == STATUS_APPROVED]
+    for ip in keys_to_remove:
+        del peer_dict[ip]
 
 
 def save_pending_peer_info(self: object, peer_socket: socket.socket, peer_ip: str,
@@ -1352,6 +1352,26 @@ def approve_connection_request(self: object):
                     elif request.role == ROLE_ADMIN and self.role == ROLE_ADMIN:
                         synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
                                                peer_request=request, enc_mode=peer.mode, mode=MODE_INITIATOR,
+                                               iv=peer.iv, do_init=True, is_target_approved=False)
+
+                    elif request.role == ROLE_DELEGATE and self.role == ROLE_PEER:
+                        synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
+                                               peer_request=request, enc_mode=peer.mode, mode=MODE_RECEIVER,
+                                               iv=peer.iv, do_init=True, is_target_approved=False)
+
+                    elif request.role == ROLE_PEER and self.role == ROLE_DELEGATE:
+                        synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
+                                               peer_request=request, enc_mode=peer.mode, mode=MODE_INITIATOR,
+                                               iv=peer.iv, do_init=True, is_target_approved=False)
+
+                    elif request.role == ROLE_DELEGATE and self.role == ROLE_ADMIN:
+                        synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
+                                               peer_request=request, enc_mode=peer.mode, mode=MODE_INITIATOR,
+                                               iv=peer.iv, do_init=True, is_target_approved=False)
+
+                    elif request.role == ROLE_ADMIN and self.role == ROLE_DELEGATE:
+                        synchronize_blockchain(self, pending_peer_sock, peer.secret, initiators_request=own_request,
+                                               peer_request=request, enc_mode=peer.mode, mode=MODE_RECEIVER,
                                                iv=peer.iv, do_init=True, is_target_approved=False)
 
                     # Perform finishing steps

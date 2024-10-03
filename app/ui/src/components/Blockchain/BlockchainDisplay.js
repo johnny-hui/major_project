@@ -5,7 +5,7 @@ import {BlockchainDisplayStyles} from "./styles";
 import Carousel from "react-material-ui-carousel";
 import {chunkArray} from "./utility";
 
-const BlockchainDisplay = ( {blockchain} ) => {
+const   BlockchainDisplay = ( {blockchain} ) => {
     const dummyArray = chunkArray([null, null, null, null], 4)
 
     return (
