@@ -1988,7 +1988,7 @@ def perform_responsible_peer_tasks(self: object, request: Transaction, consensus
             if self.app_flag:
                 send_event_to_websocket(queue=self.back_queue,
                                         event=EVENT_NODE_ADD_APPROVED_PEER,
-                                        data=pickle.dumps(pending_peer))
+                                        data=pickle.dumps(pending_peer.to_dict()))
 
             # Delete the requesting peer's transaction object
             delete_transaction(self.pending_transactions, request.ip_addr, pending_peer.transaction_path)

@@ -425,7 +425,7 @@ def send_blockchain(self: object, target_sock: socket.socket, secret: bytes, enc
     progress_bar.close()
 
     # Wait for status
-    status = AES_decrypt(data=target_sock.recv(1024), key=secret, mode=enc_mode, iv=iv)
+    status = AES_decrypt(data=target_sock.recv(1024), key=secret, mode=enc_mode, iv=iv).decode()
     if status == ACK:
         print(f"[+] Your blockchain has been successfully sent and received by peer (IP: {target_sock.getpeername()[0]})!")
         return None
