@@ -4,52 +4,68 @@ This Python file is used to test the Transaction class
 and the verification of ECDSA signatures.
 
 """
-import pickle
-import secrets
-import sys
-from datetime import datetime
+import time
+import unittest
 from models.Transaction import Transaction
-from utility.crypto.aes_utils import AES_encrypt, AES_decrypt
-from utility.crypto.ec_keys_utils import generate_keys, generate_shared_secret
-from utility.general.constants import BLOCK_SIZE, TIMESTAMP_FORMAT, ECB
-from utility.general.utils import load_image, get_img_path
+from utility.crypto.ec_keys_utils import generate_keys
+from utility.general.constants import TIMESTAMP_FORMAT, ROLE_ADMIN, ROLE_DELEGATE
+from utility.general.utils import load_image
+from utility.node.node_init import get_current_timestamp
+from utility.node.node_utils import create_transaction, sign_transaction
 
-if __name__ == '__main__':
-    ip, port, first_name, last_name = "10.0.0.16", 126, "Thompson", "Tristan"
-    pvt_key, pub_key = generate_keys()
 
-    obj = Transaction(ip=ip, port=port, first_name=first_name,
-                      last_name=last_name, public_key=pub_key)
+class TestTransaction(unittest.TestCase):
+    def setUp(self):
+        self.pvt_key, self.pub_key = generate_keys()
+        self.ip, self.port = "10.0.0.16", 126
+        self.first_name, self.last_name, self.role = "Thompson", "Tristan", ROLE_ADMIN
+        self.request = Transaction(ip=self.ip, port=self.port, first_name=self.first_name,
+                                   last_name=self.last_name, public_key=self.pub_key)
+        self.request.role = self.role
+        self.request.image = load_image("data/photos/photo_1.png")
+        sign_transaction(self, self.request)
 
-    img_path = get_img_path()
+    def testInstantiation(self):
+        request = create_transaction(self)
+        self.assertNotEqual(request.image, None)
+        self.assertEqual(request.signature, None)
+        self.assertEqual(request.is_expired(), False)
+        self.assertEqual(request.is_near_expiry(), False)
+        self.assertEqual(request.first_name, self.first_name)
+        self.assertEqual(request.last_name, self.last_name)
+        self.assertEqual(request.role, self.role)
+        self.assertEqual(request.ip, self.ip)
+        self.assertEqual(request.port, self.port)
 
-    try:
-        img = load_image(path=img_path)
-        obj.set_role("ADMIN")
-        obj.set_image(img)
-        obj.set_timestamp(datetime.now().strftime(TIMESTAMP_FORMAT))
-        obj.sign_transaction(pvt_key=pvt_key)
-        obj.set_received_by("10.0.0.153")
-    except (ValueError, FileNotFoundError, IOError) as e:
-        sys.exit(str(e))
+    def testSignature(self):
+        self.assertNotEqual(self.request.signature, None)
+        self.assertEqual(self.request.is_verified(), True)
 
-    print(obj)
+    def testDataTamperIPField(self):
+        self.request.ip_addr = "123.123.123.123"
+        self.assertEqual(self.request.is_verified(), False)
 
-    # ConnectToNetwork to Client: Key Exchange Simulation and Generation of Secret
-    shared_key = generate_shared_secret()
-    iv = secrets.token_bytes(BLOCK_SIZE)
+    def testDataTamperPortField(self):
+        self.request.port = 123
+        self.assertEqual(self.request.is_verified(), False)
 
-    # Encrypt transaction data using AES and send to peer
-    data = pickle.dumps(obj)
-    encrypted_object = AES_encrypt(data=data, key=shared_key, mode=ECB, iv=iv)
+    def testDataTamperRoleField(self):
+        self.request.role = ROLE_DELEGATE
+        self.assertEqual(self.request.is_verified(), False)
 
-    # Test decryption
-    decrypted_object = pickle.loads(AES_decrypt(data=encrypted_object, key=shared_key, mode=ECB, iv=iv))
-    print(f"Decrypted: {decrypted_object}")
+    def testDataTamperFirstNameField(self):
+        self.request.first_name = "Bob"
+        self.assertEqual(self.request.is_verified(), False)
 
-    # Test Verification: No data manipulation
-    print(decrypted_object.is_verified())
+    def testDataTamperLastNameField(self):
+        self.request.last_name = "Ross"
+        self.assertEqual(self.request.is_verified(), False)
 
-    # Test Verification: With data manipulation
-    decrypted_object.ip_addr = "10.0.0.1"
-    print(decrypted_object.is_verified())
+    def testDataTamperTimestampField(self):
+        time.sleep(2)
+        self.request.timestamp = get_current_timestamp(TIMESTAMP_FORMAT)
+        self.assertEqual(self.request.is_verified(), False)
+
+    def testDataTamperImageField(self):
+        self.request.image = b"IMAGE"
+        self.assertEqual(self.request.is_verified(), False)

@@ -8,9 +8,7 @@ managing, and signing of Tokens.
 import pickle
 import secrets
 from datetime import timedelta
-
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePublicKey, EllipticCurvePrivateKey
-
 from exceptions.exceptions import InvalidTokenError
 from models.Token import Token
 from utility.crypto.ec_keys_utils import create_signature, verify_signature, load_public_key_from_string, \

@@ -4,26 +4,75 @@ This Python file tests the Diffie-Hellman key exchange process, the derivation
 of shared secret and encryption/decryption properties.
 
 """
-from utility.client_server.client_server import establish_secure_parameters
-from utility.crypto.aes_utils import AES_decrypt, AES_encrypt
-from utility.crypto.ec_keys_utils import generate_keys
-from utility.general.constants import MODE_RECEIVER
-from utility.node.node_init import initialize_socket
+import secrets
+import unittest
+from utility.crypto.aes_utils import AES_encrypt, AES_decrypt
+from utility.crypto.ec_keys_utils import generate_keys, derive_shared_secret
+from utility.general.constants import BLOCK_SIZE, CBC, ECB
 
-if __name__ == '__main__':
-    pvt_key, pub_key = generate_keys()
-    sock = initialize_socket(ip="10.0.0.75", port=69)
 
-    # Wait for connection and establish shared secret
-    peer_socket, peer_address = sock.accept()
-    print(f"[+] NEW CONNECTION REQUEST: Accepted a peer connection from ({peer_address[0]}, {peer_address[1]})!")
-    shared_secret, session_iv, mode = establish_secure_parameters(pvt_key, pub_key, peer_socket, mode=MODE_RECEIVER)
+class TestDHKeyExchange(unittest.TestCase):
+    def setUp(self):
+        self.pvt_key_alice, self.pub_key_alice = generate_keys()  # => Alice
+        self.pvt_key_bob, self.pub_key_bob = generate_keys()      # => Bob
+        self.shared_secret = derive_shared_secret(self.pvt_key_bob, self.pub_key_alice)
 
-    # Get encrypted data and decrypt
-    encrypted_data = peer_socket.recv(1024)
-    decrypted_data = AES_decrypt(data=encrypted_data, key=shared_secret, iv=session_iv, mode=mode).decode()
-    print(f"[+] Decrypted Data: {decrypted_data}")
 
-    # Send encrypted data
-    test = AES_encrypt(data="Hello whoever you are!! :)".encode(), key=shared_secret, iv=session_iv, mode=mode)
-    peer_socket.sendall(test)
+    def testDerivationOfSharedSecret(self):
+        """
+        Tests if the EC keys generated are able to produce a
+        symmetric shared secret key.
+        @return: None
+        """
+        shared_secret_alice = derive_shared_secret(self.pvt_key_alice, self.pub_key_bob)  # Alice's secret
+        shared_secret_bob = derive_shared_secret(self.pvt_key_bob, self.pub_key_alice)    # Bob's secret
+        self.assertEqual(shared_secret_alice, shared_secret_bob)
+
+
+    def testEncryptionCBC(self):
+        """
+        Tests if the shared secret can be used to properly encrypt a
+        string with AES cipher operating in CBC mode.
+        @return: None
+        """
+        iv = secrets.token_bytes(BLOCK_SIZE)
+        plaintext = "Hello World"
+        cipher_text = AES_encrypt(data=plaintext.encode(), mode=CBC, key=self.shared_secret, iv=iv)
+        self.assertIsInstance(cipher_text, bytes)
+        self.assertNotEqual(cipher_text, plaintext)
+
+    def testEncryptionECB(self):
+        """
+        Tests if the shared secret can be used to properly encrypt a
+        string with AES cipher operating in ECB mode.
+        @return: None
+        """
+        plaintext = "Hello World"
+        cipher_text = AES_encrypt(data=plaintext.encode(), mode=ECB, key=self.shared_secret)
+        self.assertIsInstance(cipher_text, bytes)
+        self.assertNotEqual(cipher_text, plaintext)
+
+
+    def testDecryptionCBC(self):
+        """
+        Tests if the shared secret can be used to properly decrypt a
+        string with AES cipher operating in CBC mode.
+        @return: None
+        """
+        iv = secrets.token_bytes(BLOCK_SIZE)
+        plaintext = "Hello World"
+        cipher_text = AES_encrypt(data=plaintext.encode(), mode=CBC, key=self.shared_secret, iv=iv)
+        decrypted_text = AES_decrypt(data=cipher_text, mode=CBC, key=self.shared_secret, iv=iv).decode()
+        self.assertEqual(decrypted_text, plaintext)
+
+
+    def testDecryptionECB(self):
+        """
+        Tests if the shared secret can be used to properly encrypt a
+        string with AES cipher operating in ECB mode.
+        @return: None
+        """
+        plaintext = "Hello World"
+        cipher_text = AES_encrypt(data=plaintext.encode(), mode=ECB, key=self.shared_secret)
+        decrypted_text = AES_decrypt(data=cipher_text, mode=ECB, key=self.shared_secret).decode()
+        self.assertEqual(decrypted_text, plaintext)
