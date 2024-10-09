@@ -510,6 +510,7 @@ def approved_handler(self: object, target_sock: socket.socket, secret: bytes,
                         synchronize_blockchain(self, target_sock, secret, initiators_request=own_request,
                                                peer_request=request, enc_mode=self.mode, mode=MODE_INITIATOR,
                                                iv=iv, do_init=True, is_target_approved=False)
+                        save_blockchain_to_file(self.blockchain, self.pvt_key, self.pub_key)
                         perform_finishing_steps()
                         self.is_promoted = True
                         return None

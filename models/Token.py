@@ -33,7 +33,7 @@ class Token:
         @return: Boolean (T/F)
             True if the token has expired, False otherwise.
         """
-        if get_current_timestamp(FORMAT_DATETIME) > self.expiry_time:
+        if get_current_timestamp(FORMAT_DATETIME) >= self.expiry_time:
             print(f"[+] TOKEN EXPIRED: The token issued for {self.peer_ip} has expired!")
             return True
         else:

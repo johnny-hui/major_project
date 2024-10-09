@@ -10,7 +10,7 @@ from exceptions.exceptions import InvalidTokenError
 from models.Token import Token
 from utility.crypto.ec_keys_utils import generate_keys
 from utility.crypto.token_utils import generate_approval_token, verify_token
-from utility.general.constants import FORMAT_DATETIME
+from utility.general.constants import FORMAT_DATETIME, TOKEN_EXPIRY_TIME_SECONDS
 from utility.node.node_init import get_current_timestamp
 
 
@@ -89,3 +89,13 @@ class TestToken(unittest.TestCase):
         token.token = secrets.token_hex(32)
         with self.assertRaises(InvalidTokenError):
             verify_token(token)
+
+    def testTokenExpiryAfterFiveMinutes(self):
+        token = generate_approval_token(self.pvt_key, self.pub_key, peer_ip="127.0.0.1")
+        time.sleep(TOKEN_EXPIRY_TIME_SECONDS)  # 300 seconds = 5 minutes
+        self.assertEqual(token.has_expired(), True)
+
+    def testTokenExpiryJustBeforeFiveMinutes(self):
+        token = generate_approval_token(self.pvt_key, self.pub_key, peer_ip="127.0.0.1")
+        time.sleep(TOKEN_EXPIRY_TIME_SECONDS - 1)  # 299 seconds = 4 minutes 59 seconds
+        self.assertEqual(token.has_expired(), False)

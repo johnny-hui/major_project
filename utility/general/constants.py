@@ -441,6 +441,7 @@ CONSENSUS_REQ_NEAR_EXPIRY_MSG = ("[+] CONSENSUS ERROR: The selected request is n
 TOKEN_TO_STRING = ("Token <Object>: token={}, peer_ip={}, issued_time={}, expiry_time={}, "
                                     "issuers_pub_key={}, signature={}")
 TOKEN_EXPIRY_TIME = 5  # => minutes
+TOKEN_EXPIRY_TIME_SECONDS = 300
 SEND_TOKEN_SUCCESS = ("[+] The approval token issued for requesting peer (IP: {}) has been successfully sent, verified, "
                       "and received by ({})!")
 SEND_TOKEN_MULTIPROCESS_MSG = ("[+] Now issuing an approval token for the approved peer and sending it to all "
