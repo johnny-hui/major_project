@@ -2,6 +2,10 @@
 Description:
 This Python file tests the Block class.
 
+@attention: How to Run
+When prompted to enter the path of face photo, enter the following:
+"data/photos/photo_1.png"
+
 """
 import unittest
 from models.Block import Block
@@ -15,7 +19,7 @@ pvt_key, pub_key = generate_keys()
 ip, first_name, last_name = "127.0.0.1", "Thompson", "Tristan"
 signers_ip, signers_role = "10.0.0.153", ROLE_ADMIN
 
-class TestBlockchain(unittest.TestCase):
+class TestBlock(unittest.TestCase):
     def testCreationOfGenesisBlock(self):
         genesis_block = Block.create_genesis_block()
         self.assertEqual(genesis_block.index, 0)

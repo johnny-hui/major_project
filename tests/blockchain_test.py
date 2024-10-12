@@ -2,6 +2,10 @@
 Description:
 This Python file tests the Blockchain class.
 
+@attention: How to Use
+When running this test the first time, the first run will always fail.
+Run it again the second time, and the test shall pass the last test.
+
 """
 import time
 import unittest

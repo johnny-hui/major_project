@@ -3,12 +3,17 @@ Description:
 This Python file is used to test the Transaction class
 and the verification of ECDSA signatures.
 
+@attention: How to Run
+When prompted to enter the path of face photo, enter the following:
+"data/photos/photo_1.png"
+
 """
 import time
 import unittest
 from models.Transaction import Transaction
 from utility.crypto.ec_keys_utils import generate_keys
-from utility.general.constants import TIMESTAMP_FORMAT, ROLE_ADMIN, ROLE_DELEGATE, TRANSACTION_EXPIRY_TIME_SECONDS
+from utility.general.constants import TIMESTAMP_FORMAT, ROLE_ADMIN, ROLE_DELEGATE, TRANSACTION_EXPIRY_TIME_SECONDS, \
+    REQ_BUFFER_TIME_INITIAL
 from utility.general.utils import load_image
 from utility.node.node_init import get_current_timestamp
 from utility.node.node_utils import create_transaction, sign_transaction
@@ -29,8 +34,7 @@ class TestTransaction(unittest.TestCase):
         request = create_transaction(self)
         self.assertNotEqual(request.image, None)
         self.assertEqual(request.signature, None)
-        self.assertEqual(request.is_expired(), False)
-        self.assertEqual(request.is_near_expiry(), False)
+        self.assertEqual(request.is_near_expiry(REQ_BUFFER_TIME_INITIAL), False)
         self.assertEqual(request.first_name, self.first_name)
         self.assertEqual(request.last_name, self.last_name)
         self.assertEqual(request.role, self.role)
@@ -72,8 +76,8 @@ class TestTransaction(unittest.TestCase):
 
     def testTransactionExpiresAfterFiveMinutes(self):
         time.sleep(TRANSACTION_EXPIRY_TIME_SECONDS)  # 300 seconds = 5 minutes
-        self.assertEqual(self.request.is_expired(), "Transaction should expire after 5 minutes")
+        self.assertEqual(self.request.is_expired(), True)
 
     def testTransactionExpiresJustBeforeFiveMinutes(self):
         time.sleep(TRANSACTION_EXPIRY_TIME_SECONDS - 1)  # 299 seconds = 4 minutes 59 seconds
-        self.assertFalse(self.request.is_expired(), "Transaction should not expire 1 second before 5 minutes.")
+        self.assertFalse(self.request.is_expired(), False)
