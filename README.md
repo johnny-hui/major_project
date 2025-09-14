@@ -7,6 +7,7 @@
 - [Installation - Optional (Android Photo Uploader App)](#installation_android)
 - [Quickstart](#quickstart)
 - [Documentation](#documentation)
+- [Screenshots](#screenshots)
 
 ## Overview
 This project is a concept design, a P2P (Client/Server) application that utilizes Blockchain technology, facial recognition, encryption, 
