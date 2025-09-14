@@ -119,3 +119,6 @@ If you do want to install the Android camera app, perform the following steps:
      the APK file
   - 9) When launching the app for the first time, you’ll be prompted to grant
      camera permissions to the app; enter “while using this app”
+
+## Documentation
+- [Official Documentation Report](https://drive.google.com/file/d/1EOf3OjZ77PcA3HNpaFaxl-m9IJNf3ayN/view?usp=sharing)
