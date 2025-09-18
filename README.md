@@ -1,5 +1,8 @@
 # P2P (Client/Server App) - Authenticating and Verifying Users Using Blockchain Technology and Face Recognition
 
+![Front-end React Dashboard](pictures/ui_2.png)
+![CLI Example](pictures/cli_3.png)
+
 ## Table of Contents
 - [Overview](#overview)
 - [Main Functions](#main-functions)
@@ -7,7 +10,6 @@
 - [Installation](#installation)
 - [Installation - Optional (Android Photo Uploader App)](#installation---optional-android-photo-uploader-app)
 - [Documentation](#documentation)
-- [Screenshots](#screenshots)
 
 ## Overview
 This project is a concept design, a P2P (Client/Server) application that utilizes Blockchain technology, facial recognition, encryption, 
@@ -46,7 +48,7 @@ git clone https://github.com/johnny-hui/major_project
 ```
 **2) Download the P2P Photo-Uploader Android Application (Optional):**
 - [Google Drive - APK File](https://drive.google.com/file/d/1DJLwPun_fCXht6jTUslsY0G_5j74IOTu/view)
-- For an installation guide, see this [section](#installation_android).
+- For an installation guide, see this [section](#installation---optional-android-photo-uploader-app).
 
 **3) Open the Linux terminal and navigate to the project's root directory**
 
@@ -103,10 +105,7 @@ which python
 ## Installation - Optional (Android Photo Uploader App)
 Installation is optional for the Android photo-uploader application. Instead of using the app,
 you can simply drag and drop face photos into the main project’s ‘data/photos/’
-directory and specify the path of the file when prompted by the application.
-
-You can use a webcam or any other method to capture face photos or even use existing
-photos for testing purposes. This flexibility allows you to test the application without an
+directory and specify the path of the file when prompted by the application. This flexibility allows you to test the application without an
 Android device.
 
 If you do want to install the Android camera app, perform the following steps:
@@ -123,7 +122,4 @@ If you do want to install the Android camera app, perform the following steps:
      camera permissions to the app; enter “while using this app”
 
 ## Documentation
-- [Official Documentation Report](https://drive.google.com/file/d/1tv_1z5ZgNP7iN2_5ElRfJkpdAlDjFU5C/view?usp=sharing)
-
-## Screenshots
 - [Official Documentation Report](https://drive.google.com/file/d/1tv_1z5ZgNP7iN2_5ElRfJkpdAlDjFU5C/view?usp=sharing)
