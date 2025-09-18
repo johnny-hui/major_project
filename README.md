@@ -3,6 +3,8 @@
 ![Front-end React Dashboard](pictures/ui_2.png)
 ![CLI Example](pictures/cli_3.png)
 
+---
+
 ## Table of Contents
 - [Overview](#overview)
 - [Main Functions](#main-functions)
