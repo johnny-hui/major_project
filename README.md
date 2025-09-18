@@ -2,10 +2,10 @@
 
 ## Table of Contents
 - [Overview](#overview)
+- [Main Functions](#main-functions)
 - [Requirements](#requirements)
 - [Installation](#installation)
-- [Installation - Optional (Android Photo Uploader App)](#installation_android)
-- [Quickstart](#quickstart)
+- [Installation - Optional (Android Photo Uploader App)](#installation---optional-android-photo-uploader-app)
 - [Documentation](#documentation)
 - [Screenshots](#screenshots)
 
@@ -20,6 +20,7 @@ Blockchain (granted they have joined that network before).
 Upon successful verification by peers among this network will result in a new Block being added to the network's Blockchain. The Blockchain 
 (locally stored) will serve as a connection history ledger and securely store peers’ facial images upon each entry.
 
+## Main Functions
 This application encompasses the following features:
   - Secure end-to-end communication between peers (using AES).
   - Cooperative synchronization of network information amongst all peers (Blockchain, current peers).
@@ -122,4 +123,7 @@ If you do want to install the Android camera app, perform the following steps:
      camera permissions to the app; enter “while using this app”
 
 ## Documentation
+- [Official Documentation Report](https://drive.google.com/file/d/1tv_1z5ZgNP7iN2_5ElRfJkpdAlDjFU5C/view?usp=sharing)
+
+## Screenshots
 - [Official Documentation Report](https://drive.google.com/file/d/1tv_1z5ZgNP7iN2_5ElRfJkpdAlDjFU5C/view?usp=sharing)
