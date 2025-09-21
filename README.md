@@ -24,6 +24,10 @@ Blockchain (granted they have joined that network before).
 Upon successful verification by peers among this network will result in a new Block being added to the network's Blockchain. The Blockchain 
 (locally stored) will serve as a connection history ledger and securely store peers’ facial images upon each entry.
 
+<p align="center">
+  <img src="pictures/network_diagram.png" alt="P2P Network Diagram" width="60%"/>
+</p>
+
 ## Main Functions
 This application encompasses the following features:
   - Secure end-to-end communication between peers (using AES).
